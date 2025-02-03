@@ -1,0 +1,10 @@
+/venv
+.env
+json/
+rules.cursorrules
+.cursorignore
+backup.txt
+node_modules
+__pycache__
+scraper/screenshots
+winenv

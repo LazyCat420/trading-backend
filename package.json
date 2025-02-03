@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "puppeteer": "^24.1.1"
+  },
+  "scripts": {
+    "start": "ts-node index.ts",
+    "build": "tsc",
+    "dev": "ts-node-dev --respawn index.ts"
+  }
+}
