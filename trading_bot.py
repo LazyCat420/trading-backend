@@ -1436,44 +1436,11 @@ class TradingBot:
             return False
 
     def run_trading_loop(self):
-        """Run the trading bot with market hours automation"""
+        """Run the trading bot"""
         while True:
             try:
-                # Get current time in Eastern timezone
-                eastern = pytz.timezone('US/Eastern')
-                now = datetime.now(eastern)
-                
-                if not self.testing_mode:  # Only check market hours if not in testing mode
-                    # Check if it's a weekday
-                    if now.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
-                        print(f"Market closed - Weekend. Sleeping until Monday {now}")
-                        # Sleep until Monday morning
-                        next_day = now + timedelta(days=(7-now.weekday()))
-                        next_open = next_day.replace(hour=9, minute=0, second=0, microsecond=0)
-                        sleep_seconds = (next_open - now).total_seconds()
-                        time.sleep(sleep_seconds)
-                        continue
-
-                    # Check market hours (9:30 AM - 4:00 PM Eastern)
-                    market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
-                    market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
-
-                    if now < market_open:
-                        print(f"Market not open yet. Waiting until {market_open}")
-                        sleep_seconds = (market_open - now).total_seconds()
-                        time.sleep(sleep_seconds)
-                        continue
-                        
-                    if now > market_close:
-                        print(f"Market closed for the day. Sleeping until tomorrow {market_open}")
-                        next_day = now + timedelta(days=1)
-                        next_open = next_day.replace(hour=9, minute=30, second=0, microsecond=0)
-                        sleep_seconds = (next_open - now).total_seconds()
-                        time.sleep(sleep_seconds)
-                        continue
-
-                # Market is open, run trading logic
-                print(f"\nTrading Bot Status - {now.isoformat()}")
+                # Status update
+                print(f"\nTrading Bot Status - {datetime.now().isoformat()}")
                 print(f"Current Balance: ${self.balance:.2f}")
                 print(f"Portfolio Value: ${self.get_portfolio_value():.2f}")
                 print(f"Portfolio: {self.portfolio}")
@@ -1481,18 +1448,29 @@ class TradingBot:
 
                 # Check price targets
                 self.check_price_targets()
+                
+                print("\n=== Phase 1: Market News ===")
+                market_news = search_market_news("top performing stocks market analysis today")
+                if market_news:
+                    self.save_searxng_results("top performing stocks market analysis today", market_news)
+                    analysis = self.analyze_with_llm(market_news)
+                    if analysis:
+                        research_data = [{
+                            'type': 'market_news',
+                            'analysis': analysis,
+                            'timestamp': datetime.now()
+                        }]
 
                 print("\n=== Phase 2: Sector Research ===")
                 research_data = []
+
                 for query in self.generate_market_queries():
                     try:
                         print(f"\nResearching: {query}")
                         market_news = search_market_news(query)
                         if market_news:
-                            # Updated to include scraping
                             self.process_searxng_with_scraping(query, market_news)
                             
-                            # Let LLM analyze sector news
                             analysis = self.analyze_with_llm(market_news)
                             if analysis:
                                 research_data.append({
@@ -1511,8 +1489,6 @@ class TradingBot:
                     self.save_research_data(research_data)
 
                 print("\n=== Phase 3: Stock Discovery ===")
-                # Get LLM to analyze research and suggest stocks
-                recent_research = self.get_research_data(data_type='sector_analysis', limit=50)
                 self.update_watchlist_from_research()
                 
                 print("\n=== Phase 4: Watchlist Research ===")
@@ -1520,12 +1496,10 @@ class TradingBot:
                 for ticker in self.watchlist:
                     try:
                         print(f"\nResearching {ticker}...")
-                        # Get specific news for the stock
                         stock_news = search_market_news(f"{ticker} stock analysis news")
                         if stock_news:
                             self.save_searxng_results(f"{ticker}_analysis", stock_news)
                             
-                            # Let LLM analyze stock-specific news
                             analysis = self.analyze_with_llm(stock_news)
                             if analysis:
                                 watchlist_research.append({
@@ -1534,7 +1508,7 @@ class TradingBot:
                                     'analysis': analysis,
                                     'timestamp': datetime.now()
                                 })
-                        time.sleep(2)  # Avoid rate limiting
+                        time.sleep(2)
                     except Exception as e:
                         print(f"Error researching {ticker}: {e}")
                         continue
@@ -1549,18 +1523,15 @@ class TradingBot:
                         print(f"\nAnalyzing {ticker}...")
                         self.update_stock_performance(ticker)
                         
-                        # Get all relevant data for decision making
                         stock_data = self.get_stock_data(ticker)
                         stock_research = self.get_research_data(ticker=ticker, limit=10)
                         
                         if not stock_data:
                             continue
                             
-                        # Get trading decision using LLM
                         decision = self.get_trading_decision(ticker, stock_data, stock_research)
                         print(f"Decision for {ticker}: {decision}")
                         
-                        # Execute trade based on decision
                         if "BUY" in decision.upper():
                             portfolio_value = self.get_portfolio_value()
                             max_position = min(10000, portfolio_value * 0.1)
@@ -1599,12 +1570,12 @@ class TradingBot:
                 self.save_history()
                 self.save_portfolio()
 
-                # Wait 5 minutes before next cycle during market hours
+                # Wait before next cycle
                 time.sleep(300)
 
             except Exception as e:
                 print(f"Error in trading loop: {e}")
-                time.sleep(300)  # Wait 5 minutes on error
+                time.sleep(300)
 
     def check_price_targets(self):
         """Check if any stocks have hit their price targets"""
