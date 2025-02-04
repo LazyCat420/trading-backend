@@ -3,6 +3,7 @@ import os
 import requests
 import json
 from dotenv import load_dotenv
+import pprint
 
 # Load environment variables from .env file
 load_dotenv()
@@ -56,7 +57,7 @@ def search_market_news(query="What is the latest stock market news?"):
             
         search = SearxSearchWrapper(searx_host=searx_host)
         
-        # Set search parameters in the results call
+        # Get results using the results() method instead of direct search
         results = search.results(
             query,
             num_results=k,
@@ -70,29 +71,21 @@ def search_market_news(query="What is the latest stock market news?"):
             processed_results = []
             
             for result in results:
-                # Extract URL (handle both possible URL field names)
-                url = result.get('link') or result.get('url')
-                if not url:
-                    continue
-                    
                 processed_result = {
                     'title': result.get('title', 'No title'),
-                    'url': url,
-                    'link': url,  # Include both for compatibility
                     'snippet': result.get('snippet', ''),
+                    'url': result.get('link') or result.get('url', ''),
                     'source': result.get('source', 'Unknown source'),
-                    'publishedDate': result.get('publishedDate', result.get('published_date', 'No date')),
-                    'score': result.get('score', 0)
+                    'engines': result.get('engines', []),
+                    'score': result.get('score', 0),
+                    'publishedDate': result.get('publishedDate', result.get('published_date', 'No date'))
                 }
                 
                 processed_results.append(processed_result)
                 
-                # Debug output
+                # Use pprint for cleaner output
                 print("\nResult details:")
-                print(f"Title: {processed_result['title']}")
-                print(f"URL: {processed_result['url']}")
-                print(f"Source: {processed_result['source']}")
-                print(f"Published: {processed_result['publishedDate']}")
+                pprint.pprint(processed_result)
                 print("-" * 50)
             
             return processed_results
