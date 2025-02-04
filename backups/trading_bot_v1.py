@@ -52,11 +52,6 @@ class TradingBot:
         self.load_data()
         self.load_watchlist()
 
-        # Add new collections for thought patterns
-        self.thought_chains_collection = self.db['thought_chains']
-        self.thought_trees_collection = self.db['thought_trees']
-        self.thought_graphs_collection = self.db['thought_graphs']
-
     def save_to_mongodb(self, collection, data, index_fields=None):
         """Generic method to save data to MongoDB with indexing"""
         try:
@@ -1120,211 +1115,83 @@ class TradingBot:
             "recommendations": ["error parsing recommendations"]
         }
 
-    def chain_of_thought_analysis(self, data, context):
-        """Implement Chain of Thought reasoning for market analysis"""
-        try:
-            prompt = f"""
-            Analyze this market data using step-by-step reasoning:
-            
-            Context: {context}
-            Data: {data}
-            
-            Follow this chain of thought:
-            1. Initial market conditions
-            2. Key trends and patterns
-            3. Potential implications
-            4. Risk assessment
-            5. Final conclusion
-            
-            Respond with a JSON object containing your step-by-step analysis:
-            {{
-                "steps": [
-                    {{"step": 1, "reasoning": "...", "conclusion": "..."}},
-                    {{"step": 2, "reasoning": "...", "conclusion": "..."}},
-                    {{"step": 3, "reasoning": "...", "conclusion": "..."}},
-                    {{"step": 4, "reasoning": "...", "conclusion": "..."}},
-                    {{"step": 5, "reasoning": "...", "conclusion": "..."}}
-                ],
-                "final_decision": "..."
-            }}
-            """
-            
-            response = self.get_ollama_response(prompt)
-            if response:
-                # Save the thought chain
-                thought_chain = {
-                    'timestamp': datetime.now(),
-                    'context': context,
-                    'analysis': response,
-                    'type': 'market_analysis'
-                }
-                self.save_to_mongodb(self.thought_chains_collection, thought_chain)
-                return response
-            return None
-        except Exception as e:
-            print(f"Error in chain of thought analysis: {e}")
-            return None
-
-    def tree_of_thought_analysis(self, ticker, data):
-        """Implement Tree of Thought reasoning for trading decisions"""
-        try:
-            prompt = f"""
-            Analyze trading options for {ticker} using tree of thought reasoning:
-            
-            Data: {data}
-            
-            Consider three possible actions (BUY, SELL, HOLD) and explore their implications:
-            
-            Respond with a JSON object showing your tree of thought:
-            {{
-                "root": {{
-                    "ticker": "{ticker}",
-                    "current_state": "initial analysis"
-                }},
-                "branches": [
-                    {{
-                        "action": "BUY",
-                        "reasoning": ["reason1", "reason2"],
-                        "implications": ["implication1", "implication2"],
-                        "probability": 0.0,
-                        "risk_level": "high/medium/low"
-                    }},
-                    {{
-                        "action": "SELL",
-                        "reasoning": ["reason1", "reason2"],
-                        "implications": ["implication1", "implication2"],
-                        "probability": 0.0,
-                        "risk_level": "high/medium/low"
-                    }},
-                    {{
-                        "action": "HOLD",
-                        "reasoning": ["reason1", "reason2"],
-                        "implications": ["implication1", "implication2"],
-                        "probability": 0.0,
-                        "risk_level": "high/medium/low"
-                    }}
-                ],
-                "recommended_action": "..."
-            }}
-            """
-            
-            response = self.get_ollama_response(prompt)
-            if response:
-                # Save the thought tree
-                thought_tree = {
-                    'timestamp': datetime.now(),
-                    'ticker': ticker,
-                    'analysis': response,
-                    'type': 'trading_decision'
-                }
-                self.save_to_mongodb(self.thought_trees_collection, thought_tree)
-                return response
-            return None
-        except Exception as e:
-            print(f"Error in tree of thought analysis: {e}")
-            return None
-
-    def graph_of_thought_analysis(self, watchlist_data):
-        """Implement Graph of Thought reasoning for portfolio relationships"""
-        try:
-            prompt = f"""
-            Analyze relationships between watchlist stocks using graph of thought reasoning:
-            
-            Watchlist Data: {watchlist_data}
-            
-            Consider relationships between stocks including:
-            - Sector correlations
-            - Market cap relationships
-            - Performance correlations
-            - Risk relationships
-            
-            Respond with a JSON object showing your graph analysis:
-            {{
-                "nodes": [
-                    {{"id": "ticker1", "type": "stock", "metrics": {{}}}},
-                    {{"id": "ticker2", "type": "stock", "metrics": {{}}}}
-                ],
-                "edges": [
-                    {{
-                        "source": "ticker1",
-                        "target": "ticker2",
-                        "relationship": "correlation/sector/risk",
-                        "strength": 0.0,
-                        "insights": ["insight1", "insight2"]
-                    }}
-                ],
-                "clusters": [
-                    {{
-                        "name": "cluster1",
-                        "stocks": ["ticker1", "ticker2"],
-                        "characteristics": ["char1", "char2"]
-                    }}
-                ],
-                "portfolio_implications": ["implication1", "implication2"]
-            }}
-            """
-            
-            response = self.get_ollama_response(prompt)
-            if response:
-                # Save the thought graph
-                thought_graph = {
-                    'timestamp': datetime.now(),
-                    'analysis': response,
-                    'type': 'portfolio_analysis'
-                }
-                self.save_to_mongodb(self.thought_graphs_collection, thought_graph)
-                return response
-            return None
-        except Exception as e:
-            print(f"Error in graph of thought analysis: {e}")
-            return None
-
     def get_trading_decision(self, ticker, stock_data, research):
-        """Enhanced trading decision using all thought patterns"""
+        """Get trading decision using LLM with enhanced context"""
         try:
-            # Step 1: Chain of Thought for initial analysis
-            cot_analysis = self.chain_of_thought_analysis(stock_data, research)
+            # Prepare research summary
+            research_summary = "\n".join([
+                f"- {r.get('type', 'research')}: {r.get('analysis', {}).get('summary', 'No summary')}"
+                for r in research
+            ])
             
-            # Step 2: Tree of Thought for decision exploration
-            tot_analysis = self.tree_of_thought_analysis(ticker, stock_data)
-            
-            # Step 3: Graph of Thought for portfolio context
-            got_analysis = self.graph_of_thought_analysis(self.watchlist_performance)
-            
-            # Combine all analyses for final decision
             prompt = f"""
-            Synthesize these analyses into a final trading decision:
+            Analyze this stock and provide a trading decision:
             
-            Chain of Thought Analysis: {cot_analysis}
-            Tree of Thought Analysis: {tot_analysis}
-            Graph of Thought Analysis: {got_analysis}
+            Ticker: {ticker}
+            Current Price: ${stock_data['current_price']}
+            Daily Change: {stock_data['daily_change']}%
+            Momentum: {stock_data['momentum']}
             
-            Current Portfolio Context:
-            - Position: {self.portfolio.get(ticker, 0)} shares
+            Recent Research:
+            {research_summary}
+            
+            Portfolio Context:
+            - Current Position: {self.portfolio.get(ticker, 0)} shares
             - Portfolio Value: ${self.get_portfolio_value()}
             - Available Cash: ${self.balance}
             
-            Respond with final decision JSON:
+            Respond with a JSON object in this exact format:
             {{
                 "decision": "BUY/SELL/HOLD",
+                "reasoning": ["reason1", "reason2", "reason3"],
                 "confidence": "high/medium/low",
-                "reasoning": ["reason1", "reason2"],
-                "risk_assessment": "description",
-                "position_size": "recommended size as percentage",
-                "supporting_analyses": {{
-                    "chain_confidence": 0.0,
-                    "tree_confidence": 0.0,
-                    "graph_confidence": 0.0
-                }}
+                "risk_assessment": "description of risks",
+                "target_price": optional target price as number
             }}
             """
             
-            final_decision = self.get_ollama_response(prompt)
-            return final_decision.get('decision', 'HOLD') if final_decision else 'HOLD'
-            
+            response = self.get_ollama_response(prompt)
+            if response:
+                try:
+                    # Handle both string and dictionary responses
+                    if isinstance(response, dict):
+                        decision_data = response
+                    elif isinstance(response, str):
+                        # Clean the response string
+                        json_str = response.strip()
+                        if json_str.startswith('```json'):
+                            json_str = json_str.split('```json')[1]
+                        if json_str.endswith('```'):
+                            json_str = json_str.rsplit('```', 1)[0]
+                        
+                        decision_data = json.loads(json_str.strip())
+                    else:
+                        print(f"Unexpected response type: {type(response)}")
+                        return "HOLD - Invalid response type"
+                    
+                    # Save decision to MongoDB
+                    decision_data.update({
+                        'timestamp': datetime.now(),
+                        'ticker': ticker,
+                        'stock_data': stock_data,
+                        'research_summary': research_summary
+                    })
+                    
+                    self.save_to_mongodb(
+                        self.db['trading_decisions'],
+                        decision_data,
+                        ['timestamp', 'ticker', 'decision']
+                    )
+                    
+                    return decision_data['decision']
+                except json.JSONDecodeError as e:
+                    print(f"Error parsing trading decision JSON: {e}")
+                    print(f"Raw response: {response}")
+                    return "HOLD - JSON parsing error"
+            return "HOLD - No response from LLM"
         except Exception as e:
-            print(f"Error in enhanced trading decision: {e}")
-            return "HOLD"
+            print(f"Error getting trading decision: {e}")
+            return "HOLD - Error in analysis"
 
     def update_watchlist_from_research(self):
         """Update watchlist based on accumulated research"""
