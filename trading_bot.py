@@ -1340,48 +1340,29 @@ class TradingBot:
     def process_searxng_with_scraping(self, query, results):
         """Process SearxNG results without scraping"""
         try:
-            # Only save the SearxNG results
-            return self.save_searxng_results(query, results)
+            # Ensure results are in the correct format
+            if isinstance(results, list):
+                processed_results = []
+                for result in results:
+                    # Handle the structured format from searxng.py
+                    processed_result = {
+                        'title': result.get('title', 'No title'),
+                        'snippet': result.get('snippet', ''),
+                        'url': result.get('link') or result.get('url', ''),
+                        'source': result.get('source', 'Unknown source'),
+                        'engines': result.get('engines', []),
+                        'score': result.get('score', 0),
+                        'publishedDate': result.get('publishedDate', result.get('published_date', 'No date'))
+                    }
+                    processed_results.append(processed_result)
+                
+                # Save the processed results
+                return self.save_searxng_results(query, processed_results)
+            return False
             
         except Exception as e:
             print(f"Error processing results: {e}")
-
-    def search_market_news(self, query):
-        """Use SearxNG to search for market news"""
-        try:
-            from langchain_community.utilities import SearxSearchWrapper
-            
-            # Initialize SearxNG wrapper with correct parameters
-            searx = SearxSearchWrapper(
-                searx_host=os.getenv('SEARXNG_URL'),
-                kwargs={
-                    "engines": ["news", "finance"],
-                    "format": "json",
-                    "time_range": "day",
-                    "language": "en"
-                }
-            )
-            
-            # Get structured results with metadata
-            results = searx.results(query, num_results=5)
-            
-            if results:
-                print(f"\nFound {len(results)} results for query: {query}")
-                # Debug output
-                for result in results:
-                    print("\nResult details:")
-                    print(f"Title: {result.get('title', 'No title')}")
-                    print(f"URL: {result.get('link', result.get('url', 'No URL'))}")
-                    print(f"Source: {result.get('source', 'Unknown source')}")
-                    print(f"Published: {result.get('publishedDate', 'No date')}")
-                    print("-" * 50)
-                return results
-            
-            return None
-            
-        except Exception as e:
-            print(f"Error in SearxNG search: {e}")
-            return None
+            return False
 
     def save_searxng_results(self, query, results):
         """Save SearxNG search results to MongoDB news collection"""
@@ -1393,23 +1374,23 @@ class TradingBot:
                 for result in results:
                     if isinstance(result, dict):
                         # Get URL from either 'link' or 'url' field
-                        url = result.get('link') or result.get('url')
+                        url = result.get('url')  # Already processed in process_searxng_with_scraping
                         if not url:
                             continue
                             
-                        # Process structured SearxNG result
+                        # Create news entry from processed result
                         entry = {
                             'timestamp': timestamp,
                             'query': query,
                             'title': result.get('title', ''),
-                            'content': result.get('snippet', result.get('content', '')),
+                            'content': result.get('snippet', ''),  # Using snippet as content
                             'url': url,
                             'source': result.get('source', 'searxng'),
-                            'published_date': result.get('publishedDate', result.get('published_date')),
+                            'published_date': result.get('publishedDate'),
                             'engines': result.get('engines', []),
                             'score': result.get('score'),
-                            'sentiment': self.analyze_sentiment(result.get('snippet', result.get('content', ''))),
-                            'category': self.categorize_news(result.get('snippet', result.get('content', ''))),
+                            'sentiment': self.analyze_sentiment(result.get('snippet', '')),
+                            'category': self.categorize_news(result.get('snippet', '')),
                             'processed': True
                         }
                         news_entries.append(entry)
