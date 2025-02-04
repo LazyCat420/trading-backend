@@ -1008,114 +1008,86 @@ class TradingBot:
             latest_news = self.load_from_mongodb(self.news_collection, sort=[('timestamp', -1)], limit=50)
             latest_research = self.load_from_mongodb(self.research_collection, sort=[('timestamp', -1)], limit=20)
             latest_trades = self.load_from_mongodb(self.trades_collection, sort=[('timestamp', -1)], limit=20)
-            portfolio_data = self.load_from_mongodb(self.portfolio_collection, sort=[('last_updated', -1)], limit=1)
+            portfolio_data = self.load_from_mongodb(self.portfolio_collection, sort=[('timestamp', -1)], limit=1)
 
             # Prepare data for analysis
             news_summary = "\n".join([
-                f"- {news.get('timestamp').strftime('%Y-%m-%d %H:%M')} | {news.get('content', '')} | Sentiment: {news.get('sentiment', 'unknown')}"
-                for news in latest_news if news.get('content')
+                f"- {news.get('timestamp', '')} | {news.get('content', '')} | Sentiment: {news.get('sentiment', 'unknown')}"
+                for news in (latest_news or [])
             ])
 
             research_summary = "\n".join([
-                f"- {r.get('type', 'research')} | {json.dumps(r.get('analysis', {}))}"
-                for r in latest_research
+                f"- {r.get('type', 'research')} | {str(r.get('analysis', {}))}"
+                for r in (latest_research or [])
             ])
 
             trades_summary = "\n".join([
-                f"- {trade.get('timestamp').strftime('%Y-%m-%d %H:%M')} | {trade.get('action')} {trade.get('ticker')} | "
-                f"Amount: ${trade.get('amount')} | Status: {trade.get('status')}"
-                for trade in latest_trades
+                f"- {trade.get('timestamp', '')} | {trade.get('action', '')} {trade.get('ticker', '')} | "
+                f"Amount: ${trade.get('amount', 0)} | Status: {trade.get('status', '')}"
+                for trade in (latest_trades or [])
             ])
 
             current_portfolio = portfolio_data[0] if portfolio_data else {}
-
-            # Create comprehensive prompt for LLM
-            prompt = f"""
-            You are a trading bot's analysis engine. Generate a comprehensive market summary based on the following data.
-            Your response must be a SINGLE valid JSON object.
             
-            Recent Market News:
-            {news_summary}
-
-            Research Analysis:
-            {research_summary}
-
-            Recent Trading Activity:
-            {trades_summary}
-
-            Current Portfolio Status:
-            - Balance: ${current_portfolio.get('balance', 0):.2f}
-            - Holdings: {json.dumps(current_portfolio.get('portfolio', {}))}
-            - Watchlist: {json.dumps(current_portfolio.get('watchlist', []))}
-
-            Analyze all the above data and provide a detailed summary.
-            
-            Format your entire response as a SINGLE JSON object like this:
-            {{
-                "market_analysis": {{
-                    "sentiment": "bullish/bearish/neutral",
-                    "key_trends": ["trend1", "trend2"],
-                    "market_conditions": "description"
-                }},
-                "portfolio_analysis": {{
-                    "performance": "good/neutral/poor",
-                    "key_metrics": ["metric1", "metric2"],
-                    "recommendations": ["recommendation1", "recommendation2"]
-                }},
-                "strategy_analysis": {{
-                    "effectiveness": "high/medium/low",
-                    "successful_patterns": ["pattern1", "pattern2"],
-                    "areas_for_improvement": ["area1", "area2"]
-                }},
-                "opportunities": ["opportunity1", "opportunity2"],
-                "risks": ["risk1", "risk2"],
-                "recommendations": ["action1", "action2"]
-            }}
-
-            DO NOT include multiple JSON objects or separate them with semicolons.
-            """
+            # Create prompt for LLM
+            prompt = {
+                "context": {
+                    "news": news_summary,
+                    "research": research_summary,
+                    "trades": trades_summary,
+                    "portfolio": {
+                        "balance": current_portfolio.get('balance', 0),
+                        "holdings": current_portfolio.get('portfolio', {}),
+                        "watchlist": current_portfolio.get('watchlist', [])
+                    }
+                },
+                "request": "Generate a comprehensive market analysis and summary."
+            }
 
             # Get AI analysis
-            response = self.get_ollama_response(prompt)
-            if response:
+            response = self.get_ollama_response(json.dumps(prompt))
+            if not response:
+                return None
+
+            # Process the response
+            if isinstance(response, dict):
+                analysis = response
+            elif isinstance(response, str):
+                # Clean and parse the response
                 try:
-                    # Clean the response to ensure it only contains the JSON part
-                    json_str = response.strip()
-                    if json_str.startswith('```json'):
-                        json_str = json_str.split('```json')[1]
-                    if json_str.endswith('```'):
-                        json_str = json_str.rsplit('```', 1)[0]
-                    
-                    analysis = json.loads(json_str.strip())
-                    
-                    # Save summary to MongoDB
-                    summary_data = {
-                        'timestamp': datetime.now(),
-                        'analysis': analysis,
-                        'data_points': {
-                            'news_count': len(latest_news),
-                            'research_count': len(latest_research),
-                            'trades_count': len(latest_trades)
-                        },
-                        'portfolio_snapshot': current_portfolio,
-                        'raw_data': {
-                            'news_summary': news_summary,
-                            'research_summary': research_summary,
-                            'trades_summary': trades_summary
-                        }
-                    }
-                    
-                    self.save_to_mongodb(
-                        self.summary_collection, 
-                        summary_data, 
-                        ['timestamp', 'data_points.news_count', 'analysis.market_analysis.sentiment']
-                    )
-                    return analysis
-                except json.JSONDecodeError as e:
-                    print(f"Error parsing AI summary response: {e}")
-                    print(f"Raw response: {response}")
-                    return self.get_error_summary()
+                    # Remove any markdown code block markers
+                    clean_response = response.replace('```json', '').replace('```', '').strip()
+                    analysis = json.loads(clean_response)
+                except json.JSONDecodeError:
+                    print(f"Error parsing AI response: {response}")
+                    return None
+            else:
+                print(f"Unexpected response type: {type(response)}")
+                return None
+
+            # Save summary to MongoDB
+            if analysis:
+                summary_data = {
+                    'timestamp': datetime.now(),
+                    'analysis': analysis,
+                    'data_points': {
+                        'news_count': len(latest_news) if latest_news else 0,
+                        'research_count': len(latest_research) if latest_research else 0,
+                        'trades_count': len(latest_trades) if latest_trades else 0
+                    },
+                    'portfolio_snapshot': current_portfolio
+                }
+                
+                # Save to MongoDB with proper indexing
+                self.save_to_mongodb(
+                    self.summary_collection,
+                    summary_data,
+                    ['timestamp', 'data_points.news_count']
+                )
+                return analysis
+
             return None
+
         except Exception as e:
             print(f"Error generating AI summary: {e}")
             return None
