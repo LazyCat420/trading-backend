@@ -93,27 +93,29 @@ def analyze_with_ollama(content):
             result = response.json()
             if 'message' in result and 'content' in result['message']:
                 content = result['message']['content']
-                # Clean the content to ensure it's valid JSON
-                content = content.strip()
-                if content.startswith('```json'):
-                    content = content[7:]
-                if content.endswith('```'):
-                    content = content[:-3]
-                content = content.strip()
-                
-                # Parse the JSON content
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError as e:
-                    print(f"Error parsing JSON content: {e}")
-                    print(f"Raw content: {content}")
-                    return {
-                        "summary": content,
-                        "companies_mentioned": [],
-                        "sentiment": "NEUTRAL",
-                        "key_points": [],
-                        "market_impact": "Unknown"
-                    }
+                # Ensure content is a string before calling strip
+                if isinstance(content, str):
+                    # Clean the content to ensure it's valid JSON
+                    content = content.strip()
+                    if content.startswith('```json'):
+                        content = content[7:]
+                    if content.endswith('```'):
+                        content = content[:-3]
+                    content = content.strip()
+                    
+                    # Parse the JSON content
+                    try:
+                        return json.loads(content)
+                    except json.JSONDecodeError as e:
+                        print(f"Error parsing JSON content: {e}")
+                        print(f"Raw content: {content}")
+                        return {
+                            "summary": content,
+                            "companies_mentioned": [],
+                            "sentiment": "NEUTRAL",
+                            "key_points": [],
+                            "market_impact": "Unknown"
+                        }
         return None
     except Exception as e:
         print(f"Error analyzing with Ollama: {e}")

@@ -37,7 +37,7 @@ Respond with ONLY a number between 5 and 10."""
             result = response.json()['message']['content'].strip()
             try:
                 k = int(result)
-                return max(1, min(20, k))  # Ensure result is between 1 and 2
+                return max(1, min(1, k))  # Ensure result is between 1 and 2
             except ValueError:
                 return 1  # Default if parsing fails
     except Exception as e:
