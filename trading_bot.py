@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import yfinance as yf
 import requests
 from searxng import search_market_news
@@ -1279,6 +1279,113 @@ class TradingBot:
             print(f"Error in graph of thought analysis: {e}")
             return None
 
+    def clean_mongodb_data(self, data):
+        """Clean MongoDB data for JSON serialization"""
+        if isinstance(data, dict):
+            return {k: self.clean_mongodb_data(v) for k, v in data.items() if k != '_id'}
+        elif isinstance(data, list):
+            return [self.clean_mongodb_data(item) for item in data]
+        elif isinstance(data, (datetime, date)):
+            return data.isoformat()
+        else:
+            return data
+
+    def get_position_size_decision(self, ticker, stock_data, stock_research, portfolio_value, available_cash):
+        """Get LLM decision on position sizing"""
+        try:
+            # Clean the data before using it
+            stock_data = self.clean_mongodb_data(stock_data)
+            stock_research = self.clean_mongodb_data(stock_research)
+            
+            current_positions = {
+                stock: {
+                    'shares': shares,
+                    'value': shares * self.get_stock_data(stock)['current_price']
+                } for stock, shares in self.portfolio.items()
+            }
+            
+            prompt = f"""
+            Analyze this stock and determine optimal position size.
+            
+            Portfolio Context:
+            - Total Portfolio Value: ${portfolio_value:.2f}
+            - Available Cash: ${available_cash:.2f}
+            - Current Positions: {json.dumps(current_positions, indent=2)}
+            
+            Stock Details:
+            - Ticker: {ticker}
+            - Current Price: ${stock_data['current_price']:.2f}
+            - Momentum: {stock_data['momentum']:.2f}
+            - Daily Change: {stock_data['daily_change']:.2f}%
+            - Beta: {stock_data['beta']}
+            
+            Recent Research:
+            {json.dumps(stock_research, indent=2)}
+
+            Respond with a JSON object containing:
+            {{
+                "action": "BUY/SELL/HOLD",
+                "shares": number_of_shares,
+                "reasoning": ["reason1", "reason2"],
+                "risk_level": "high/medium/low",
+                "position_adjustment": {{
+                    "stocks_to_sell": [
+                        {{"ticker": "XYZ", "shares": 100, "reason": "reason"}}
+                    ]
+                }},
+                "confidence": 0.0-1.0
+            }}
+            
+            Consider:
+            1. Portfolio diversification
+            2. Available cash vs position size
+            3. Risk management (max 20% in single position)
+            4. Current market conditions
+            5. Stock momentum and volatility
+            """
+            
+            response = self.get_ollama_response(prompt)
+            if isinstance(response, str):
+                try:
+                    response = json.loads(response)
+                except json.JSONDecodeError as e:
+                    print(f"Error parsing LLM response: {e}")
+                    print(f"Raw response: {response}")
+                    return None
+                
+            return response
+            
+        except Exception as e:
+            print(f"Error getting position size decision: {e}")
+            import traceback
+            print(traceback.format_exc())  # Print full traceback for debugging
+            return None
+
+    def execute_position_adjustment(self, adjustments):
+        """Execute position adjustments recommended by LLM"""
+        try:
+            total_freed_cash = 0
+            
+            # First sell positions as recommended
+            if adjustments and 'stocks_to_sell' in adjustments:
+                for sell_rec in adjustments['stocks_to_sell']:
+                    ticker = sell_rec['ticker']
+                    shares = sell_rec['shares']
+                    
+                    if ticker in self.portfolio and self.portfolio[ticker] >= shares:
+                        stock_data = self.get_stock_data(ticker)
+                        if stock_data:
+                            sell_value = shares * stock_data['current_price']
+                            if self.execute_trade(ticker, "SELL", sell_value):
+                                total_freed_cash += sell_value
+                                print(f"Sold {shares} shares of {ticker} for ${sell_value:.2f}")
+            
+            return total_freed_cash
+            
+        except Exception as e:
+            print(f"Error executing position adjustment: {e}")
+            return 0
+
     def get_trading_decision(self, ticker, stock_data, research):
         """Enhanced trading decision using all thought patterns"""
         try:
@@ -1633,31 +1740,46 @@ class TradingBot:
                             if not stock_data:
                                 continue
                                 
-                            decision = self.get_trading_decision(ticker, stock_data, stock_research)
-                            print(f"Decision for {ticker}: {decision}")
+                            portfolio_value = self.get_portfolio_value()
+                            available_cash = self.balance
                             
-                            if "BUY" in decision.upper():
-                                portfolio_value = self.get_portfolio_value()
-                                max_position = min(10000, portfolio_value * 0.1)
+                            # Get position sizing decision from LLM
+                            decision = self.get_position_size_decision(
+                                ticker, 
+                                stock_data, 
+                                stock_research,
+                                portfolio_value,
+                                available_cash
+                            )
+                            
+                            if not decision:
+                                continue
                                 
-                                if stock_data['momentum'] > 0:
-                                    confidence = min(stock_data['momentum'], 0.5)
-                                    position_size = max_position * (0.5 + confidence)
-                                else:
-                                    position_size = max_position * 0.5
-                                    
-                                amount = min(position_size, self.balance)
-                                if amount >= 100:
-                                    self.execute_trade(ticker, "BUY", amount)
-                                    
-                            elif "SELL" in decision.upper() and ticker in self.portfolio:
-                                shares = self.portfolio[ticker]
-                                position_value = shares * stock_data['current_price']
+                            print(f"\nDecision for {ticker}:")
+                            print(json.dumps(decision, indent=2))
+                            
+                            # Execute any recommended position adjustments first
+                            if 'position_adjustment' in decision:
+                                freed_cash = self.execute_position_adjustment(decision['position_adjustment'])
+                                available_cash += freed_cash
+                            
+                            # Execute the main trade decision
+                            if decision['action'] == 'BUY':
+                                shares = decision['shares']
+                                total_cost = shares * stock_data['current_price']
                                 
-                                if "stop loss" in decision.lower() or stock_data['momentum'] < -0.5:
-                                    self.execute_trade(ticker, "SELL", position_value)
+                                # Validate against available cash and position limits
+                                max_position = portfolio_value * 0.2  # Max 20% in single position
+                                if total_cost <= available_cash and total_cost <= max_position:
+                                    self.execute_trade(ticker, "BUY", total_cost)
                                 else:
-                                    self.execute_trade(ticker, "SELL", position_value * 0.5)
+                                    print(f"Trade rejected - Cost ${total_cost:.2f} exceeds limits")
+                                    
+                            elif decision['action'] == 'SELL' and ticker in self.portfolio:
+                                shares = min(decision['shares'], self.portfolio[ticker])
+                                if shares > 0:
+                                    sell_value = shares * stock_data['current_price']
+                                    self.execute_trade(ticker, "SELL", sell_value)
                         
                         except Exception as e:
                             print(f"Error processing {ticker}: {e}")
