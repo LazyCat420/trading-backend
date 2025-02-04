@@ -417,8 +417,8 @@ class TradingBot:
         """Categorize news using Ollama"""
         try:
             prompt = f"""
-            Categorize this news into exactly one category from: EARNINGS, MERGER, MARKET_SENTIMENT, COMPANY_NEWS, INDUSTRY_NEWS, REGULATORY, OTHER
-            News: {text}
+            Categorize this news responding exactly with the category name and nothing else: EARNINGS, MERGER, MARKET_SENTIMENT, COMPANY_NEWS, INDUSTRY_NEWS, REGULATORY, OTHER
+            News: {text}.
             """
             response = self.get_ollama_response(prompt)
             if response:
@@ -427,6 +427,22 @@ class TradingBot:
         except Exception as e:
             print(f"Error categorizing news: {e}")
             return "OTHER"
+    
+    def list_tickers(self, text):
+        """List tickers from news text using Ollama"""
+        try:
+            prompt = f"""
+            Extract all stock tickers from this news text: {text}
+            Respond with a list of tickers separated by commas.
+            """
+            response = self.get_ollama_response(prompt)
+            if response:
+                return response.strip().upper()
+            return ""
+        except Exception as e:
+            print(f"Error listing tickers: {e}")
+            return ""
+    
 
     def calculate_news_impact(self, news_item):
         """Calculate potential market impact of news"""
@@ -621,84 +637,31 @@ class TradingBot:
                 print(f"Trade amount ${amount} too small for {ticker}")
                 return False
 
-            trade_data = {
+            # Create trade document
+            trade = {
                 'timestamp': datetime.now(),
                 'ticker': ticker,
                 'action': action,
                 'amount': amount,
-                'price': float(stock_data['current_price']),
-                'momentum': stock_data.get('momentum', 0),
-                'daily_change': stock_data.get('daily_change', 0)
+                'status': 'pending'
             }
-
-            success = False
-            if action == "BUY":
-                if amount <= self.balance:
-                    shares = amount / float(stock_data['current_price'])
-                    if shares > 0:
-                        self.portfolio[ticker] = self.portfolio.get(ticker, 0) + shares
-                        self.balance -= amount
-                        trade_data['shares'] = shares
-                        trade_data['status'] = 'success'
-                        print(f"Successfully bought {shares:.2f} shares of {ticker} at ${stock_data['current_price']:.2f}")
-                        success = True
-                    else:
-                        trade_data['status'] = 'failed - invalid share calculation'
-                else:
-                    trade_data['status'] = 'failed - insufficient funds'
-            elif action == "SELL":
-                if ticker in self.portfolio:
-                    shares_to_sell = amount / float(stock_data['current_price'])
-                    if shares_to_sell <= self.portfolio[ticker]:
-                        self.portfolio[ticker] -= shares_to_sell
-                        self.balance += amount
-                        trade_data['shares'] = shares_to_sell
-                        trade_data['status'] = 'success'
-                        print(f"Successfully sold {shares_to_sell:.2f} shares of {ticker} at ${stock_data['current_price']:.2f}")
-                        if self.portfolio[ticker] < 0.0001:  # Clean up tiny positions
-                            del self.portfolio[ticker]
-                        success = True
-                    else:
-                        trade_data['status'] = 'failed - insufficient shares'
-                else:
-                    trade_data['status'] = 'failed - not in portfolio'
-
-            # Save trade to MongoDB
-            self.save_to_mongodb(
-                self.trades_collection,
-                trade_data,
-                ['timestamp', 'ticker', 'action', 'status']
+            
+            # Save to MongoDB first
+            result = self.trades_collection.insert_one(trade)
+            if not result.inserted_id:
+                raise Exception("Failed to save trade to MongoDB")
+            
+            # Update trade status
+            self.trades_collection.update_one(
+                {'_id': result.inserted_id},
+                {'$set': {'status': 'executed'}}
             )
             
-            if success:
-                # Save updated portfolio state
-                self.save_data()
-                # Update performance metrics
-                if ticker in self.watchlist_performance:
-                    self.watchlist_performance[ticker]['success_trades'] = \
-                        self.watchlist_performance[ticker].get('success_trades', 0) + 1
-                    self.save_watchlist()
-            else:
-                if ticker in self.watchlist_performance:
-                    self.watchlist_performance[ticker]['failed_trades'] = \
-                        self.watchlist_performance[ticker].get('failed_trades', 0) + 1
-                    self.save_watchlist()
-
-            return success
+            print(f"Trade executed and saved: {ticker} {action} ${amount:.2f}")
+            return True
 
         except Exception as e:
             print(f"Error executing trade: {e}")
-            if trade_data:
-                trade_data['status'] = f'failed - {str(e)}'
-                self.save_to_mongodb(
-                    self.trades_collection,
-                    trade_data,
-                    ['timestamp', 'ticker', 'action', 'status']
-                )
-            if ticker in self.watchlist_performance:
-                self.watchlist_performance[ticker]['failed_trades'] = \
-                    self.watchlist_performance[ticker].get('failed_trades', 0) + 1
-                self.save_watchlist()
             return False
 
     def log_trade(self, trade_data):
@@ -1004,14 +967,26 @@ class TradingBot:
             response = self.get_ollama_response(prompt)
             if response:
                 try:
-                    # Clean the response to ensure it only contains the JSON part
-                    json_str = response.strip()
-                    if json_str.startswith('```json'):
-                        json_str = json_str.split('```json')[1]
-                    if json_str.endswith('```'):
-                        json_str = json_str.rsplit('```', 1)[0]
-                    
-                    return json.loads(json_str.strip())
+                    # Handle both string and dictionary responses
+                    if isinstance(response, dict):
+                        return response
+                    elif isinstance(response, str):
+                        # Clean the response string
+                        json_str = response.strip()
+                        if json_str.startswith('```json'):
+                            json_str = json_str.split('```json')[1]
+                        if json_str.endswith('```'):
+                            json_str = json_str.rsplit('```', 1)[0]
+                        
+                        return json.loads(json_str.strip())
+                    else:
+                        print(f"Unexpected response type: {type(response)}")
+                        return {
+                            "sentiment": "neutral",
+                            "trends": ["error parsing trends"],
+                            "opportunities": ["error parsing opportunities"],
+                            "risks": ["error parsing analysis"]
+                        }
                 except json.JSONDecodeError as e:
                     print(f"Error parsing LLM response: {e}")
                     print(f"Raw response: {response}")
@@ -1340,29 +1315,48 @@ class TradingBot:
     def process_searxng_with_scraping(self, query, results):
         """Process SearxNG results without scraping"""
         try:
-            # Ensure results are in the correct format
-            if isinstance(results, list):
-                processed_results = []
-                for result in results:
-                    # Handle the structured format from searxng.py
-                    processed_result = {
-                        'title': result.get('title', 'No title'),
-                        'snippet': result.get('snippet', ''),
-                        'url': result.get('link') or result.get('url', ''),
-                        'source': result.get('source', 'Unknown source'),
-                        'engines': result.get('engines', []),
-                        'score': result.get('score', 0),
-                        'publishedDate': result.get('publishedDate', result.get('published_date', 'No date'))
-                    }
-                    processed_results.append(processed_result)
-                
-                # Save the processed results
-                return self.save_searxng_results(query, processed_results)
-            return False
+            # Only save the SearxNG results
+            return self.save_searxng_results(query, results)
             
         except Exception as e:
             print(f"Error processing results: {e}")
-            return False
+
+    def search_market_news(self, query):
+        """Use SearxNG to search for market news"""
+        try:
+            from langchain_community.utilities import SearxSearchWrapper
+            
+            # Initialize SearxNG wrapper with correct parameters
+            searx = SearxSearchWrapper(
+                searx_host=os.getenv('SEARXNG_URL'),
+                kwargs={
+                    "engines": ["news", "finance"],
+                    "format": "json",
+                    "time_range": "day",
+                    "language": "en"
+                }
+            )
+            
+            # Get structured results with metadata
+            results = searx.results(query, num_results=5)
+            
+            if results:
+                print(f"\nFound {len(results)} results for query: {query}")
+                # Debug output
+                for result in results:
+                    print("\nResult details:")
+                    print(f"Title: {result.get('title', 'No title')}")
+                    print(f"URL: {result.get('link', result.get('url', 'No URL'))}")
+                    print(f"Source: {result.get('source', 'Unknown source')}")
+                    print(f"Published: {result.get('publishedDate', 'No date')}")
+                    print("-" * 50)
+                return results
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error in SearxNG search: {e}")
+            return None
 
     def save_searxng_results(self, query, results):
         """Save SearxNG search results to MongoDB news collection"""
@@ -1374,23 +1368,23 @@ class TradingBot:
                 for result in results:
                     if isinstance(result, dict):
                         # Get URL from either 'link' or 'url' field
-                        url = result.get('url')  # Already processed in process_searxng_with_scraping
+                        url = result.get('link') or result.get('url')
                         if not url:
                             continue
                             
-                        # Create news entry from processed result
+                        # Process structured SearxNG result
                         entry = {
                             'timestamp': timestamp,
                             'query': query,
                             'title': result.get('title', ''),
-                            'content': result.get('snippet', ''),  # Using snippet as content
+                            'content': result.get('snippet', result.get('content', '')),
                             'url': url,
                             'source': result.get('source', 'searxng'),
-                            'published_date': result.get('publishedDate'),
+                            'published_date': result.get('publishedDate', result.get('published_date')),
                             'engines': result.get('engines', []),
                             'score': result.get('score'),
-                            'sentiment': self.analyze_sentiment(result.get('snippet', '')),
-                            'category': self.categorize_news(result.get('snippet', '')),
+                            'sentiment': self.analyze_sentiment(result.get('snippet', result.get('content', ''))),
+                            'category': self.categorize_news(result.get('snippet', result.get('content', ''))),
                             'processed': True
                         }
                         news_entries.append(entry)
@@ -1416,8 +1410,18 @@ class TradingBot:
             print(f"Error saving Searxng results: {e}")
             return False
 
-    def run_trading_loop(self):
-        """Run the trading bot"""
+    def run_trading_loop(self, start_phase=1):
+        """Run the trading bot starting from specified phase
+        
+        Args:
+            start_phase (int): Phase to start from (1-6)
+            1: Market News
+            2: Sector Research 
+            3: Stock Discovery
+            4: Watchlist Research
+            5: Trading Decisions
+            6: Summary and Analysis
+        """
         while True:
             try:
                 # Status update
@@ -1430,121 +1434,127 @@ class TradingBot:
                 # Check price targets
                 self.check_price_targets()
                 
-                print("\n=== Phase 1: Market News ===")
-                market_news = search_market_news("top performing stocks market analysis today")
-                if market_news:
-                    self.save_searxng_results("top performing stocks market analysis today", market_news)
-                    analysis = self.analyze_with_llm(market_news)
-                    if analysis:
-                        research_data = [{
-                            'type': 'market_news',
-                            'analysis': analysis,
-                            'timestamp': datetime.now()
-                        }]
+                if start_phase <= 1:
+                    print("\n=== Phase 1: Market News ===")
+                    market_news = search_market_news("top performing stocks market analysis today")
+                    if market_news:
+                        self.save_searxng_results("top performing stocks market analysis today", market_news)
+                        analysis = self.analyze_with_llm(market_news)
+                        if analysis:
+                            research_data = [{
+                                'type': 'market_news',
+                                'analysis': analysis,
+                                'timestamp': datetime.now()
+                            }]
 
-                print("\n=== Phase 2: Sector Research ===")
-                research_data = []
+                if start_phase <= 2:
+                    print("\n=== Phase 2: Sector Research ===")
+                    research_data = []
 
-                for query in self.generate_market_queries():
-                    try:
-                        print(f"\nResearching: {query}")
-                        market_news = search_market_news(query)
-                        if market_news:
-                            self.process_searxng_with_scraping(query, market_news)
-                            
-                            analysis = self.analyze_with_llm(market_news)
-                            if analysis:
-                                research_data.append({
-                                    'type': 'sector_analysis',
-                                    'query': query,
-                                    'analysis': analysis,
-                                    'timestamp': datetime.now()
-                                })
-                        time.sleep(2)  # Avoid rate limiting
-                    except Exception as e:
-                        print(f"Error researching {query}: {e}")
-                        continue
-
-                # Save all research data
-                if research_data:
-                    self.save_research_data(research_data)
-
-                print("\n=== Phase 3: Stock Discovery ===")
-                self.update_watchlist_from_research()
-                
-                print("\n=== Phase 4: Watchlist Research ===")
-                watchlist_research = []
-                for ticker in self.watchlist:
-                    try:
-                        print(f"\nResearching {ticker}...")
-                        stock_news = search_market_news(f"{ticker} stock analysis news")
-                        if stock_news:
-                            self.save_searxng_results(f"{ticker}_analysis", stock_news)
-                            
-                            analysis = self.analyze_with_llm(stock_news)
-                            if analysis:
-                                watchlist_research.append({
-                                    'type': 'stock_analysis',
-                                    'ticker': ticker,
-                                    'analysis': analysis,
-                                    'timestamp': datetime.now()
-                                })
-                        time.sleep(2)
-                    except Exception as e:
-                        print(f"Error researching {ticker}: {e}")
-                        continue
-
-                # Save watchlist research
-                if watchlist_research:
-                    self.save_research_data(watchlist_research)
-
-                print("\n=== Phase 5: Trading Decisions ===")
-                for ticker in self.watchlist:
-                    try:
-                        print(f"\nAnalyzing {ticker}...")
-                        self.update_stock_performance(ticker)
-                        
-                        stock_data = self.get_stock_data(ticker)
-                        stock_research = self.get_research_data(ticker=ticker, limit=10)
-                        
-                        if not stock_data:
+                    for query in self.generate_market_queries():
+                        try:
+                            print(f"\nResearching: {query}")
+                            market_news = search_market_news(query)
+                            if market_news:
+                                self.process_searxng_with_scraping(query, market_news)
+                                
+                                analysis = self.analyze_with_llm(market_news)
+                                if analysis:
+                                    research_data.append({
+                                        'type': 'sector_analysis',
+                                        'query': query,
+                                        'analysis': analysis,
+                                        'timestamp': datetime.now()
+                                    })
+                            time.sleep(2)  # Avoid rate limiting
+                        except Exception as e:
+                            print(f"Error researching {query}: {e}")
                             continue
-                            
-                        decision = self.get_trading_decision(ticker, stock_data, stock_research)
-                        print(f"Decision for {ticker}: {decision}")
-                        
-                        if "BUY" in decision.upper():
-                            portfolio_value = self.get_portfolio_value()
-                            max_position = min(10000, portfolio_value * 0.1)
-                            
-                            if stock_data['momentum'] > 0:
-                                confidence = min(stock_data['momentum'], 0.5)
-                                position_size = max_position * (0.5 + confidence)
-                            else:
-                                position_size = max_position * 0.5
-                                
-                            amount = min(position_size, self.balance)
-                            if amount >= 100:
-                                self.execute_trade(ticker, "BUY", amount)
-                                
-                        elif "SELL" in decision.upper() and ticker in self.portfolio:
-                            shares = self.portfolio[ticker]
-                            position_value = shares * stock_data['current_price']
-                            
-                            if "stop loss" in decision.lower() or stock_data['momentum'] < -0.5:
-                                self.execute_trade(ticker, "SELL", position_value)
-                            else:
-                                self.execute_trade(ticker, "SELL", position_value * 0.5)
-                    
-                    except Exception as e:
-                        print(f"Error processing {ticker}: {e}")
-                        continue
 
-                print("\n=== Phase 6: Summary and Analysis ===")
-                summary = self.generate_ai_summary()
-                if summary:
-                    print("\nAI Market Summary:")
-                    print(json.dumps(summary, indent=2))
+                    # Save all research data
+                    if research_data:
+                        self.save_research_data(research_data)
+
+                if start_phase <= 3:
+                    print("\n=== Phase 3: Stock Discovery ===")
+                    self.update_watchlist_from_research()
+                    
+                if start_phase <= 4:
+                    print("\n=== Phase 4: Watchlist Research ===")
+                    watchlist_research = []
+                    for ticker in self.watchlist:
+                        try:
+                            print(f"\nResearching {ticker}...")
+                            stock_news = search_market_news(f"{ticker} stock analysis news")
+                            if stock_news:
+                                self.save_searxng_results(f"{ticker}_analysis", stock_news)
+                                
+                                analysis = self.analyze_with_llm(stock_news)
+                                if analysis:
+                                    watchlist_research.append({
+                                        'type': 'stock_analysis',
+                                        'ticker': ticker,
+                                        'analysis': analysis,
+                                        'timestamp': datetime.now()
+                                    })
+                            time.sleep(2)
+                        except Exception as e:
+                            print(f"Error researching {ticker}: {e}")
+                            continue
+
+                    # Save watchlist research
+                    if watchlist_research:
+                        self.save_research_data(watchlist_research)
+
+                if start_phase <= 5:
+                    print("\n=== Phase 5: Trading Decisions ===")
+                    for ticker in self.watchlist:
+                        try:
+                            print(f"\nAnalyzing {ticker}...")
+                            self.update_stock_performance(ticker)
+                            
+                            stock_data = self.get_stock_data(ticker)
+                            stock_research = self.get_research_data(ticker=ticker, limit=10)
+                            
+                            if not stock_data:
+                                continue
+                                
+                            decision = self.get_trading_decision(ticker, stock_data, stock_research)
+                            print(f"Decision for {ticker}: {decision}")
+                            
+                            if "BUY" in decision.upper():
+                                portfolio_value = self.get_portfolio_value()
+                                max_position = min(10000, portfolio_value * 0.1)
+                                
+                                if stock_data['momentum'] > 0:
+                                    confidence = min(stock_data['momentum'], 0.5)
+                                    position_size = max_position * (0.5 + confidence)
+                                else:
+                                    position_size = max_position * 0.5
+                                    
+                                amount = min(position_size, self.balance)
+                                if amount >= 100:
+                                    self.execute_trade(ticker, "BUY", amount)
+                                    
+                            elif "SELL" in decision.upper() and ticker in self.portfolio:
+                                shares = self.portfolio[ticker]
+                                position_value = shares * stock_data['current_price']
+                                
+                                if "stop loss" in decision.lower() or stock_data['momentum'] < -0.5:
+                                    self.execute_trade(ticker, "SELL", position_value)
+                                else:
+                                    self.execute_trade(ticker, "SELL", position_value * 0.5)
+                        
+                        except Exception as e:
+                            print(f"Error processing {ticker}: {e}")
+                            continue
+
+                if start_phase <= 6:
+                    print("\n=== Phase 6: Summary and Analysis ===")
+                    summary = self.generate_ai_summary()
+                    if summary:
+                        print("\nAI Market Summary:")
+                        print(json.dumps(summary, indent=2))
 
                 # Save all data
                 self.save_data()
@@ -1602,8 +1612,11 @@ class TradingBot:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Trading Bot')
     parser.add_argument('--test', action='store_true', help='Run in testing mode (bypass market hours)')
+    parser.add_argument('--start-phase', type=int, choices=range(1, 7), default=1,
+                      help='Start from specific phase (1-6)')
     args = parser.parse_args()
     
     bot = TradingBot(testing_mode=args.test)
     print("Starting Trading Bot..." + (" (Testing Mode)" if args.test else ""))
-    bot.run_trading_loop() 
+    print(f"Starting from Phase {args.start_phase}")
+    bot.run_trading_loop(start_phase=args.start_phase) 

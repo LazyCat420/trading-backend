@@ -71,9 +71,16 @@ def search_market_news(query="What is the latest stock market news?"):
             processed_results = []
             
             for result in results:
+                # Extract snippet with fallback to description or text
+                snippet = (
+                    result.get('snippet') or 
+                    result.get('description') or 
+                    result.get('text', '')
+                )
+                
                 processed_result = {
                     'title': result.get('title', 'No title'),
-                    'snippet': result.get('snippet', ''),
+                    'snippet': snippet,
                     'url': result.get('link') or result.get('url', ''),
                     'source': result.get('source', 'Unknown source'),
                     'engines': result.get('engines', []),
