@@ -1181,14 +1181,21 @@ class TradingBot:
             response = self.get_ollama_response(prompt)
             if response:
                 try:
-                    # Clean and parse JSON response
-                    json_str = response.strip()
-                    if json_str.startswith('```json'):
-                        json_str = json_str.split('```json')[1]
-                    if json_str.endswith('```'):
-                        json_str = json_str.rsplit('```', 1)[0]
-                    
-                    decision_data = json.loads(json_str.strip())
+                    # Handle both string and dictionary responses
+                    if isinstance(response, dict):
+                        decision_data = response
+                    elif isinstance(response, str):
+                        # Clean the response string
+                        json_str = response.strip()
+                        if json_str.startswith('```json'):
+                            json_str = json_str.split('```json')[1]
+                        if json_str.endswith('```'):
+                            json_str = json_str.rsplit('```', 1)[0]
+                        
+                        decision_data = json.loads(json_str.strip())
+                    else:
+                        print(f"Unexpected response type: {type(response)}")
+                        return "HOLD - Invalid response type"
                     
                     # Save decision to MongoDB
                     decision_data.update({
@@ -1205,8 +1212,10 @@ class TradingBot:
                     )
                     
                     return decision_data['decision']
-                except json.JSONDecodeError:
-                    return "HOLD - Error parsing decision"
+                except json.JSONDecodeError as e:
+                    print(f"Error parsing trading decision JSON: {e}")
+                    print(f"Raw response: {response}")
+                    return "HOLD - JSON parsing error"
             return "HOLD - No response from LLM"
         except Exception as e:
             print(f"Error getting trading decision: {e}")
