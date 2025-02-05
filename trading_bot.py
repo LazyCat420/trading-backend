@@ -43,17 +43,9 @@ class TradingBot:
             raise Exception("Could not connect to MongoDB")
         
         self.db = self.client['trading']
-        self.trades_collection = self.db['trades']
-        self.watchlist_collection = self.db['watchlist']
-        self.news_collection = self.db['news']
-        self.portfolio_collection = self.db['portfolio']
-        self.summary_collection = self.db['summary']
-        self.research_collection = self.db['research']
         
-        # Add thought pattern collections
-        self.thought_chains_collection = self.db['thought_chains']
-        self.thought_trees_collection = self.db['thought_trees']
-        self.thought_graphs_collection = self.db['thought_graphs']
+        # Setup collections with proper indexes
+        self.setup_mongodb_collections()
         
         # Initialize data lists
         self.trades_data = []
@@ -70,6 +62,46 @@ class TradingBot:
         # Load data from MongoDB
         self.load_data()
         self.load_watchlist()
+
+    def setup_mongodb_collections(self):
+        """Setup MongoDB collections with proper indexes"""
+        try:
+            # News collection
+            self.news_collection = self.db['news']
+            self.news_collection.drop_indexes()  # Drop existing indexes
+            self.news_collection.create_index([('url', 1)], unique=True, name='unique_url')
+            self.news_collection.create_index([('timestamp', -1)], name='news_timestamp')
+            
+            # Analysis collection
+            self.analysis_collection = self.db['analysis']
+            self.analysis_collection.drop_indexes()
+            self.analysis_collection.create_index([('news_url', 1)], unique=True, name='unique_news_url')
+            self.analysis_collection.create_index([('timestamp', -1)], name='analysis_timestamp')
+            
+            # Trends collection
+            self.trends_collection = self.db['trends']
+            self.trends_collection.drop_indexes()
+            self.trends_collection.create_index(
+                [('timestamp', 1), ('trend', 1), ('source_url', 1)],
+                unique=True,
+                name='unique_trend'
+            )
+            
+            # Other collections
+            self.trades_collection = self.db['trades']
+            self.watchlist_collection = self.db['watchlist']
+            self.portfolio_collection = self.db['portfolio']
+            self.summary_collection = self.db['summary']
+            self.research_collection = self.db['research']
+            self.thought_chains_collection = self.db['thought_chains']
+            self.thought_trees_collection = self.db['thought_trees']
+            self.thought_graphs_collection = self.db['thought_graphs']
+            
+            print("MongoDB collections and indexes setup complete")
+            
+        except Exception as e:
+            print(f"Error setting up MongoDB collections: {e}")
+            raise
 
     def save_to_mongodb(self, collection, data, index_fields=None):
         """Generic method to save data to MongoDB with indexing"""
@@ -439,35 +471,142 @@ class TradingBot:
         except Exception as e:
             print(f"Error saving trades: {e}")
 
-    def analyze_sentiment(self, text):
-        """Analyze sentiment of news text using Ollama"""
+    def extract_tickers(self, text):
+        """Extract stock tickers from text using regex and common patterns"""
         try:
-            prompt = f"""
-            Analyze the sentiment of this news. Respond with exactly one word: POSITIVE, NEGATIVE, or NEUTRAL.
-            News: {text}. Use tool calling to add the stock tickers to the watchlist. 
-            """
-            response = self.get_ollama_response(prompt)
-            if response:
-                return response.strip().lower()
-            return "neutral"
+            import re
+            
+            # Initialize empty set for unique tickers
+            tickers = set()
+            
+            # Common patterns for stock tickers
+            patterns = [
+                r'\b[A-Z]{1,5}\b',  # 1-5 uppercase letters
+                r'\$[A-Z]{1,5}\b',  # Tickers with $ prefix
+                r'\([A-Z]{1,5}\)',  # Tickers in parentheses
+                r'NYSE:\s*([A-Z]{1,5})',  # NYSE listings
+                r'NASDAQ:\s*([A-Z]{1,5})'  # NASDAQ listings
+            ]
+            
+            # Extract potential tickers using patterns
+            for pattern in patterns:
+                matches = re.findall(pattern, text)
+                tickers.update(matches)
+            
+            # Filter out common words and invalid tickers
+            exclude_words = {
+                'A', 'I', 'CEO', 'CFO', 'US', 'USA', 'NYSE', 'NASDAQ', 'IPO', 
+                'AI', 'API', 'ETF', 'GDP', 'COVID', 'FDA', 'SEC', 'THE'
+            }
+            
+            # Validate tickers using yfinance
+            valid_tickers = []
+            for ticker in tickers:
+                # Clean the ticker (remove $ and parentheses)
+                clean_ticker = ticker.strip('$()').strip()
+                
+                # Skip if it's in exclude words
+                if clean_ticker in exclude_words:
+                    continue
+                    
+                try:
+                    # Quick validation using yfinance
+                    stock = yf.Ticker(clean_ticker)
+                    info = stock.info
+                    if info and 'symbol' in info:
+                        valid_tickers.append(clean_ticker)
+                except:
+                    continue
+            
+            # Debug output
+            if valid_tickers:
+                print(f"Extracted tickers: {', '.join(valid_tickers)}")
+            
+            return valid_tickers
+            
+        except Exception as e:
+            print(f"Error extracting tickers: {e}")
+            return []
+
+    def analyze_sentiment(self, text):
+        """Analyze sentiment of text using simple keyword matching"""
+        try:
+            # Positive and negative word lists
+            positive_words = {
+                'up', 'rise', 'gain', 'profit', 'growth', 'positive', 'bullish',
+                'outperform', 'beat', 'strong', 'higher', 'increase', 'improved'
+            }
+            
+            negative_words = {
+                'down', 'fall', 'loss', 'decline', 'negative', 'bearish',
+                'underperform', 'miss', 'weak', 'lower', 'decrease', 'reduced'
+            }
+            
+            # Convert text to lowercase for matching
+            text = text.lower()
+            
+            # Count occurrences
+            positive_count = sum(1 for word in positive_words if word in text)
+            negative_count = sum(1 for word in negative_words if word in text)
+            
+            # Determine sentiment
+            if positive_count > negative_count:
+                return "positive"
+            elif negative_count > positive_count:
+                return "negative"
+            else:
+                return "neutral"
+                
         except Exception as e:
             print(f"Error analyzing sentiment: {e}")
             return "neutral"
 
     def categorize_news(self, text):
-        """Categorize news using Ollama"""
+        """Categorize news into relevant market sectors"""
+        try:
+            # Define sector keywords
+            sector_keywords = {
+                "Technology": ['tech', 'software', 'hardware', 'ai', 'cloud', 'cyber'],
+                "Healthcare": ['health', 'medical', 'biotech', 'pharma', 'drug'],
+                "Financial": ['bank', 'finance', 'invest', 'trading', 'insurance'],
+                "Consumer": ['retail', 'consumer', 'shopping', 'goods', 'services'],
+                "Energy": ['energy', 'oil', 'gas', 'renewable', 'solar', 'wind'],
+                "Industrial": ['manufacturing', 'industry', 'construction', 'machinery']
+            }
+            
+            # Convert text to lowercase
+            text = text.lower()
+            
+            # Count keyword matches for each sector
+            sector_matches = {}
+            for sector, keywords in sector_keywords.items():
+                matches = sum(1 for keyword in keywords if keyword in text)
+                if matches > 0:
+                    sector_matches[sector] = matches
+            
+            # Return the sector with most matches, or "Other"
+            if sector_matches:
+                return max(sector_matches.items(), key=lambda x: x[1])[0]
+            return "Other"
+            
+        except Exception as e:
+            print(f"Error categorizing news: {e}")
+            return "Other"
+
+    def categorize_tickers(self, text):
+        """Categorize tickers from news text using Ollama"""
         try:
             prompt = f"""
-            Categorize this news responding exactly with the category name and nothing else: EARNINGS, MERGER, MARKET_SENTIMENT, COMPANY_NEWS, INDUSTRY_NEWS, REGULATORY, OTHER
-            News: {text}.
-            """
+            Categorize the tickers in this news text: {text}
+            Respond with a list of tickers separated by commas.
+        """
             response = self.get_ollama_response(prompt)
             if response:
                 return response.strip().upper()
-            return "OTHER"
+            return ""
         except Exception as e:
-            print(f"Error categorizing news: {e}")
-            return "OTHER"
+            print(f"Error categorizing tickers: {e}")
+            return ""
     
     def list_tickers(self, text):
         """List tickers from news text using Ollama"""
@@ -1842,55 +1981,155 @@ class TradingBot:
             return None
 
     def save_searxng_results(self, query, results):
-        """Save SearxNG search results to MongoDB news collection"""
+        """Save SearxNG search results to MongoDB with improved error handling"""
         try:
             news_entries = []
+            analysis_entries = []
+            trends_entries = []
             timestamp = datetime.now()
             
-            if isinstance(results, list):
-                for result in results:
-                    if isinstance(result, dict):
-                        # Get URL from either 'link' or 'url' field
-                        url = result.get('link') or result.get('url')
-                        if not url:
-                            continue
-                            
-                        # Process structured SearxNG result
-                        entry = {
-                            'timestamp': timestamp,
-                            'query': query,
-                            'title': result.get('title', ''),
-                            'content': result.get('snippet', result.get('content', '')),
-                            'url': url,
-                            'source': result.get('source', 'searxng'),
-                            'published_date': result.get('publishedDate', result.get('published_date')),
-                            'engines': result.get('engines', []),
-                            'score': result.get('score'),
-                            'sentiment': self.analyze_sentiment(result.get('snippet', result.get('content', ''))),
-                            'category': self.categorize_news(result.get('snippet', result.get('content', ''))),
-                            'processed': True
-                        }
-                        news_entries.append(entry)
+            print(f"\nProcessing {len(results) if isinstance(results, list) else 0} search results...")
             
+            for result in results:
+                if not isinstance(result, dict):
+                    continue
+                    
+                # Get URL and validate
+                url = result.get('link') or result.get('url')
+                if not url:
+                    continue
+                
+                # Extract content
+                content = result.get('snippet') or result.get('content', '')
+                if not content:
+                    continue
+                
+                # Create comprehensive news entry
+                news_entry = {
+                    'timestamp': timestamp,
+                    'query': query,
+                    'title': result.get('title', '').strip(),
+                    'content': content.strip(),
+                    'snippet': result.get('snippet', ''),  # Add this line to save the snippet
+                    'url': url,
+                    'source': result.get('source', 'Unknown source'),
+                    'published_date': result.get('publishedDate') or result.get('published_date', 'No date'),
+                    'engines': result.get('engines', []),
+                    'score': float(result.get('score', 0)),
+                    'sentiment': self.analyze_sentiment(content),
+                    'category': self.categorize_news(content),
+                    'tickers': self.extract_tickers(content),
+                    'processed': True
+                }
+                
+                # Create detailed analysis entry
+                analysis_prompt = f"""
+                Analyze this market news for actionable insights:
+                Title: {news_entry['title']}
+                Content: {content}
+                
+                Respond with ONLY a JSON object containing:
+                {{
+                    "trends": ["specific market trend 1", "specific market trend 2"],
+                    "opportunities": ["specific opportunity 1", "specific opportunity 2"],
+                    "risks": ["specific risk 1", "specific risk 2"],
+                    "tickers_mentioned": ["TICKER1", "TICKER2"],
+                    "key_metrics": ["metric1", "metric2"],
+                    "sentiment_details": {{
+                        "overall": "positive/negative/neutral",
+                        "confidence": 0.0-1.0,
+                        "factors": ["factor1", "factor2"]
+                    }}
+                }}
+                """
+                
+                analysis_response = self.get_ollama_response(analysis_prompt)
+                
+                if isinstance(analysis_response, dict):
+                    analysis_entry = {
+                        'timestamp': timestamp,
+                        'news_url': url,
+                        'news_title': news_entry['title'],
+                        'sentiment': news_entry['sentiment'],
+                        'analysis': analysis_response,
+                        'tickers': news_entry['tickers']
+                    }
+                    
+                    # Create trend entries from analysis
+                    if 'trends' in analysis_response:
+                        for trend in analysis_response['trends']:
+                            trend_entry = {
+                                'timestamp': timestamp,
+                                'trend': trend,
+                                'source_url': url,
+                                'related_tickers': news_entry['tickers'],
+                                'sentiment': news_entry['sentiment'],
+                                'confidence': analysis_response.get('sentiment_details', {}).get('confidence', 0.5),
+                                'category': news_entry['category']
+                            }
+                            trends_entries.append(trend_entry)
+                    
+                    news_entries.append(news_entry)
+                    analysis_entries.append(analysis_entry)
+            
+            # Save to MongoDB with error handling
             if news_entries:
-                # Save to MongoDB with enhanced indexes
-                self.save_to_mongodb(
-                    self.news_collection, 
-                    news_entries,
-                    ['timestamp', 'query', 'sentiment', 'category', 'url', 'source']
-                )
-                print(f"\nSaved {len(news_entries)} news entries to MongoDB:")
-                for entry in news_entries:
-                    print(f"\nSaved entry:")
-                    print(f"Title: {entry['title'][:100]}...")
-                    print(f"URL: {entry['url']}")
-                    print(f"Source: {entry['source']}")
-                    print(f"Published: {entry['published_date']}")
-                return True
+                try:
+                    # Save news entries
+                    for entry in news_entries:
+                        try:
+                            self.news_collection.update_one(
+                                {'url': entry['url']},
+                                {'$set': entry},
+                                upsert=True
+                            )
+                        except Exception as e:
+                            print(f"Error saving news entry: {e}")
+                            continue
+                    
+                    # Save analysis entries
+                    for entry in analysis_entries:
+                        try:
+                            self.analysis_collection.update_one(
+                                {'news_url': entry['news_url']},
+                                {'$set': entry},
+                                upsert=True
+                            )
+                        except Exception as e:
+                            print(f"Error saving analysis entry: {e}")
+                            continue
+                    
+                    # Save trends entries
+                    for entry in trends_entries:
+                        try:
+                            self.trends_collection.update_one(
+                                {
+                                    'timestamp': entry['timestamp'],
+                                    'trend': entry['trend'],
+                                    'source_url': entry['source_url']
+                                },
+                                {'$set': entry},
+                                upsert=True
+                            )
+                        except Exception as e:
+                            print(f"Error saving trend entry: {e}")
+                            continue
+                    
+                    print(f"\nSuccessfully saved to MongoDB:")
+                    print(f"- News entries: {len(news_entries)}")
+                    print(f"- Analysis entries: {len(analysis_entries)}")
+                    print(f"- Trend entries: {len(trends_entries)}")
+                    
+                    return True
+                    
+                except Exception as e:
+                    print(f"Error in MongoDB operations: {e}")
+                    return False
+                    
             return False
             
         except Exception as e:
-            print(f"Error saving Searxng results: {e}")
+            print(f"Error in save_searxng_results: {e}")
             return False
 
     def run_trading_loop(self, start_phase=1):
@@ -1918,8 +2157,10 @@ class TradingBot:
                                 research_data = [{
                                     'type': 'market_news',
                                     'analysis': analysis,
-                                    'timestamp': datetime.now()
+                                    'timestamp': datetime.now(),
+                                    'tickers': self.categorize_tickers(market_news)
                                 }]
+
 
                     if start_phase <= 2:
                         print("\n=== Phase 2: Sector Research ===")
@@ -1938,10 +2179,12 @@ class TradingBot:
                                             'type': 'sector_analysis',
                                             'query': query,
                                             'analysis': analysis,
-                                            'timestamp': datetime.now()
+                                            'timestamp': datetime.now(),
+                                            'tickers': self.categorize_tickers(market_news)
                                         })
                                 time.sleep(2)  # Avoid rate limiting
                             except Exception as e:
+
                                 print(f"Error researching {query}: {e}")
                                 continue
 
