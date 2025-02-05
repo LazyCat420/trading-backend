@@ -61,7 +61,7 @@ def analyze_with_ollama(content):
     """Analyze scraped content with Ollama"""
     try:
         prompt = {
-            "model": os.getenv('OLLAMA_MODEL', 'huihui_ai/deepseek-r1-abliterated:32b'),  # Provide default model
+            "model": os.getenv('OLLAMA_MODEL'),  # Provide default model
             "messages": [{
                 "role": "user",
                 "content": f"""Analyze this financial news content and extract key information:

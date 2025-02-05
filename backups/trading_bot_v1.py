@@ -276,7 +276,7 @@ class TradingBot:
 
             # Prepare request with proper format
             request_body = {
-                "model": os.getenv('OLLAMA_MODEL', 'huihui_ai/deepseek-r1-abliterated:32b'),
+                "model": os.getenv('OLLAMA_MODEL'),
                 "messages": [{
                     "role": "user",
                     "content": self.clean_text(prompt_text)

@@ -14,14 +14,30 @@ import pytz
 import argparse
 import base64
 import logging
+from bson import ObjectId
+from pymongo import UpdateOne
 
 class TradingBot:
-    def __init__(self, initial_balance=100000, testing_mode=False):  # Added testing_mode parameter
-        self.initial_balance = float(initial_balance)  # Store initial balance
+    def __init__(self, initial_balance=100000, testing_mode=False, personality_type="balanced"):
+        # Initialize basic attributes first
+        self.initial_balance = float(initial_balance)
         self.balance = self.initial_balance
         self.portfolio = {}
+        self.testing_mode = testing_mode
+        self.personality_type = personality_type
+        
+        # Define sectors before using them
+        self.sectors = [
+            "Technology", "Healthcare", "Financial", "Consumer Cyclical",
+            "Energy", "Industrial", "Communication Services", "Materials",
+            "Real Estate", "Utilities", "Consumer Defensive"
+        ]
+        
+        # Initialize watchlist as a list instead of sector dict
         self.watchlist = []
-        self.testing_mode = testing_mode  # Add testing mode flag
+        self.sector_watchlists = {sector: [] for sector in self.sectors}
+        
+        # Initialize MongoDB connection
         self.client = get_database()
         if not self.client:
             raise Exception("Could not connect to MongoDB")
@@ -34,6 +50,11 @@ class TradingBot:
         self.summary_collection = self.db['summary']
         self.research_collection = self.db['research']
         
+        # Add thought pattern collections
+        self.thought_chains_collection = self.db['thought_chains']
+        self.thought_trees_collection = self.db['thought_trees']
+        self.thought_graphs_collection = self.db['thought_graphs']
+        
         # Initialize data lists
         self.trades_data = []
         self.news_data = []
@@ -42,31 +63,46 @@ class TradingBot:
         # Other initializations
         self.momentum_window = 20
         self.watchlist_performance = {}
-        self.sectors = [
-            "Technology", "Healthcare", "Financial", "Consumer Cyclical",
-            "Energy", "Industrial", "Communication Services", "Materials",
-            "Real Estate", "Utilities", "Consumer Defensive"
-        ]
         
-        # Load all data from MongoDB
+        # Set personality traits after basic initialization
+        self.personality_traits = self.set_personality(personality_type)
+        
+        # Load data from MongoDB
         self.load_data()
         self.load_watchlist()
-
-        # Add new collections for thought patterns
-        self.thought_chains_collection = self.db['thought_chains']
-        self.thought_trees_collection = self.db['thought_trees']
-        self.thought_graphs_collection = self.db['thought_graphs']
 
     def save_to_mongodb(self, collection, data, index_fields=None):
         """Generic method to save data to MongoDB with indexing"""
         try:
             if isinstance(data, list):
                 if data:
-                    result = collection.insert_many(data)
-                    print(f"Inserted {len(result.inserted_ids)} documents")
+                    # Use update_many with upsert for lists
+                    operations = []
+                    for doc in data:
+                        operations.append(
+                            UpdateOne(
+                                {'timestamp': doc.get('timestamp')},  # Use timestamp as unique identifier
+                                {'$set': doc},
+                                upsert=True
+                            )
+                        )
+                    result = collection.bulk_write(operations)
+                    print(f"Processed {len(operations)} documents")
             else:
-                result = collection.insert_one(data)
-                print("Inserted 1 document")
+                # For single documents, use update_one with upsert
+                if '_id' in data:
+                    # If _id exists, use it as filter
+                    filter_doc = {'_id': data['_id']}
+                else:
+                    # Otherwise use timestamp as unique identifier
+                    filter_doc = {'timestamp': data.get('timestamp', datetime.now())}
+                
+                result = collection.update_one(
+                    filter_doc,
+                    {'$set': data},
+                    upsert=True
+                )
+                print("Document updated/inserted")
             
             # Create indexes if specified
             if index_fields:
@@ -114,7 +150,7 @@ class TradingBot:
         if latest_data:
             data = latest_data[0]
             self.portfolio = data.get('portfolio', {})
-            self.watchlist = data.get('watchlist', [])
+            self.watchlist = data.get('watchlist', {})
             self.balance = data.get('balance', 100000)
 
     def save_research_data(self, research_data):
@@ -281,7 +317,7 @@ class TradingBot:
 
             # Prepare request with proper format
             request_body = {
-                "model": os.getenv('OLLAMA_MODEL', 'huihui_ai/deepseek-r1-abliterated:32b'),
+                "model": os.getenv('OLLAMA_MODEL'),
                 "messages": [{
                     "role": "user",
                     "content": self.clean_text(prompt_text)
@@ -408,7 +444,7 @@ class TradingBot:
         try:
             prompt = f"""
             Analyze the sentiment of this news. Respond with exactly one word: POSITIVE, NEGATIVE, or NEUTRAL.
-            News: {text}
+            News: {text}. Use tool calling to add the stock tickers to the watchlist. 
             """
             response = self.get_ollama_response(prompt)
             if response:
@@ -557,6 +593,44 @@ class TradingBot:
                 
             if not news:
                 news = "No recent news available"
+
+            # Retrieve existing research data for this ticker
+            stock_research = self.get_research_data(ticker=ticker, limit=5) # Get last 5 research items
+
+            # Incorporate research data into signal logic
+            signals = {
+                'price_vs_50d': stock_data['current_price'] > stock_data['fifty_day_avg'],
+                'momentum': stock_data['momentum'] > 0,
+                'daily_trend': stock_data['daily_change'] > 0,
+                'volume': stock_data['volume'] > 0,
+                'positive_research': any(r.get('analysis', {}).get('sentiment') == 'bullish' for r in stock_research) # Example
+            }
+            
+            # Count positive signals
+            positive_signals = sum(1 for signal in signals.values() if signal)
+            
+            # Get current position and value
+            current_shares = self.portfolio.get(ticker, 0)
+            position_value = current_shares * stock_data['current_price']
+            portfolio_value = self.get_portfolio_value()
+            
+            # Decision logic
+            if current_shares == 0:  # No position yet
+                if positive_signals >= 3:  # At least 3 positive signals for new position
+                    return f"BUY - Strong signals ({positive_signals}/4) suggest entry point"
+            else:  # Existing position
+                if positive_signals <= 1:  # Weak signals
+                    return f"SELL - Weak signals ({positive_signals}/4) suggest exit"
+                elif stock_data['daily_change'] < -2:  # Stop loss
+                    return f"SELL - Stop loss triggered at {stock_data['daily_change']:.2f}%"
+                elif position_value > portfolio_value * 0.2:  # Position too large
+                    return f"SELL - Position size exceeds 20% of portfolio"
+                elif positive_signals >= 3:  # Strong position
+                    if position_value < portfolio_value * 0.1:  # Can add more
+                        return f"BUY - Strong signals ({positive_signals}/4) and position size allows growth"
+            
+            return "HOLD - No clear signals"
+
         except Exception as e:
             print(f"Error fetching news for {ticker}: {e}")
             news = "Error fetching news"
@@ -564,39 +638,6 @@ class TradingBot:
         stock_data = self.get_stock_data(ticker)
         if not stock_data or stock_data['current_price'] == 0:
             return "HOLD - Insufficient data"
-
-        # Calculate buy/sell signals
-        signals = {
-            'price_vs_50d': stock_data['current_price'] > stock_data['fifty_day_avg'],
-            'momentum': stock_data['momentum'] > 0,
-            'daily_trend': stock_data['daily_change'] > 0,
-            'volume': stock_data['volume'] > 0
-        }
-        
-        # Count positive signals
-        positive_signals = sum(1 for signal in signals.values() if signal)
-        
-        # Get current position and value
-        current_shares = self.portfolio.get(ticker, 0)
-        position_value = current_shares * stock_data['current_price']
-        portfolio_value = self.get_portfolio_value()
-        
-        # Decision logic
-        if current_shares == 0:  # No position yet
-            if positive_signals >= 3:  # At least 3 positive signals for new position
-                return f"BUY - Strong signals ({positive_signals}/4) suggest entry point"
-        else:  # Existing position
-            if positive_signals <= 1:  # Weak signals
-                return f"SELL - Weak signals ({positive_signals}/4) suggest exit"
-            elif stock_data['daily_change'] < -2:  # Stop loss
-                return f"SELL - Stop loss triggered at {stock_data['daily_change']:.2f}%"
-            elif position_value > portfolio_value * 0.2:  # Position too large
-                return f"SELL - Position size exceeds 20% of portfolio"
-            elif positive_signals >= 3:  # Strong position
-                if position_value < portfolio_value * 0.1:  # Can add more
-                    return f"BUY - Strong signals ({positive_signals}/4) and position size allows growth"
-        
-        return "HOLD - No clear signals"
 
     def get_portfolio_value(self):
         """Calculate total portfolio value"""
@@ -626,29 +667,38 @@ class TradingBot:
             return float(self.initial_balance)  # Return initial balance as fallback
 
     def execute_trade(self, ticker, action, amount):
-        """Execute a trade and save to MongoDB"""
+        """Execute a trade with improved error handling and logging"""
         try:
+            print(f"\nExecuting trade: {action} {ticker} ${amount:.2f}")
+            
             stock_data = self.get_stock_data(ticker)
             if not stock_data or stock_data.get('current_price', 0) <= 0:
                 print(f"Invalid price data for {ticker}")
                 return False
 
-            # Validate and limit the trade amount
-            portfolio_value = self.get_portfolio_value()
-            max_trade_amount = min(portfolio_value * 0.2, 50000)  # Max 20% of portfolio or $50k
-            amount = min(amount, max_trade_amount)
-            
-            if amount < 100:  # Minimum trade size
-                print(f"Trade amount ${amount} too small for {ticker}")
-                return False
+            current_price = stock_data['current_price']
+            shares = amount / current_price
+
+            # Validate trade size
+            if action == "BUY":
+                if amount > self.balance:
+                    print(f"Insufficient funds: ${self.balance:.2f} < ${amount:.2f}")
+                    return False
+            elif action == "SELL":
+                if shares > self.portfolio.get(ticker, 0):
+                    print(f"Insufficient shares: {self.portfolio.get(ticker, 0)} < {shares}")
+                    return False
 
             # Create trade document
             trade = {
                 'timestamp': datetime.now(),
                 'ticker': ticker,
                 'action': action,
+                'shares': shares,
+                'price': current_price,
                 'amount': amount,
-                'status': 'pending'
+                'status': 'pending',
+                'personality': self.personality_type
             }
             
             # Save to MongoDB first
@@ -656,13 +706,22 @@ class TradingBot:
             if not result.inserted_id:
                 raise Exception("Failed to save trade to MongoDB")
             
+            # Execute trade
+            if action == "BUY":
+                self.portfolio[ticker] = self.portfolio.get(ticker, 0) + shares
+                self.balance -= amount
+            else:  # SELL
+                self.portfolio[ticker] = max(0, self.portfolio.get(ticker, 0) - shares)
+                self.balance += amount
+            
             # Update trade status
             self.trades_collection.update_one(
                 {'_id': result.inserted_id},
                 {'$set': {'status': 'executed'}}
             )
             
-            print(f"Trade executed and saved: {ticker} {action} ${amount:.2f}")
+            print(f"Trade executed: {action} {shares:.2f} shares of {ticker} @ ${current_price:.2f}")
+            print(f"New balance: ${self.balance:.2f}")
             return True
 
         except Exception as e:
@@ -694,11 +753,11 @@ class TradingBot:
             )
             if latest_watchlist:
                 data = latest_watchlist[0]
-                self.watchlist = data.get('watchlist', [])
+                self.watchlist = data.get('watchlist', {})
                 self.watchlist_performance = data.get('performance', {})
         except Exception as e:
             print(f"Error loading watchlist from MongoDB: {e}")
-            self.watchlist = []
+            self.watchlist = {}
             self.watchlist_performance = {}
 
     def save_watchlist(self):
@@ -928,83 +987,140 @@ class TradingBot:
             print(f"Error saving history to MongoDB: {e}")
 
     def save_portfolio(self):
-        """Save portfolio data to MongoDB"""
+        """Save portfolio data to MongoDB with enhanced tracking"""
         try:
+            # Calculate total value first
+            total_value = self.get_portfolio_value()
+            
+            # Create detailed portfolio snapshot
             portfolio_data = {
+                '_id': ObjectId(),  # Add unique _id for MongoDB
                 'timestamp': datetime.now(),
-                'portfolio': self.portfolio,
+                'portfolio': {
+                    ticker: {
+                        'shares': shares,
+                        'current_price': self.get_stock_data(ticker)['current_price'],
+                        'market_value': shares * self.get_stock_data(ticker)['current_price']
+                    } for ticker, shares in self.portfolio.items()
+                },
                 'balance': self.balance,
-                'total_value': self.get_portfolio_value()
+                'total_value': total_value,
+                'cash_percentage': (self.balance / total_value * 100) if total_value > 0 else 0,
+                'positions_count': len(self.portfolio),
+                'last_updated': datetime.now()
             }
-            self.save_to_mongodb(
-                self.portfolio_collection,
-                portfolio_data,
-                ['timestamp', 'balance', 'total_value']
-            )
-            print("Portfolio saved to MongoDB successfully")
+            
+            # Save to MongoDB with retry logic
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    result = self.portfolio_collection.insert_one(portfolio_data)
+                    if result.inserted_id:
+                        print(f"Portfolio saved successfully to MongoDB")
+                        
+                        # Also update the latest portfolio summary
+                        self.portfolio_collection.update_one(
+                            {'type': 'latest_summary'},
+                            {'$set': {**portfolio_data, 'type': 'latest_summary'}},
+                            upsert=True
+                        )
+                        return True
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    time.sleep(1)  # Wait before retry
+                    
         except Exception as e:
             print(f"Error saving portfolio to MongoDB: {e}")
+            return False
 
     def analyze_with_llm(self, content):
-        """Analyze content using Ollama LLM"""
+        """Analyze content using Ollama LLM with improved prompting"""
         try:
             prompt = f"""
-            You are a trading bot's analysis engine. Analyze this market information and provide insights.
-            
-            Market Information:
+            You are a financial analyst. Analyze this market information and provide a valid JSON response:
+
             {content}
-            
-            Analyze the above information considering:
-            1. Market sentiment
-            2. Sector trends
-            3. Trading opportunities
-            4. Risk factors
-            
-            Respond ONLY with a valid JSON object using this exact format:
+
+            Respond with ONLY a JSON object in this exact format, with no additional text:
             {{
                 "sentiment": "bullish/bearish/neutral",
-                "trends": ["trend1", "trend2", "trend3"],
-                "opportunities": ["opportunity1", "opportunity2"],
-                "risks": ["risk1", "risk2"]
+                "trends": [
+                    "trend 1",
+                    "trend 2",
+                    "trend 3"
+                ],
+                "opportunities": [
+                    "opportunity 1",
+                    "opportunity 2"
+                ],
+                "risks": [
+                    "risk 1",
+                    "risk 2"
+                ]
             }}
             """
             
             response = self.get_ollama_response(prompt)
             if response:
                 try:
-                    # Handle both string and dictionary responses
+                    # If response is already a dict, return it
                     if isinstance(response, dict):
                         return response
-                    elif isinstance(response, str):
-                        # Clean the response string
-                        json_str = response.strip()
-                        if json_str.startswith('```json'):
-                            json_str = json_str.split('```json')[1]
-                        if json_str.endswith('```'):
-                            json_str = json_str.rsplit('```', 1)[0]
-                        
-                        return json.loads(json_str.strip())
-                    else:
-                        print(f"Unexpected response type: {type(response)}")
-                        return {
-                            "sentiment": "neutral",
-                            "trends": ["error parsing trends"],
-                            "opportunities": ["error parsing opportunities"],
-                            "risks": ["error parsing analysis"]
-                        }
+                    
+                    # Clean the response string
+                    json_str = response.strip()
+                    
+                    # Remove any markdown code blocks
+                    if '```json' in json_str:
+                        json_str = json_str.split('```json')[1]
+                    if '```' in json_str:
+                        json_str = json_str.split('```')[0]
+                    
+                    # Remove any leading/trailing whitespace and newlines
+                    json_str = json_str.strip()
+                    
+                    # Ensure the JSON string has proper structure
+                    if not (json_str.startswith('{') and json_str.endswith('}')):
+                        raise json.JSONDecodeError("Invalid JSON structure", json_str, 0)
+                    
+                    # Check for missing closing brackets
+                    if json_str.count('{') != json_str.count('}'):
+                        missing = json_str.count('{') - json_str.count('}')
+                        if missing > 0:
+                            json_str += '}' * missing
+                    
+                    # Parse the JSON string
+                    parsed_json = json.loads(json_str)
+                    
+                    # Validate required fields
+                    required_fields = ['sentiment', 'trends', 'opportunities', 'risks']
+                    for field in required_fields:
+                        if field not in parsed_json:
+                            parsed_json[field] = [] if field != 'sentiment' else 'neutral'
+                    
+                    return parsed_json
+                    
                 except json.JSONDecodeError as e:
-                    print(f"Error parsing LLM response: {e}")
-                    print(f"Raw response: {response}")
+                    print(f"JSON parsing error: {e}")
+                    # Return a valid default response
                     return {
                         "sentiment": "neutral",
-                        "trends": ["error parsing trends"],
-                        "opportunities": ["error parsing opportunities"],
-                        "risks": ["error parsing analysis"]
+                        "trends": ["Unable to parse market trends"],
+                        "opportunities": ["Unable to parse opportunities"],
+                        "risks": ["Unable to parse risks"]
                     }
+                
             return None
+            
         except Exception as e:
             print(f"Error in LLM analysis: {e}")
-            return None
+            return {
+                "sentiment": "neutral",
+                "trends": ["Error analyzing market trends"],
+                "opportunities": ["Error analyzing opportunities"],
+                "risks": ["Error analyzing risks"]
+            }
 
     def generate_ai_summary(self):
         """Generate comprehensive AI summary from all MongoDB data"""
@@ -1291,74 +1407,89 @@ class TradingBot:
             return data
 
     def get_position_size_decision(self, ticker, stock_data, stock_research, portfolio_value, available_cash):
-        """Get LLM decision on position sizing"""
+        """Get LLM decision on position sizing with improved debugging"""
         try:
-            # Clean the data before using it
-            stock_data = self.clean_mongodb_data(stock_data)
-            stock_research = self.clean_mongodb_data(stock_research)
+            print(f"\nAnalyzing position size for {ticker}...")
+            print(f"Available Cash: ${available_cash:.2f}")
+            print(f"Portfolio Value: ${portfolio_value:.2f}")
+            print(f"Current Price: ${stock_data['current_price']:.2f}")
             
-            current_positions = {
-                stock: {
-                    'shares': shares,
-                    'value': shares * self.get_stock_data(stock)['current_price']
-                } for stock, shares in self.portfolio.items()
-            }
+            # Calculate maximum shares based on available cash and risk limits
+            max_position_value = min(available_cash * 0.25, portfolio_value * 0.25)  # Max 25% of either
+            max_shares = int(max_position_value / stock_data['current_price'])
             
             prompt = f"""
-            Analyze this stock and determine optimal position size.
-            
-            Portfolio Context:
-            - Total Portfolio Value: ${portfolio_value:.2f}
-            - Available Cash: ${available_cash:.2f}
-            - Current Positions: {json.dumps(current_positions, indent=2)}
-            
-            Stock Details:
-            - Ticker: {ticker}
+            Determine position size for {ticker} trade with these parameters:
             - Current Price: ${stock_data['current_price']:.2f}
-            - Momentum: {stock_data['momentum']:.2f}
-            - Daily Change: {stock_data['daily_change']:.2f}%
-            - Beta: {stock_data['beta']}
+            - Daily Change: {stock_data.get('daily_change', 0):.2f}%
+            - Momentum: {stock_data.get('momentum', 0):.2f}
+            - Available Cash: ${available_cash:.2f}
+            - Max Shares Possible: {max_shares}
+            - Current Holdings: {self.portfolio.get(ticker, 0)} shares
+            - Personality Type: {self.personality_type}
             
-            Recent Research:
-            {json.dumps(stock_research, indent=2)}
-
-            Respond with a JSON object containing:
+            Respond with ONLY a JSON object in this format:
             {{
                 "action": "BUY/SELL/HOLD",
-                "shares": number_of_shares,
-                "reasoning": ["reason1", "reason2"],
-                "risk_level": "high/medium/low",
-                "position_adjustment": {{
-                    "stocks_to_sell": [
-                        {{"ticker": "XYZ", "shares": 100, "reason": "reason"}}
-                    ]
-                }},
-                "confidence": 0.0-1.0
+                "shares": <number of shares>,
+                "confidence": <0.0-1.0>,
+                "reasoning": ["reason1", "reason2"]
             }}
-            
-            Consider:
-            1. Portfolio diversification
-            2. Available cash vs position size
-            3. Risk management (max 20% in single position)
-            4. Current market conditions
-            5. Stock momentum and volatility
             """
             
             response = self.get_ollama_response(prompt)
-            if isinstance(response, str):
+            print(f"\nLLM Response: {response}")  # Debug print
+            
+            if response:
                 try:
-                    response = json.loads(response)
+                    # Handle both string and dict responses
+                    if isinstance(response, str):
+                        # Clean the response string
+                        cleaned_response = response.strip()
+                        if cleaned_response.startswith('```json'):
+                            cleaned_response = cleaned_response.split('```json')[1]
+                        if cleaned_response.endswith('```'):
+                            cleaned_response = cleaned_response.rsplit('```', 1)[0]
+                        decision = json.loads(cleaned_response.strip())
+                    else:
+                        decision = response
+                    
+                    # Validate and adjust the decision
+                    if decision['action'] == 'BUY':
+                        # Limit buy size
+                        max_shares = int(max_position_value / stock_data['current_price'])
+                        decision['shares'] = min(decision['shares'], max_shares)
+                        
+                        # Ensure minimum trade size
+                        min_trade_value = 500  # $500 minimum trade
+                        min_shares = max(1, int(min_trade_value / stock_data['current_price']))
+                        
+                        if decision['shares'] < min_shares:
+                            print(f"Trade size too small (${decision['shares'] * stock_data['current_price']:.2f}), skipping")
+                            return None
+                        
+                    elif decision['action'] == 'SELL':
+                        # Can't sell more than we own
+                        current_shares = self.portfolio.get(ticker, 0)
+                        decision['shares'] = min(decision['shares'], current_shares)
+                        
+                        if decision['shares'] <= 0:
+                            print("No shares to sell")
+                            return None
+                    
+                    print(f"\nFinal Decision: {json.dumps(decision, indent=2)}")
+                    return decision
+                    
                 except json.JSONDecodeError as e:
-                    print(f"Error parsing LLM response: {e}")
+                    print(f"Error parsing decision: {e}")
                     print(f"Raw response: {response}")
                     return None
-                
-            return response
+                    
+            return None
             
         except Exception as e:
-            print(f"Error getting position size decision: {e}")
-            import traceback
-            print(traceback.format_exc())  # Print full traceback for debugging
+            print(f"Error in position sizing: {e}")
+            print(f"Stock data: {stock_data}")
             return None
 
     def execute_position_adjustment(self, adjustments):
@@ -1387,160 +1518,291 @@ class TradingBot:
             return 0
 
     def get_trading_decision(self, ticker, stock_data, research):
-        """Enhanced trading decision using all thought patterns"""
+        """Enhanced trading decision using all thought patterns and personality"""
         try:
-            # Step 1: Chain of Thought for initial analysis
-            cot_analysis = self.chain_of_thought_analysis(stock_data, research)
+            # Get base decision (existing code)
+            base_decision = super().get_trading_decision(ticker, stock_data, research)
             
-            # Step 2: Tree of Thought for decision exploration
-            tot_analysis = self.tree_of_thought_analysis(ticker, stock_data)
+            # Adjust decision based on personality
+            context = {
+                "market_conditions": self.analyze_market_conditions(),
+                "portfolio_status": self.get_portfolio_status(),
+                "risk_metrics": self.calculate_risk_metrics(ticker)
+            }
             
-            # Step 3: Graph of Thought for portfolio context
-            got_analysis = self.graph_of_thought_analysis(self.watchlist_performance)
-            
-            # Combine all analyses for final decision
-            prompt = f"""
-            Synthesize these analyses into a final trading decision:
-            
-            Chain of Thought Analysis: {cot_analysis}
-            Tree of Thought Analysis: {tot_analysis}
-            Graph of Thought Analysis: {got_analysis}
-            
-            Current Portfolio Context:
-            - Position: {self.portfolio.get(ticker, 0)} shares
-            - Portfolio Value: ${self.get_portfolio_value()}
-            - Available Cash: ${self.balance}
-            
-            Respond with final decision JSON:
-            {{
-                "decision": "BUY/SELL/HOLD",
-                "confidence": "high/medium/low",
-                "reasoning": ["reason1", "reason2"],
-                "risk_assessment": "description",
-                "position_size": "recommended size as percentage",
-                "supporting_analyses": {{
-                    "chain_confidence": 0.0,
-                    "tree_confidence": 0.0,
-                    "graph_confidence": 0.0
-                }}
-            }}
-            """
-            
-            final_decision = self.get_ollama_response(prompt)
-            return final_decision.get('decision', 'HOLD') if final_decision else 'HOLD'
+            adjusted_decision = self.get_personality_adjusted_decision(base_decision, context)
+            return adjusted_decision
             
         except Exception as e:
-            print(f"Error in enhanced trading decision: {e}")
+            print(f"Error in personality-adjusted trading decision: {e}")
             return "HOLD"
 
-    def update_watchlist_from_research(self):
-        """Update watchlist based on accumulated research"""
+    def analyze_market_conditions(self):
+        """Analyze current market conditions for personality context"""
         try:
-            # Get recent research data
-            recent_research = self.get_research_data(data_type='sector_analysis', limit=50)
-            print(f"\nAnalyzing {len(recent_research)} research entries for stock suggestions...")
-            
-            # Extract potential stock symbols from research
-            potential_stocks = set()
-            
-            # Helper function to extract stock symbols
-            def extract_symbols(text):
-                # Common stock market indices to exclude
-                indices = {'SPX', 'DJI', 'IXIC', 'RUT', 'VIX', 'NYSE', 'NASDAQ'}
-                # Common words to exclude
-                common_words = {'THE', 'AND', 'INC', 'CO', 'CORP', 'LTD', 'LLC', 'PLC'}
-                # Find 1-5 letter uppercase words that might be tickers
-                import re
-                symbols = re.findall(r'\b[A-Z]{1,5}\b', text)
-                # Filter out common indices and words
-                return {s for s in symbols if s not in indices and s not in common_words}
-            
-            # Look through research data
-            for r in recent_research:
-                analysis = r.get('analysis', {})
-                
-                # Extract from opportunities and trends
-                for item in analysis.get('opportunities', []) + analysis.get('trends', []):
-                    potential_stocks.update(extract_symbols(item))
-                
-                # Extract from the query itself
-                query = r.get('query', '')
-                if 'stock' in query.lower():
-                    potential_stocks.update(extract_symbols(query))
-            
-            print(f"Found potential stocks: {list(potential_stocks)}")
-            
-            # If we found stocks directly, try to add them
-            stocks_added = 0
-            for ticker in potential_stocks:
-                if len(self.watchlist) < 20:  # Maximum 20 stocks
-                    if self.add_to_watchlist(ticker):
-                        print(f"Added {ticker} to watchlist based on research mention")
-                        stocks_added += 1
-            
-            # If watchlist is still small, use LLM for additional suggestions
-            if len(self.watchlist) < 5:
-                # Get recent market news for context
-                market_news = search_market_news("top performing stocks market analysis today")
-                
-                prompt = f"""
-                Based on this market research and news, suggest 3-5 established stocks to add to the watchlist.
-                Choose only well-known companies with high trading volume.
-                
-                Market News:
-                {market_news}
-                
-                Current market conditions and trends suggest these sectors are promising:
-                {self.sectors}
-                
-                Current watchlist: {self.watchlist}
-                
-                Respond with ONLY a JSON object containing stock symbols to add.
-                Format example:
-                {{
-                    "add": ["AAPL", "MSFT", "GOOGL"]
-                }}
-                
-                Important: Respond with ONLY the JSON object, no other text.
-                """
-                
-                print("\nAsking LLM for stock suggestions...")
-                response = self.get_ollama_response(prompt)
-                if response:
-                    try:
-                        changes = json.loads(response)
-                        suggested_stocks = changes.get('add', [])
-                        if suggested_stocks:
-                            print(f"LLM suggested stocks: {suggested_stocks}")
-                            
-                            # Add suggested stocks
-                            for ticker in suggested_stocks:
-                                if len(self.watchlist) < 20:
-                                    if self.add_to_watchlist(ticker):
-                                        print(f"Added {ticker} to watchlist based on LLM suggestion")
-                                        stocks_added += 1
-                        else:
-                            print("No valid stock suggestions from LLM")
-                                    
-                    except json.JSONDecodeError as e:
-                        print(f"Error parsing LLM response: {e}")
-                        print(f"Raw response: {response}")
-            
-            print(f"\nWatchlist update complete. Added {stocks_added} new stocks.")
-            return stocks_added > 0
-                    
+            # Implement market analysis logic
+            return {
+                "volatility": "medium",
+                "trend": "upward",
+                "sentiment": "positive"
+            }
         except Exception as e:
-            print(f"Error updating watchlist from research: {e}")
-            return False
+            print(f"Error analyzing market conditions: {e}")
+            return {}
+
+    def get_portfolio_status(self):
+        """Get current portfolio status for personality context"""
+        try:
+            return {
+                "total_value": self.get_portfolio_value(),
+                "cash_ratio": self.balance / self.get_portfolio_value(),
+                "diversification": len(self.portfolio)
+            }
+        except Exception as e:
+            print(f"Error getting portfolio status: {e}")
+            return {}
+
+    def calculate_risk_metrics(self, ticker):
+        """Calculate risk metrics for personality context"""
+        try:
+            stock_data = self.get_stock_data(ticker)
+            return {
+                "volatility": stock_data.get('beta', 1.0),
+                "momentum": stock_data.get('momentum', 0),
+                "risk_level": "medium"
+            }
+        except Exception as e:
+            print(f"Error calculating risk metrics: {e}")
+            return {}
+
+    def set_personality(self, personality_type):
+        """Set the trading bot's personality traits and behavior parameters"""
+        personalities = {
+            "conservative": {
+                "risk_tolerance": 0.3,
+                "max_position_size": 0.1,
+                "profit_target": 0.15,
+                "stop_loss": 0.05,
+                "holding_period": "long",
+                "diversification_preference": "high",
+                "description": "A cautious trader focused on capital preservation",
+                "decision_style": "methodical",
+                "market_view": "defensive",
+                "emotional_state": "calm",
+                "confidence": 0.6
+            },
+            "aggressive": {
+                "risk_tolerance": 0.7,
+                "max_position_size": 0.25,
+                "profit_target": 0.3,
+                "stop_loss": 0.15,
+                "holding_period": "short",
+                "diversification_preference": "low",
+                "description": "A bold trader seeking high returns",
+                "decision_style": "quick",
+                "market_view": "opportunistic",
+                "emotional_state": "excited",
+                "confidence": 0.9
+            },
+            "drunk": {
+                "risk_tolerance": 0.95,  # Very high risk tolerance
+                "max_position_size": 0.4,  # Dangerously large positions
+                "profit_target": 0.5,  # Unrealistic profit targets
+                "stop_loss": 0.25,  # Wide stop losses
+                "holding_period": "random",  # Unpredictable holding periods
+                "diversification_preference": "erratic",
+                "description": "A chaotic trader making impulsive decisions and screams about his wife and kids and how he is getting a divorce and that he needs this money from trading to make it and if he doesn't it everything is going to fall apart.",
+                "decision_style": "random",
+                "market_view": "delusional",
+                "emotional_state": "euphoric",
+                "confidence": 1.0  # Overconfident
+            },
+            "balanced": {
+                "risk_tolerance": 0.5,  # Moderate risk tolerance
+                "max_position_size": 0.15,  # Moderate position sizes
+                "profit_target": 0.2,  # Moderate profit targets
+                "stop_loss": 0.1,  # Moderate stop losses
+                "holding_period": "medium",
+                "diversification_preference": "medium",
+                "description": "A balanced trader seeking steady growth",
+                "decision_style": "analytical",
+                "market_view": "neutral"
+            },
+            "momentum": {
+                "risk_tolerance": 0.6,
+                "max_position_size": 0.2,
+                "profit_target": 0.25,
+                "stop_loss": 0.12,
+                "holding_period": "variable",
+                "diversification_preference": "medium",
+                "description": "A trend-following trader focused on market momentum",
+                "decision_style": "adaptive",
+                "market_view": "trend-focused"
+            },
+            "value": {
+                "risk_tolerance": 0.4,
+                "max_position_size": 0.18,
+                "profit_target": 0.22,
+                "stop_loss": 0.08,
+                "holding_period": "long",
+                "diversification_preference": "high",
+                "description": "A value-oriented trader seeking undervalued opportunities",
+                "decision_style": "thorough",
+                "market_view": "contrarian"
+            }
+        }
+        
+        # Return default balanced personality if specified type not found
+        return personalities.get(personality_type.lower(), personalities["balanced"])
+
+    def get_personality_adjusted_decision(self, base_decision, context):
+        """Adjust trading decisions based on personality traits"""
+        try:
+            # Get personality traits
+            traits = self.personality_traits
+            
+            # Adjust position size based on risk tolerance
+            if "amount" in base_decision:
+                risk_factor = traits["risk_tolerance"]
+                base_amount = float(base_decision["amount"])
+                adjusted_amount = base_amount * risk_factor
+                
+                # Apply personality-based position limits
+                max_position = self.get_portfolio_value() * traits["max_position_size"]
+                adjusted_amount = min(adjusted_amount, max_position)
+                base_decision["amount"] = adjusted_amount
+            
+            # Add personality-influenced reasoning
+            if "reasoning" in base_decision:
+                base_decision["reasoning"].append(
+                    f"Decision influenced by {traits['description']} with "
+                    f"{traits['decision_style']} approach and {traits['market_view']} market view"
+                )
+            
+            # Adjust stop loss and profit targets
+            if "stop_loss" in base_decision:
+                base_decision["stop_loss"] *= traits["stop_loss"]
+            if "profit_target" in base_decision:
+                base_decision["profit_target"] *= traits["profit_target"]
+            
+            # Add personality context to decision
+            base_decision["personality_context"] = {
+                "type": self.personality_type,
+                "traits": traits,
+                "influence": f"Decision adjusted for {traits['description']}"
+            }
+            
+            return base_decision
+            
+        except Exception as e:
+            print(f"Error adjusting decision for personality: {e}")
+            return base_decision
+
+    def update_watchlist_from_research(self):
+        """Update watchlist with researched stocks"""
+        try:
+            # Start with some default stocks for each sector
+            default_stocks = {
+                "Technology": ["AAPL", "MSFT", "GOOGL", "NVDA", "AMD"],
+                "Healthcare": ["JNJ", "PFE", "UNH", "ABBV", "MRK"],
+                "Financial": ["JPM", "BAC", "V", "MA", "GS"],
+                "Consumer Cyclical": ["AMZN", "TSLA", "NKE", "HD", "MCD"],
+                "Energy": ["XOM", "CVX", "COP", "SLB", "EOG"],
+                "Industrial": ["CAT", "BA", "HON", "UPS", "GE"],
+                "Communication Services": ["META", "NFLX", "DIS", "CMCSA", "T"],
+                "Materials": ["LIN", "APD", "ECL", "DD", "FCX"],
+                "Real Estate": ["PLD", "AMT", "EQIX", "SPG", "CCI"],
+                "Utilities": ["NEE", "DUK", "SO", "D", "AEP"],
+                "Consumer Defensive": ["PG", "KO", "WMT", "COST", "PEP"]
+            }
+
+            # Clear current watchlist
+            self.watchlist = []
+            
+            # Add default stocks to watchlist
+            for sector, stocks in default_stocks.items():
+                self.sector_watchlists[sector] = stocks
+                self.watchlist.extend(stocks)
+
+            # Remove duplicates
+            self.watchlist = list(set(self.watchlist))
+
+            # Get market research for potential new stocks
+            market_news = search_market_news("top performing stocks market analysis today")
+            
+            prompt = f"""
+            Based on this market research and news, suggest 5-10 additional established stocks to add to the watchlist.
+            Choose only well-known companies with high trading volume.
+            
+            Market News:
+            {market_news}
+            
+            Current watchlist: {self.watchlist}
+            
+            Respond with ONLY a JSON array of stock symbols.
+            Example: ["AAPL", "MSFT", "GOOGL"]
+            """
+            
+            response = self.get_ollama_response(prompt)
+            if response:
+                try:
+                    new_stocks = json.loads(response.strip())
+                    if isinstance(new_stocks, list):
+                        for stock in new_stocks:
+                            if stock not in self.watchlist:
+                                # Verify stock exists using yfinance
+                                try:
+                                    stock = stock.strip().upper()
+                                    stock_data = self.get_stock_data(stock)
+                                    if stock_data and stock_data.get('current_price', 0) > 0:
+                                        self.watchlist.append(stock)
+                                        print(f"Added {stock} to watchlist")
+                                except Exception as e:
+                                    print(f"Error verifying {stock}: {e}")
+                                    continue
+
+                except json.JSONDecodeError:
+                    print("Error parsing LLM response")
+
+            # Save updated watchlist to MongoDB
+            watchlist_data = {
+                'timestamp': datetime.now(),
+                'watchlist': self.watchlist,
+                'sector_watchlists': self.sector_watchlists
+            }
+            self.save_to_mongodb(self.watchlist_collection, watchlist_data, ['timestamp'])
+            print(f"Updated watchlist with {len(self.watchlist)} stocks")
+
+        except Exception as e:
+            print(f"Error updating watchlist: {e}")
 
     def process_searxng_with_scraping(self, query, results):
-        """Process SearxNG results without scraping"""
+        """Process SearxNG results with enhanced content extraction"""
         try:
-            # Only save the SearxNG results
-            return self.save_searxng_results(query, results)
+            # Combine all relevant content from results
+            combined_content = []
+            for result in results:
+                content_parts = []
+                if result.get('title'):
+                    content_parts.append(result['title'])
+                if result.get('snippet'):
+                    content_parts.append(result['snippet'])
+                if result.get('content'):
+                    content_parts.append(result['content'])
+                
+                combined_content.append(' '.join(content_parts))
+                
+            # Join all content with clear separators
+            full_content = '\n---\n'.join(combined_content)
+            
+            # Save results first
+            self.save_searxng_results(query, results)
+            
+            return full_content
             
         except Exception as e:
             print(f"Error processing results: {e}")
+            return None
 
     def search_market_news(self, query):
         """Use SearxNG to search for market news"""
@@ -1632,177 +1894,165 @@ class TradingBot:
             return False
 
     def run_trading_loop(self, start_phase=1):
-        """Run the trading bot starting from specified phase
-        
-        Args:
-            start_phase (int): Phase to start from (1-6)
-            1: Market News
-            2: Sector Research 
-            3: Stock Discovery
-            4: Watchlist Research
-            5: Trading Decisions
-            6: Summary and Analysis
-        """
-        while True:
-            try:
-                # Status update
-                print(f"\nTrading Bot Status - {datetime.now().isoformat()}")
-                print(f"Current Balance: ${self.balance:.2f}")
-                print(f"Portfolio Value: ${self.get_portfolio_value():.2f}")
-                print(f"Portfolio: {self.portfolio}")
-                print(f"Watchlist ({len(self.watchlist)} stocks): {self.watchlist}")
+        """Main trading loop with phases"""
+        try:
+            while True:
+                try:
+                    # Status update
+                    print(f"\nTrading Bot Status - {datetime.now().isoformat()}")
+                    print(f"Current Balance: ${self.balance:.2f}")
+                    print(f"Portfolio Value: ${self.get_portfolio_value():.2f}")
+                    print(f"Portfolio: {self.portfolio}")
+                    print(f"Watchlist ({len(self.watchlist)} stocks): {self.watchlist}")
 
-                # Check price targets
-                self.check_price_targets()
-                
-                if start_phase <= 1:
-                    print("\n=== Phase 1: Market News ===")
-                    market_news = search_market_news("top performing stocks market analysis today")
-                    if market_news:
-                        self.save_searxng_results("top performing stocks market analysis today", market_news)
-                        analysis = self.analyze_with_llm(market_news)
-                        if analysis:
-                            research_data = [{
-                                'type': 'market_news',
-                                'analysis': analysis,
-                                'timestamp': datetime.now()
-                            }]
-
-                if start_phase <= 2:
-                    print("\n=== Phase 2: Sector Research ===")
-                    research_data = []
-
-                    for query in self.generate_market_queries():
-                        try:
-                            print(f"\nResearching: {query}")
-                            market_news = search_market_news(query)
-                            if market_news:
-                                self.process_searxng_with_scraping(query, market_news)
-                                
-                                analysis = self.analyze_with_llm(market_news)
-                                if analysis:
-                                    research_data.append({
-                                        'type': 'sector_analysis',
-                                        'query': query,
-                                        'analysis': analysis,
-                                        'timestamp': datetime.now()
-                                    })
-                            time.sleep(2)  # Avoid rate limiting
-                        except Exception as e:
-                            print(f"Error researching {query}: {e}")
-                            continue
-
-                    # Save all research data
-                    if research_data:
-                        self.save_research_data(research_data)
-
-                if start_phase <= 3:
-                    print("\n=== Phase 3: Stock Discovery ===")
-                    self.update_watchlist_from_research()
+                    # Check price targets
+                    self.check_price_targets()
                     
-                if start_phase <= 4:
-                    print("\n=== Phase 4: Watchlist Research ===")
-                    watchlist_research = []
-                    for ticker in self.watchlist:
-                        try:
-                            print(f"\nResearching {ticker}...")
-                            stock_news = search_market_news(f"{ticker} stock analysis news")
-                            if stock_news:
-                                self.save_searxng_results(f"{ticker}_analysis", stock_news)
-                                
-                                analysis = self.analyze_with_llm(stock_news)
-                                if analysis:
-                                    watchlist_research.append({
-                                        'type': 'stock_analysis',
-                                        'ticker': ticker,
-                                        'analysis': analysis,
-                                        'timestamp': datetime.now()
-                                    })
-                            time.sleep(2)
-                        except Exception as e:
-                            print(f"Error researching {ticker}: {e}")
-                            continue
+                    if start_phase <= 1:
+                        print("\n=== Phase 1: Market News ===")
+                        market_news = search_market_news("top performing stocks market analysis today")
+                        if market_news:
+                            self.save_searxng_results("top performing stocks market analysis today", market_news)
+                            analysis = self.analyze_with_llm(market_news)
+                            if analysis:
+                                research_data = [{
+                                    'type': 'market_news',
+                                    'analysis': analysis,
+                                    'timestamp': datetime.now()
+                                }]
 
-                    # Save watchlist research
-                    if watchlist_research:
-                        self.save_research_data(watchlist_research)
+                    if start_phase <= 2:
+                        print("\n=== Phase 2: Sector Research ===")
+                        research_data = []
 
-                if start_phase <= 5:
-                    print("\n=== Phase 5: Trading Decisions ===")
-                    for ticker in self.watchlist:
-                        try:
-                            print(f"\nAnalyzing {ticker}...")
-                            self.update_stock_performance(ticker)
-                            
-                            stock_data = self.get_stock_data(ticker)
-                            stock_research = self.get_research_data(ticker=ticker, limit=10)
-                            
-                            if not stock_data:
-                                continue
-                                
-                            portfolio_value = self.get_portfolio_value()
-                            available_cash = self.balance
-                            
-                            # Get position sizing decision from LLM
-                            decision = self.get_position_size_decision(
-                                ticker, 
-                                stock_data, 
-                                stock_research,
-                                portfolio_value,
-                                available_cash
-                            )
-                            
-                            if not decision:
-                                continue
-                                
-                            print(f"\nDecision for {ticker}:")
-                            print(json.dumps(decision, indent=2))
-                            
-                            # Execute any recommended position adjustments first
-                            if 'position_adjustment' in decision:
-                                freed_cash = self.execute_position_adjustment(decision['position_adjustment'])
-                                available_cash += freed_cash
-                            
-                            # Execute the main trade decision
-                            if decision['action'] == 'BUY':
-                                shares = decision['shares']
-                                total_cost = shares * stock_data['current_price']
-                                
-                                # Validate against available cash and position limits
-                                max_position = portfolio_value * 0.2  # Max 20% in single position
-                                if total_cost <= available_cash and total_cost <= max_position:
-                                    self.execute_trade(ticker, "BUY", total_cost)
-                                else:
-                                    print(f"Trade rejected - Cost ${total_cost:.2f} exceeds limits")
+                        for query in self.generate_market_queries():
+                            try:
+                                print(f"\nResearching: {query}")
+                                market_news = search_market_news(query)
+                                if market_news:
+                                    self.process_searxng_with_scraping(query, market_news)
                                     
-                            elif decision['action'] == 'SELL' and ticker in self.portfolio:
-                                shares = min(decision['shares'], self.portfolio[ticker])
-                                if shares > 0:
-                                    sell_value = shares * stock_data['current_price']
-                                    self.execute_trade(ticker, "SELL", sell_value)
+                                    analysis = self.analyze_with_llm(market_news)
+                                    if analysis:
+                                        research_data.append({
+                                            'type': 'sector_analysis',
+                                            'query': query,
+                                            'analysis': analysis,
+                                            'timestamp': datetime.now()
+                                        })
+                                time.sleep(2)  # Avoid rate limiting
+                            except Exception as e:
+                                print(f"Error researching {query}: {e}")
+                                continue
+
+                        # Save all research data
+                        if research_data:
+                            self.save_research_data(research_data)
+
+                    if start_phase <= 3:
+                        print("\n=== Phase 3: Stock Discovery ===")
+                        self.update_watchlist_from_research()
                         
-                        except Exception as e:
-                            print(f"Error processing {ticker}: {e}")
-                            continue
+                    if start_phase <= 4:
+                        print("\n=== Phase 4: Watchlist Research ===")
+                        watchlist_research = []
+                        for ticker in self.watchlist:
+                            try:
+                                print(f"\nResearching {ticker}...")
+                                stock_news = search_market_news(f"{ticker} stock analysis news")
+                                if stock_news:
+                                    self.save_searxng_results(f"{ticker}_analysis", stock_news)
+                                    
+                                    analysis = self.analyze_with_llm(stock_news)
+                                    if analysis:
+                                        watchlist_research.append({
+                                            'type': 'stock_analysis',
+                                            'ticker': ticker,
+                                            'analysis': analysis,
+                                            'timestamp': datetime.now()
+                                        })
+                                time.sleep(2)
+                            except Exception as e:
+                                print(f"Error researching {ticker}: {e}")
+                                continue
 
-                if start_phase <= 6:
-                    print("\n=== Phase 6: Summary and Analysis ===")
-                    summary = self.generate_ai_summary()
-                    if summary:
-                        print("\nAI Market Summary:")
-                        print(json.dumps(summary, indent=2))
+                        # Save watchlist research
+                        if watchlist_research:
+                            self.save_research_data(watchlist_research)
 
-                # Save all data
-                self.save_data()
-                self.save_history()
-                self.save_portfolio()
+                    if start_phase <= 5:
+                        print("\n=== Phase 5: Trading Decisions ===")
+                        
+                        # Update watchlist if empty
+                        if not self.watchlist:
+                            self.update_watchlist_from_research()
+                        
+                        for ticker in self.watchlist:
+                            try:
+                                print(f"\nAnalyzing {ticker}...")
+                                stock_data = self.get_stock_data(ticker)
+                                if not stock_data:
+                                    print(f"Could not get data for {ticker}, skipping...")
+                                    continue
+                                
+                                stock_research = self.get_research_data(ticker=ticker, limit=10)
+                                portfolio_value = self.get_portfolio_value()
+                                available_cash = self.balance
+                                
+                                # Get position sizing decision
+                                decision = self.get_position_size_decision(
+                                    ticker,
+                                    stock_data,
+                                    stock_research,
+                                    portfolio_value,
+                                    available_cash
+                                )
+                                
+                                if not decision:
+                                    continue
+                                
+                                print(f"\nDecision for {ticker}:")
+                                print(json.dumps(decision, indent=2))
+                                
+                                # Execute trades based on decision
+                                if decision['action'] == 'BUY':
+                                    total_cost = decision['shares'] * stock_data['current_price']
+                                    if total_cost <= available_cash:
+                                        self.execute_trade(ticker, "BUY", total_cost)
+                                elif decision['action'] == 'SELL' and ticker in self.portfolio:
+                                    shares = min(decision['shares'], self.portfolio[ticker])
+                                    if shares > 0:
+                                        sell_value = shares * stock_data['current_price']
+                                        self.execute_trade(ticker, "SELL", sell_value)
+                                
+                                time.sleep(1)  # Rate limiting
+                                
+                            except Exception as e:
+                                print(f"Error analyzing {ticker}: {e}")
+                                continue
 
-                # Wait before next cycle
-                time.sleep(300)
+                    if start_phase <= 6:
+                        print("\n=== Phase 6: Summary and Analysis ===")
+                        summary = self.generate_ai_summary()
+                        if summary:
+                            print("\nAI Market Summary:")
+                            print(json.dumps(summary, indent=2))
 
-            except Exception as e:
-                print(f"Error in trading loop: {e}")
-                time.sleep(300)
+                    # Save all data
+                    self.save_data()
+                    self.save_history()
+                    self.save_portfolio()
+
+                    # Wait before next cycle
+                    time.sleep(300)
+
+                except Exception as e:
+                    print(f"Error in trading loop: {e}")
+                    time.sleep(60)  # Wait before retrying
+
+        except KeyboardInterrupt:
+            print("\nTrading bot stopped by user")
+            self.save_data()
 
     def check_price_targets(self):
         """Check if any stocks have hit their price targets"""
@@ -1845,14 +2095,113 @@ class TradingBot:
         except Exception as e:
             print(f"Error checking price targets: {e}")
 
-if __name__ == "__main__":
+    def generate_trader_bio(self, personality):
+        """Generate a bio for the trader based on personality traits"""
+        
+        # Base bio template
+        bio_template = """
+        🤖 TRADING BOT PROFILE 🤖
+        
+        PERSONALITY TYPE: {personality_type}
+        
+        TRADING STYLE:
+        - Risk Tolerance: {risk_level}
+        - Decision Making: {decision_style}
+        - Market Approach: {market_view}
+        - Emotional State: {emotional_state}
+        - Confidence Level: {confidence_level}
+        
+        STRATEGY OVERVIEW:
+        {strategy_description}
+        
+        NOTABLE CHARACTERISTICS:
+        {characteristics}
+        
+        PREFERRED MARKETS:
+        {markets}
+        
+        TRADING MOTTO:
+        "{motto}"
+        
+        WARNING: {warning}
+        """
+        
+        # Personality-specific content
+        content = {
+            "conservative": {
+                "risk_level": "Low and calculated",
+                "strategy_description": "Focuses on stable, long-term growth through careful analysis and risk management.",
+                "characteristics": "- Thorough research\n- Patient execution\n- Capital preservation focus",
+                "markets": "Blue-chip stocks, ETFs, and stable value investments",
+                "motto": "Slow and steady wins the race",
+                "warning": "May miss opportunities due to excessive caution"
+            },
+            "aggressive": {
+                "risk_level": "High and embracing",
+                "strategy_description": "Seeks maximum returns through bold, decisive actions and high-risk opportunities.",
+                "characteristics": "- Quick decision making\n- High risk tolerance\n- Growth-focused",
+                "markets": "Growth stocks, options, and emerging markets",
+                "motto": "No risk, no reward",
+                "warning": "High risk of significant losses"
+            },
+            "drunk": {
+                "risk_level": "YOLO level",
+                "strategy_description": "Makes impulsive decisions based on 'gut feelings' and random market theories.",
+                "characteristics": "- Unpredictable moves\n- Overconfident decisions\n- Emotional trading",
+                "markets": "Whatever looks good after a few drinks 🍺",
+                "motto": "Hold my beer while I buy this dip!",
+                "warning": "Trading decisions may have been influenced by excessive optimism and/or actual beverages"
+            }
+            # Add other personalities here...
+        }
+        
+        # Get content for personality type or use balanced as default
+        personality_type = next((k for k, v in content.items() if v["characteristics"] == personality["description"]), "balanced")
+        content_data = content.get(personality_type, content["conservative"])
+        
+        # Format bio
+        return bio_template.format(
+            personality_type=personality_type.upper(),
+            risk_level=content_data["risk_level"],
+            decision_style=personality["decision_style"],
+            market_view=personality["market_view"],
+            emotional_state=personality["emotional_state"],
+            confidence_level=f"{personality['confidence']*100}%",
+            strategy_description=content_data["strategy_description"],
+            characteristics=content_data["characteristics"],
+            markets=content_data["markets"],
+            motto=content_data["motto"],
+            warning=content_data["warning"]
+        )
+
+    def display_personality(self):
+        """Display the current personality profile"""
+        print(self.personality_traits["bio"])
+
+    def display_watchlist(self):
+        for sector in self.sectors:
+            print(f"\nWatchlist for {sector}:")
+            print(', '.join(self.watchlist.get(sector, [])))
+
+def run_trading_simulator():
     parser = argparse.ArgumentParser(description='Trading Bot')
     parser.add_argument('--test', action='store_true', help='Run in testing mode (bypass market hours)')
     parser.add_argument('--start-phase', type=int, choices=range(1, 7), default=1,
                       help='Start from specific phase (1-6)')
+    parser.add_argument('--personality', type=str, default='balanced',
+                      choices=['conservative', 'aggressive', 'balanced', 'momentum', 'value', 'drunk'],
+                      help='Set the trading bot personality type')
+    parser.add_argument('--show-bio', action='store_true', help='Display trader bio')
     args = parser.parse_args()
     
-    bot = TradingBot(testing_mode=args.test)
-    print("Starting Trading Bot..." + (" (Testing Mode)" if args.test else ""))
+    bot = TradingBot(testing_mode=args.test, personality_type=args.personality)
+    if args.show_bio:
+        bot.display_personality()
+        
+    print("\nStarting Trading Bot..." + (" (Testing Mode)" if args.test else ""))
     print(f"Starting from Phase {args.start_phase}")
-    bot.run_trading_loop(start_phase=args.start_phase) 
+    print(f"Personality Type: {args.personality}")
+    bot.run_trading_loop(start_phase=args.start_phase)
+
+if __name__ == "__main__":
+    run_trading_simulator() 
