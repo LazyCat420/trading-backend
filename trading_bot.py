@@ -382,34 +382,36 @@ class TradingBot:
             # Try to parse as JSON if possible
             if full_content:
                 try:
-                    if '{' in full_content and '}' in full_content:
-                        # Extract JSON part
-                        json_start = full_content.find('{')
-                        json_end = full_content.rfind('}') + 1
+                    # Extract potential JSON parts
+                    json_start = full_content.find('{')
+                    json_end = full_content.rfind('}') + 1
+                    if json_start != -1 and json_end != -1:
                         json_str = full_content[json_start:json_end]
                         
                         # Clean common JSON formatting issues
                         json_str = json_str.replace('```json', '').replace('```', '')
                         json_str = json_str.replace('\n', ' ').replace('\r', '')
                         
-                        try:
-                            return json.loads(json_str)
-                        except json.JSONDecodeError as je:
-                            print(f"Invalid JSON structure: {je}")
-                            # Try to fix common JSON errors
-                            if '"add": [' in json_str and json_str.count('[') != json_str.count(']'):
-                                json_str = json_str.replace('}}', ']}')
-                            if json_str.count('{') != json_str.count('}'):
-                                missing = json_str.count('{') - json_str.count('}')
-                                json_str = json_str + ('}' * missing)
-                            # Try parsing again after fixes
+                        # Validate JSON structure
+                        if json_str.count('{') == json_str.count('}'):
                             try:
-                                return json.loads(json_str)
-                            except:
-                                pass
-                            
-                            # If still invalid, return a safe default
-                            return {"error": "Invalid JSON response"}
+                                parsed_json = json.loads(json_str)
+                                # Validate required fields
+                                required_fields = ['sentiment', 'trends', 'opportunities', 'risks']
+                                for field in required_fields:
+                                    if field not in parsed_json:
+                                        parsed_json[field] = [] if field != 'sentiment' else 'neutral'
+                                return parsed_json
+                            except json.JSONDecodeError as je:
+                                print(f"JSON parsing error: {je}")
+                    
+                    # Fallback to default response if JSON is invalid
+                    return {
+                        "sentiment": "neutral",
+                        "trends": ["Unable to parse market trends"],
+                        "opportunities": ["Unable to parse opportunities"],
+                        "risks": ["Unable to parse risks"]
+                    }
                 except:
                     pass
                 
@@ -1928,7 +1930,6 @@ class TradingBot:
                     content_parts.append(result['snippet'])
                 if result.get('content'):
                     content_parts.append(result['content'])
-                
                 combined_content.append(' '.join(content_parts))
                 
             # Join all content with clear separators
