@@ -16,7 +16,6 @@ import base64
 import logging
 from bson import ObjectId
 from pymongo import UpdateOne
-from bson.decimal128 import Decimal128
 
 class TradingBot:
     def __init__(self, initial_balance=100000, testing_mode=False, personality_type="balanced"):
@@ -352,7 +351,7 @@ class TradingBot:
             request_body = {
                 "model": os.getenv('OLLAMA_MODEL'),
                 "messages": [{
-                    "role": "user", 
+                    "role": "user",
                     "content": self.clean_text(prompt_text)
                 }],
                 "stream": True
@@ -380,22 +379,49 @@ class TradingBot:
                     except json.JSONDecodeError:
                         continue
 
-            # Return string content unless JSON is explicitly requested
-            if 'json' in prompt_text.lower():
+            # Try to parse as JSON if possible
+            if full_content:
                 try:
                     # Extract potential JSON parts
                     json_start = full_content.find('{')
                     json_end = full_content.rfind('}') + 1
                     if json_start != -1 and json_end != -1:
                         json_str = full_content[json_start:json_end]
-                        return json.loads(json_str)
+                        
+                        # Clean common JSON formatting issues
+                        json_str = json_str.replace('```json', '').replace('```', '')
+                        json_str = json_str.replace('\n', ' ').replace('\r', '')
+                        
+                        # Validate JSON structure
+                        if json_str.count('{') == json_str.count('}'):
+                            try:
+                                parsed_json = json.loads(json_str)
+                                # Validate required fields
+                                required_fields = ['sentiment', 'trends', 'opportunities', 'risks']
+                                for field in required_fields:
+                                    if field not in parsed_json:
+                                        parsed_json[field] = [] if field != 'sentiment' else 'neutral'
+                                return parsed_json
+                            except json.JSONDecodeError as je:
+                                print(f"JSON parsing error: {je}")
+                    
+                    # Fallback to default response if JSON is invalid
+                    return {
+                        "sentiment": "neutral",
+                        "trends": ["Unable to parse market trends"],
+                        "opportunities": ["Unable to parse opportunities"],
+                        "risks": ["Unable to parse risks"]
+                    }
                 except:
                     pass
-            
-            return full_content.strip()
+                
+            return full_content
 
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             print(f"Request error: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error: {e}")
             return None
 
     def load_news(self):
@@ -574,10 +600,10 @@ class TradingBot:
         try:
             prompt = f"""
             Categorize the tickers in this news text: {text}
-            Respond with ONLY a comma-separated list of tickers, no other text.
-            """
+            Respond with a list of tickers separated by commas.
+        """
             response = self.get_ollama_response(prompt)
-            if response and isinstance(response, str):
+            if response:
                 return response.strip().upper()
             return ""
         except Exception as e:
@@ -755,109 +781,108 @@ class TradingBot:
             return "HOLD - Insufficient data"
 
     def get_portfolio_value(self):
-        """Calculate total portfolio value from MongoDB"""
+        """Calculate total portfolio value"""
         try:
             total_value = float(self.balance)  # Ensure balance is float
             
-            # Get all portfolio positions from MongoDB
-            portfolio_positions = self.portfolio_collection.find({})
+            # Calculate value of stock holdings
+            for ticker, shares in self.portfolio.items():
+                stock_data = self.get_stock_data(ticker)
+                if stock_data and stock_data.get('current_price', 0) > 0:
+                    position_value = float(shares) * float(stock_data['current_price'])
+                    if position_value > 0 and position_value < 1000000:  # Sanity check
+                        total_value += position_value
+                    else:
+                        print(f"Warning: Suspicious position value for {ticker}: ${position_value}")
             
-            for position in portfolio_positions:
-                ticker = position.get('ticker')
-                # Convert Decimal128 shares to float
-                shares = float(str(position.get('shares', 0)))
+            # Sanity check on total value
+            if total_value <= 0 or total_value > 1000000:  # Assuming max reasonable value is $1M
+                print(f"Warning: Suspicious total portfolio value: ${total_value}")
+                # Return last valid value or initial balance
+                return float(self.initial_balance)
                 
-                if shares > 0:  # Only calculate for positions with shares
-                    stock_data = self.get_stock_data(ticker)
-                    if stock_data and stock_data.get('current_price'):
-                        current_price = float(stock_data['current_price'])
-                        position_value = shares * current_price
-                        
-                        if position_value > 0 and position_value < 1000000:  # Sanity check
-                            total_value += position_value
-                            print(f"Position value for {ticker}: ${position_value:.2f} ({shares} shares @ ${current_price:.2f})")
-                        else:
-                            print(f"Warning: Suspicious position value for {ticker}: ${position_value}")
-                
-            print(f"Total portfolio value: ${total_value:.2f}")
             return total_value
-                
+            
         except Exception as e:
             print(f"Error calculating portfolio value: {e}")
-            return float(self.initial_balance)
+            return float(self.initial_balance)  # Return initial balance as fallback
 
-    def execute_trade(self, ticker, action, shares):
-        """Execute a trade with proper MongoDB decimal handling"""
+    def execute_trade(self, ticker, action, amount):
+        """Execute a trade with improved error handling and logging"""
         try:
-            print(f"\nExecuting trade: {action} {ticker} {shares} shares")
-
-            shares = float(shares)  # Ensure shares is a float
+            print(f"\nExecuting trade: {action} {ticker} ${amount:.2f}")
+            
             stock_data = self.get_stock_data(ticker)
-
-            if not isinstance(stock_data, dict) or 'current_price' not in stock_data:
-                print(f"Invalid price data for {ticker}: {stock_data}")
+            if not stock_data or stock_data.get('current_price', 0) <= 0:
+                print(f"Invalid price data for {ticker}")
                 return False
 
-            current_price = float(stock_data['current_price'])
-            amount = current_price * shares
+            current_price = stock_data['current_price']
+            shares = amount / current_price
+
+            # Validate trade size
+            if action == "BUY":
+                if amount > self.balance:
+                    print(f"Insufficient funds: ${self.balance:.2f} < ${amount:.2f}")
+                    return False
+            elif action == "SELL":
+                if shares > self.portfolio.get(ticker, 0):
+                    print(f"Insufficient shares: {self.portfolio.get(ticker, 0)} < {shares}")
+                    return False
 
             # Create trade document
             trade = {
                 'timestamp': datetime.now(),
                 'ticker': ticker,
                 'action': action,
-                'shares': Decimal128(str(shares)),
-                'price': Decimal128(str(current_price)),
-                'amount': Decimal128(str(amount)),
-                'status': 'executed',
+                'shares': shares,
+                'price': current_price,
+                'amount': amount,
+                'status': 'pending',
                 'personality': self.personality_type
             }
             
-            try:
-                # Insert trade record directly without transaction
-                self.trades_collection.insert_one(trade)
-                
-                # Update portfolio
-                if action == "BUY":
-                    # Deduct from balance
-                    self.balance -= amount
-                    # Add to portfolio
-                    if ticker in self.portfolio:
-                        self.portfolio[ticker] += shares
-                    else:
-                        self.portfolio[ticker] = shares
-                        
-                elif action == "SELL":
-                    # Add to balance
-                    self.balance += amount
-                    # Remove from portfolio
-                    if ticker in self.portfolio:
-                        self.portfolio[ticker] -= shares
-                        if self.portfolio[ticker] <= 0:
-                            del self.portfolio[ticker]
-                
-                # Save updated portfolio state
-                portfolio_update = {
-                    'portfolio': self.portfolio,
-                    'balance': self.balance,
-                    'last_updated': datetime.now()
-                }
-                self.portfolio_collection.update_one(
-                    {'_id': ObjectId()}, 
-                    {'$set': portfolio_update},
-                    upsert=True
-                )
-                
-                print(f"Trade executed successfully: {action} {shares} shares of {ticker} at ${current_price}")
-                return True
-                
-            except Exception as e:
-                print(f"Error executing trade: {e}")
-                return False
-                
+            # Save to MongoDB first
+            result = self.trades_collection.insert_one(trade)
+            if not result.inserted_id:
+                raise Exception("Failed to save trade to MongoDB")
+            
+            # Execute trade
+            if action == "BUY":
+                self.portfolio[ticker] = self.portfolio.get(ticker, 0) + shares
+                self.balance -= amount
+            else:  # SELL
+                self.portfolio[ticker] = max(0, self.portfolio.get(ticker, 0) - shares)
+                self.balance += amount
+            
+            # Update trade status
+            self.trades_collection.update_one(
+                {'_id': result.inserted_id},
+                {'$set': {'status': 'executed'}}
+            )
+            
+            print(f"Trade executed: {action} {shares:.2f} shares of {ticker} @ ${current_price:.2f}")
+            print(f"New balance: ${self.balance:.2f}")
+            return True
+
         except Exception as e:
-            print(f"Error in execute_trade: {e}")
+            print(f"Error executing trade: {e}")
             return False
+
+    def log_trade(self, trade_data):
+        """Log trade to JSON file"""
+        try:
+            if os.path.exists('trades.json'):
+                with open('trades.json', 'r') as f:
+                    trades = json.load(f)
+            else:
+                trades = []
+            
+            trades.append(trade_data)
+            with open('trades.json', 'w') as f:
+                json.dump(trades, f, indent=4)
+        except Exception as e:
+            print(f"Error logging trade: {e}")
 
     def load_watchlist(self):
         """Load watchlist and performance data from MongoDB"""
@@ -1106,77 +1131,43 @@ class TradingBot:
         """Save portfolio data to MongoDB with enhanced tracking"""
         try:
             # Calculate total value first
-            total_value = float(self.balance)  # Start with cash balance
-            portfolio_positions = []
+            total_value = self.get_portfolio_value()
             
-            # Get all current positions from MongoDB
-            current_positions = self.portfolio_collection.find({})
-            
-            for position in current_positions:
-                ticker = position.get('ticker')
-                if not ticker:
-                    continue
-                    
-                # Get current stock data
-                stock_data = self.get_stock_data(ticker)
-                if not stock_data:
-                    continue
-                    
-                # Convert shares from Decimal128 to float for calculations
-                shares = float(str(position.get('shares', 0)))
-                current_price = float(stock_data['current_price'])
-                market_value = shares * current_price
-                
-                # Add to total value
-                total_value += market_value
-                
-                # Create position document
-                position_data = {
-                    'ticker': ticker,
-                    'shares': Decimal128(str(shares)),
-                    'current_price': Decimal128(str(current_price)),
-                    'market_value': Decimal128(str(market_value)),
-                    'last_updated': datetime.now()
-                }
-                portfolio_positions.append(position_data)
-                
-            # Create portfolio snapshot
-            portfolio_snapshot = {
+            # Create detailed portfolio snapshot
+            portfolio_data = {
+                '_id': ObjectId(),  # Add unique _id for MongoDB
                 'timestamp': datetime.now(),
-                'positions': portfolio_positions,
-                'balance': Decimal128(str(self.balance)),
-                'total_value': Decimal128(str(total_value)),
-                'cash_percentage': Decimal128(str((self.balance / total_value * 100) if total_value > 0 else 0)),
-                'positions_count': len(portfolio_positions)
+                'portfolio': {
+                    ticker: {
+                        'shares': shares,
+                        'current_price': self.get_stock_data(ticker)['current_price'],
+                        'market_value': shares * self.get_stock_data(ticker)['current_price']
+                    } for ticker, shares in self.portfolio.items()
+                },
+                'balance': self.balance,
+                'total_value': total_value,
+                'cash_percentage': (self.balance / total_value * 100) if total_value > 0 else 0,
+                'positions_count': len(self.portfolio),
+                'last_updated': datetime.now()
             }
             
             # Save to MongoDB with retry logic
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    # Save current snapshot
-                    result = self.portfolio_collection.insert_one(portfolio_snapshot)
-                    
-                    # Update latest summary
-                    self.summary_collection.update_one(
-                        {'type': 'latest_portfolio'},
-                        {
-                            '$set': {
-                                **portfolio_snapshot,
-                                'type': 'latest_portfolio'
-                            }
-                        },
-                        upsert=True
-                    )
-                    
-                    print(f"Portfolio saved successfully to MongoDB")
-                    print(f"Total Value: ${total_value:.2f}")
-                    print(f"Cash Balance: ${self.balance:.2f}")
-                    print(f"Positions Count: {len(portfolio_positions)}")
-                    return True
-                    
-                except pymongo.errors.PyMongoError as e:
-                    if attempt == max_retries - 1:  # Last attempt
+                    result = self.portfolio_collection.insert_one(portfolio_data)
+                    if result.inserted_id:
+                        print(f"Portfolio saved successfully to MongoDB")
+                        
+                        # Also update the latest portfolio summary
+                        self.portfolio_collection.update_one(
+                            {'type': 'latest_summary'},
+                            {'$set': {**portfolio_data, 'type': 'latest_summary'}},
+                            upsert=True
+                        )
+                        return True
+                except Exception as e:
+                    if attempt == max_retries - 1:
                         raise e
                     time.sleep(1)  # Wait before retry
                     
@@ -1387,160 +1378,238 @@ class TradingBot:
         }
 
     def chain_of_thought_analysis(self, data, context):
-        """Implement Chain of Thought reasoning for market analysis"""
+        """Enhanced Chain of Thought reasoning for market analysis"""
         try:
-            prompt = f"""
-            Analyze this market data using step-by-step reasoning:
+            # Format data and context
+            data_str = json.dumps(data) if isinstance(data, dict) else str(data)
+            context_str = json.dumps(context) if isinstance(context, dict) else str(context)
             
-            Context: {context}
-            Data: {data}
+            prompt = f"""
+            Analyze this market data using systematic reasoning:
+            
+            Context: {context_str}
+            Data: {data_str}
             
             Follow this chain of thought:
-            1. Initial market conditions
-            2. Key trends and patterns
-            3. Potential implications
-            4. Risk assessment
-            5. Final conclusion
+            1. Market Environment: Analyze current market conditions and sentiment
+            2. Technical Analysis: Review price patterns, volume, and momentum
+            3. Fundamental Factors: Evaluate company/sector performance and news
+            4. Risk Assessment: Identify potential risks and mitigations
+            5. Trading Implications: Determine actionable insights
             
-            Respond with a JSON object containing your step-by-step analysis:
+            Respond with ONLY a JSON object in this format:
             {{
-                "steps": [
-                    {{"step": 1, "reasoning": "...", "conclusion": "..."}},
-                    {{"step": 2, "reasoning": "...", "conclusion": "..."}},
-                    {{"step": 3, "reasoning": "...", "conclusion": "..."}},
-                    {{"step": 4, "reasoning": "...", "conclusion": "..."}},
-                    {{"step": 5, "reasoning": "...", "conclusion": "..."}}
+                "reasoning_chain": [
+                    {{"step": 1, "analysis": "Market analysis", "conclusion": "Market state"}},
+                    {{"step": 2, "analysis": "Technical review", "conclusion": "Technical outlook"}},
+                    {{"step": 3, "analysis": "Fundamental review", "conclusion": "Fundamental outlook"}},
+                    {{"step": 4, "analysis": "Risk evaluation", "conclusion": "Risk assessment"}},
+                    {{"step": 5, "analysis": "Trading strategy", "conclusion": "Action plan"}}
                 ],
-                "final_decision": "..."
+                "final_decision": "BUY/SELL/HOLD",
+                "confidence": <0.0-1.0>,
+                "reasoning_quality": <0.0-1.0>
             }}
             """
             
             response = self.get_ollama_response(prompt)
-            if response:
-                # Save the thought chain
-                thought_chain = {
-                    'timestamp': datetime.now(),
-                    'context': context,
-                    'analysis': response,
-                    'type': 'market_analysis'
+            if not response:
+                return None
+                
+            # Parse response and validate structure
+            if isinstance(response, str):
+                response = json.loads(response.strip())
+                
+            # Validate required fields
+            required_fields = ['reasoning_chain', 'final_decision', 'confidence', 'reasoning_quality']
+            if not all(field in response for field in required_fields):
+                raise ValueError("Missing required fields in response")
+                
+            # Save the thought chain with metadata
+            thought_chain = {
+                'timestamp': datetime.now(),
+                'context': context,
+                'data': data,
+                'analysis': response,
+                'type': 'market_analysis',
+                'metadata': {
+                    'confidence_score': response.get('confidence', 0),
+                    'decision': response.get('final_decision', 'HOLD'),
+                    'steps_count': len(response.get('reasoning_chain', []))
                 }
-                self.save_to_mongodb(self.thought_chains_collection, thought_chain)
-                return response
-            return None
+            }
+            
+            self.save_to_mongodb(self.thought_chains_collection, thought_chain)
+            return response
+            
         except Exception as e:
             print(f"Error in chain of thought analysis: {e}")
             return None
 
     def tree_of_thought_analysis(self, ticker, data):
-        """Implement Tree of Thought reasoning for trading decisions"""
+        """Enhanced Tree of Thought reasoning for trading decisions"""
         try:
+            data_str = json.dumps(data) if isinstance(data, dict) else str(data)
+            
             prompt = f"""
-            Analyze trading options for {ticker} using tree of thought reasoning:
+            Analyze trading scenarios for {ticker} using tree-based reasoning:
             
-            Data: {data}
+            Data: {data_str}
             
-            Consider three possible actions (BUY, SELL, HOLD) and explore their implications:
+            Generate a decision tree with the following structure:
+            1. Root: Current market state
+            2. Main Branches: BUY, SELL, HOLD scenarios
+            3. Sub-branches: Different market conditions
+            4. Leaves: Specific outcomes
             
-            Respond with a JSON object showing your tree of thought:
+            Respond with ONLY a JSON object in this format:
             {{
                 "root": {{
                     "ticker": "{ticker}",
-                    "current_state": "initial analysis"
+                    "current_state": "Market state description",
+                    "key_metrics": ["metric1", "metric2"]
                 }},
                 "branches": [
                     {{
-                        "action": "BUY",
-                        "reasoning": ["reason1", "reason2"],
-                        "implications": ["implication1", "implication2"],
-                        "probability": 0.0,
-                        "risk_level": "high/medium/low"
-                    }},
-                    {{
-                        "action": "SELL",
-                        "reasoning": ["reason1", "reason2"],
-                        "implications": ["implication1", "implication2"],
-                        "probability": 0.0,
-                        "risk_level": "high/medium/low"
-                    }},
-                    {{
-                        "action": "HOLD",
-                        "reasoning": ["reason1", "reason2"],
-                        "implications": ["implication1", "implication2"],
-                        "probability": 0.0,
-                        "risk_level": "high/medium/low"
+                        "action": "BUY/SELL/HOLD",
+                        "scenarios": [
+                            {{
+                                "condition": "Specific market condition",
+                                "probability": <0.0-1.0>,
+                                "outcome": "Expected result",
+                                "confidence": <0.0-1.0>
+                            }}
+                        ],
+                        "overall_probability": <0.0-1.0>
                     }}
                 ],
-                "recommended_action": "..."
+                "recommended_path": {{
+                    "action": "BUY/SELL/HOLD",
+                    "reasoning": ["reason1", "reason2"],
+                    "confidence": <0.0-1.0>
+                }}
             }}
             """
             
             response = self.get_ollama_response(prompt)
-            if response:
-                # Save the thought tree
-                thought_tree = {
-                    'timestamp': datetime.now(),
-                    'ticker': ticker,
-                    'analysis': response,
-                    'type': 'trading_decision'
+            if not response:
+                return None
+                
+            # Parse and validate response
+            if isinstance(response, str):
+                response = json.loads(response.strip())
+                
+            # Validate structure
+            required_fields = ['root', 'branches', 'recommended_path', 'overall_probability']
+            if not all(field in response for field in required_fields):
+                raise ValueError("Missing required fields in tree analysis")
+                
+            # Save thought tree with metadata
+            thought_tree = {
+                'timestamp': datetime.now(),
+                'ticker': ticker,
+                'data': data,
+                'analysis': response,
+                'type': 'trading_decision',
+                'metadata': {
+                    'confidence': response.get('overall_probability', 0),
+                    'recommendation': response.get('recommended_path', 'HOLD'),
+                    'branch_count': len(response.get('branches', []))
                 }
-                self.save_to_mongodb(self.thought_trees_collection, thought_tree)
-                return response
-            return None
+            }
+            
+            self.save_to_mongodb(self.thought_trees_collection, thought_tree)
+            return response
+            
         except Exception as e:
             print(f"Error in tree of thought analysis: {e}")
             return None
 
     def graph_of_thought_analysis(self, watchlist_data):
-        """Implement Graph of Thought reasoning for portfolio relationships"""
+        """Enhanced Graph of Thought reasoning for portfolio relationships"""
         try:
+            data_str = json.dumps(watchlist_data) if isinstance(watchlist_data, dict) else str(watchlist_data)
+            
             prompt = f"""
-            Analyze relationships between watchlist stocks using graph of thought reasoning:
+            Analyze portfolio relationships using graph-based reasoning:
             
-            Watchlist Data: {watchlist_data}
+            Watchlist Data: {data_str}
             
-            Consider relationships between stocks including:
-            - Sector correlations
-            - Market cap relationships
-            - Performance correlations
-            - Risk relationships
+            Create a relationship graph considering:
+            1. Stock correlations
+            2. Sector relationships
+            3. Risk dependencies
+            4. Market impact connections
             
-            Respond with a JSON object showing your graph analysis:
+            Respond with ONLY a JSON object in this format:
             {{
                 "nodes": [
-                    {{"id": "ticker1", "type": "stock", "metrics": {{}}}},
-                    {{"id": "ticker2", "type": "stock", "metrics": {{}}}}
+                    {{
+                        "id": "TICKER",
+                        "type": "stock/sector/index",
+                        "metrics": {{
+                            "market_cap": <value>,
+                            "sector": "sector_name",
+                            "risk_score": <0.0-1.0>,
+                            "centrality": <0.0-1.0>
+                        }}
+                    }}
                 ],
                 "edges": [
                     {{
-                        "source": "ticker1",
-                        "target": "ticker2",
-                        "relationship": "correlation/sector/risk",
-                        "strength": 0.0,
-                        "insights": ["insight1", "insight2"]
+                        "source": "TICKER1",
+                        "target": "TICKER2",
+                        "relationship_type": "correlation/sector/risk",
+                        "strength": <0.0-1.0>,
+                        "direction": "bidirectional/directed",
+                        "impact": "description"
                     }}
                 ],
                 "clusters": [
                     {{
-                        "name": "cluster1",
-                        "stocks": ["ticker1", "ticker2"],
-                        "characteristics": ["char1", "char2"]
+                        "name": "cluster_name",
+                        "stocks": ["TICKER1", "TICKER2"],
+                        "risk_profile": "high/medium/low",
+                        "correlation_score": <0.0-1.0>
                     }}
                 ],
-                "portfolio_implications": ["implication1", "implication2"]
+                "portfolio_insights": {{
+                    "diversification_score": <0.0-1.0>,
+                    "risk_distribution": "description",
+                    "rebalancing_suggestions": ["suggestion1", "suggestion2"]
+                }}
             }}
             """
             
             response = self.get_ollama_response(prompt)
-            if response:
-                # Save the thought graph
-                thought_graph = {
-                    'timestamp': datetime.now(),
-                    'analysis': response,
-                    'type': 'portfolio_analysis'
+            if not response:
+                return None
+                
+            # Parse and validate response
+            if isinstance(response, str):
+                response = json.loads(response.strip())
+                
+            # Validate structure
+            required_fields = ['nodes', 'edges', 'clusters', 'portfolio_insights']
+            if not all(field in response for field in required_fields):
+                raise ValueError("Missing required fields in graph analysis")
+                
+            # Save thought graph with metadata
+            thought_graph = {
+                'timestamp': datetime.now(),
+                'analysis': response,
+                'type': 'portfolio_analysis',
+                'metadata': {
+                    'confidence_score': response.get('confidence_score', 0),
+                    'node_count': len(response.get('nodes', [])),
+                    'edge_count': len(response.get('edges', [])),
+                    'cluster_count': len(response.get('clusters', []))
                 }
-                self.save_to_mongodb(self.thought_graphs_collection, thought_graph)
-                return response
-            return None
+            }
+            
+            self.save_to_mongodb(self.thought_graphs_collection, thought_graph)
+            return response
+            
         except Exception as e:
             print(f"Error in graph of thought analysis: {e}")
             return None
@@ -1609,6 +1678,14 @@ class TradingBot:
                         # Limit buy size
                         max_shares = int(max_position_value / stock_data['current_price'])
                         decision['shares'] = min(decision['shares'], max_shares)
+                        
+                        # Ensure minimum trade size
+                        min_trade_value = 500  # $500 minimum trade
+                        min_shares = max(1, int(min_trade_value / stock_data['current_price']))
+                        
+                        if decision['shares'] < min_shares:
+                            print(f"Trade size too small (${decision['shares'] * stock_data['current_price']:.2f}), skipping")
+                            return None
                         
                     elif decision['action'] == 'SELL':
                         # Can't sell more than we own
@@ -2263,11 +2340,12 @@ class TradingBot:
                                 if decision['action'] == 'BUY':
                                     total_cost = decision['shares'] * stock_data['current_price']
                                     if total_cost <= available_cash:
-                                        self.execute_trade(ticker, "BUY", decision['shares'])
+                                        self.execute_trade(ticker, "BUY", total_cost)
                                 elif decision['action'] == 'SELL' and ticker in self.portfolio:
                                     shares = min(decision['shares'], self.portfolio[ticker])
                                     if shares > 0:
-                                        self.execute_trade(ticker, "SELL", shares)
+                                        sell_value = shares * stock_data['current_price']
+                                        self.execute_trade(ticker, "SELL", sell_value)
                                 
                                 time.sleep(1)  # Rate limiting
                                 
@@ -2426,6 +2504,225 @@ class TradingBot:
         for sector in self.sectors:
             print(f"\nWatchlist for {sector}:")
             print(', '.join(self.watchlist.get(sector, [])))
+
+    def execute_phase_analysis(self, phase, data):
+        """Execute thought pattern analysis for specific trading bot phase"""
+        try:
+            phase_analyses = {
+                1: self.phase_one_analysis,
+                2: self.phase_two_analysis,
+                3: self.phase_three_analysis,
+                4: self.phase_four_analysis,
+                5: self.phase_five_analysis,
+                6: self.phase_six_analysis
+            }
+            
+            if phase in phase_analyses:
+                return phase_analyses[phase](data)
+            else:
+                raise ValueError(f"Invalid phase: {phase}")
+                
+        except Exception as e:
+            print(f"Error in phase {phase} analysis: {e}")
+            return None
+
+    def phase_one_analysis(self, market_data):
+        """Phase 1: Initial Market Research"""
+        try:
+            # Chain of Thought - Market Analysis
+            market_cot = self.chain_of_thought_analysis(market_data, {
+                "focus": "market_overview",
+                "metrics": ["market_indices", "sector_performance", "economic_indicators"]
+            })
+            
+            # Tree of Thought - Sector Analysis
+            sector_tot = self.tree_of_thought_analysis("MARKET", {
+                "sectors": self.sectors,
+                "market_conditions": market_cot.get("reasoning_chain", [])
+            })
+            
+            # Graph of Thought - Sector Relationships
+            sector_got = self.graph_of_thought_analysis({
+                "sectors": sector_tot.get("branches", []),
+                "market_state": market_cot.get("final_decision")
+            })
+            
+            return {
+                "phase": 1,
+                "chain_analysis": market_cot,
+                "tree_analysis": sector_tot,
+                "graph_analysis": sector_got,
+                "timestamp": datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"Error in Phase 1 analysis: {e}")
+            return None
+
+    def phase_two_analysis(self, discovery_data):
+        """Phase 2: Stock Discovery"""
+        try:
+            # Chain of Thought - Stock Screening
+            discovery_cot = self.chain_of_thought_analysis(discovery_data, {
+                "focus": "stock_discovery",
+                "metrics": ["volume", "price_action", "news_sentiment"]
+            })
+            
+            # Tree of Thought - Stock Selection
+            selection_tot = self.tree_of_thought_analysis("DISCOVERY", {
+                "candidates": discovery_data.get("potential_stocks", []),
+                "screening_results": discovery_cot.get("reasoning_chain", [])
+            })
+            
+            # Graph of Thought - Stock Relationships
+            discovery_got = self.graph_of_thought_analysis({
+                "candidates": selection_tot.get("branches", []),
+                "market_context": discovery_cot.get("final_decision")
+            })
+            
+            return {
+                "phase": 2,
+                "chain_analysis": discovery_cot,
+                "tree_analysis": selection_tot,
+                "graph_analysis": discovery_got,
+                "timestamp": datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"Error in Phase 2 analysis: {e}")
+            return None
+
+    def phase_three_analysis(self, research_data):
+        """Phase 3: Deep Research"""
+        try:
+            # Chain of Thought - Deep Analysis
+            research_cot = self.chain_of_thought_analysis(research_data, {
+                "focus": "deep_research",
+                "metrics": ["fundamentals", "technicals", "news_analysis"]
+            })
+            
+            # Tree of Thought - Research Paths
+            research_tot = self.tree_of_thought_analysis("RESEARCH", {
+                "stocks": research_data.get("watchlist_stocks", []),
+                "analysis_results": research_cot.get("reasoning_chain", [])
+            })
+            
+            # Graph of Thought - Research Integration
+            research_got = self.graph_of_thought_analysis({
+                "research_findings": research_tot.get("branches", []),
+                "market_impact": research_cot.get("final_decision")
+            })
+            
+            return {
+                "phase": 3,
+                "chain_analysis": research_cot,
+                "tree_analysis": research_tot,
+                "graph_analysis": research_got,
+                "timestamp": datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"Error in Phase 3 analysis: {e}")
+            return None
+
+    def phase_four_analysis(self, watchlist_data):
+        """Phase 4: Watchlist Management"""
+        try:
+            # Chain of Thought - Watchlist Evaluation
+            watchlist_cot = self.chain_of_thought_analysis(watchlist_data, {
+                "focus": "watchlist_management",
+                "metrics": ["performance", "risk_metrics", "correlation"]
+            })
+            
+            # Tree of Thought - Watchlist Decisions
+            watchlist_tot = self.tree_of_thought_analysis("WATCHLIST", {
+                "current_stocks": watchlist_data.get("stocks", []),
+                "evaluation_results": watchlist_cot.get("reasoning_chain", [])
+            })
+            
+            # Graph of Thought - Watchlist Relationships
+            watchlist_got = self.graph_of_thought_analysis({
+                "watchlist_composition": watchlist_tot.get("branches", []),
+                "portfolio_impact": watchlist_cot.get("final_decision")
+            })
+            
+            return {
+                "phase": 4,
+                "chain_analysis": watchlist_cot,
+                "tree_analysis": watchlist_tot,
+                "graph_analysis": watchlist_got,
+                "timestamp": datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"Error in Phase 4 analysis: {e}")
+            return None
+
+    def phase_five_analysis(self, trading_data):
+        """Phase 5: Trading Decisions"""
+        try:
+            # Chain of Thought - Trade Analysis
+            trading_cot = self.chain_of_thought_analysis(trading_data, {
+                "focus": "trade_execution",
+                "metrics": ["entry_points", "position_sizing", "risk_management"]
+            })
+            
+            # Tree of Thought - Trading Scenarios
+            trading_tot = self.tree_of_thought_analysis("TRADING", {
+                "potential_trades": trading_data.get("opportunities", []),
+                "analysis_results": trading_cot.get("reasoning_chain", [])
+            })
+            
+            # Graph of Thought - Trade Impact
+            trading_got = self.graph_of_thought_analysis({
+                "trade_scenarios": trading_tot.get("branches", []),
+                "portfolio_effect": trading_cot.get("final_decision")
+            })
+            
+            return {
+                "phase": 5,
+                "chain_analysis": trading_cot,
+                "tree_analysis": trading_tot,
+                "graph_analysis": trading_got,
+                "timestamp": datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"Error in Phase 5 analysis: {e}")
+            return None
+
+    def phase_six_analysis(self, portfolio_data):
+        """Phase 6: Portfolio Management"""
+        try:
+            # Chain of Thought - Portfolio Review
+            portfolio_cot = self.chain_of_thought_analysis(portfolio_data, {
+                "focus": "portfolio_management",
+                "metrics": ["returns", "risk_adjusted_performance", "diversification"]
+            })
+            
+            # Tree of Thought - Portfolio Optimization
+            portfolio_tot = self.tree_of_thought_analysis("PORTFOLIO", {
+                "holdings": portfolio_data.get("positions", []),
+                "performance_metrics": portfolio_cot.get("reasoning_chain", [])
+            })
+            
+            # Graph of Thought - Portfolio Balance
+            portfolio_got = self.graph_of_thought_analysis({
+                "portfolio_structure": portfolio_tot.get("branches", []),
+                "optimization_needs": portfolio_cot.get("final_decision")
+            })
+            
+            return {
+                "phase": 6,
+                "chain_analysis": portfolio_cot,
+                "tree_analysis": portfolio_tot,
+                "graph_analysis": portfolio_got,
+                "timestamp": datetime.now()
+            }
+            
+        except Exception as e:
+            print(f"Error in Phase 6 analysis: {e}")
+            return None
 
 def run_trading_simulator():
     parser = argparse.ArgumentParser(description='Trading Bot')
