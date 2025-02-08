@@ -789,7 +789,17 @@ class TradingBot:
     def execute_trade(self, ticker, action, shares):
         """Execute a trade with proper MongoDB decimal handling"""
         try:
-            print(f"\nExecuting trade: {action} {ticker} {shares} shares")
+            print(f"\n=== Execute Trade Debug ===")
+            print(f"Ticker: {ticker}")
+            print(f"Action: {action}")
+            print(f"Shares Type: {type(shares)}")
+            print(f"Shares Value: {shares}")
+            print(f"Current Portfolio: {json.dumps(self.portfolio, indent=2)}")
+
+            # Validate shares is a number
+            if not isinstance(shares, (int, float)):
+                print(f"Error: Invalid shares type: {type(shares)}")
+                return False
 
             shares = float(shares)  # Ensure shares is a float
             stock_data = self.get_stock_data(ticker)
@@ -800,6 +810,9 @@ class TradingBot:
 
             current_price = float(stock_data['current_price'])
             amount = current_price * shares
+
+            print(f"Current Price: ${current_price}")
+            print(f"Total Amount: ${amount}")
 
             # Create trade document
             trade = {
@@ -814,27 +827,86 @@ class TradingBot:
             }
             
             try:
-                # Insert trade record directly without transaction
+                print("\nUpdating portfolio...")
+                print(f"Before Update - Portfolio: {json.dumps(self.portfolio, indent=2)}")
+                print(f"Before Update - Balance: ${self.balance}")
+
+                # Insert trade record
                 self.trades_collection.insert_one(trade)
                 
                 # Update portfolio
                 if action == "BUY":
+                    print("\nProcessing BUY...")
+                    # Validate sufficient funds
+                    if amount > self.balance:
+                        print(f"Insufficient funds: Need ${amount}, have ${self.balance}")
+                        return False
+
                     # Deduct from balance
                     self.balance -= amount
+                    
                     # Add to portfolio
                     if ticker in self.portfolio:
-                        self.portfolio[ticker] += shares
-                    else:
-                        self.portfolio[ticker] = shares
+                        print(f"Updating existing position for {ticker}")
+                        current_position = self.portfolio[ticker]
+                        print(f"Current position type: {type(current_position)}")
+                        print(f"Current position data: {current_position}")
                         
+                        if isinstance(current_position, dict):
+                            current_shares = float(current_position.get('shares', 0))
+                        else:
+                            current_shares = float(current_position)
+                        
+                        new_shares = current_shares + shares
+                        self.portfolio[ticker] = {
+                            'shares': new_shares,
+                            'current_price': current_price,
+                            'market_value': new_shares * current_price
+                        }
+                    else:
+                        print(f"Creating new position for {ticker}")
+                        self.portfolio[ticker] = {
+                            'shares': shares,
+                            'current_price': current_price,
+                            'market_value': amount
+                        }
+                    
                 elif action == "SELL":
+                    print("\nProcessing SELL...")
+                    # Validate sufficient shares
+                    if ticker not in self.portfolio:
+                        print(f"No shares of {ticker} in portfolio")
+                        return False
+                    
+                    current_position = self.portfolio[ticker]
+                    print(f"Current position type: {type(current_position)}")
+                    print(f"Current position data: {current_position}")
+                    
+                    if isinstance(current_position, dict):
+                        current_shares = float(current_position.get('shares', 0))
+                    else:
+                        current_shares = float(current_position)
+                    
+                    if current_shares < shares:
+                        print(f"Insufficient shares: Have {current_shares}, trying to sell {shares}")
+                        return False
+
                     # Add to balance
                     self.balance += amount
+                    
                     # Remove from portfolio
-                    if ticker in self.portfolio:
-                        self.portfolio[ticker] -= shares
-                        if self.portfolio[ticker] <= 0:
-                            del self.portfolio[ticker]
+                    new_shares = current_shares - shares
+                    if new_shares <= 0:
+                        del self.portfolio[ticker]
+                    else:
+                        self.portfolio[ticker] = {
+                            'shares': new_shares,
+                            'current_price': current_price,
+                            'market_value': new_shares * current_price
+                        }
+                
+                print(f"\nAfter Update - Portfolio: {json.dumps(self.portfolio, indent=2)}")
+                print(f"After Update - Balance: ${self.balance}")
                 
                 # Save updated portfolio state
                 portfolio_update = {
@@ -848,15 +920,19 @@ class TradingBot:
                     upsert=True
                 )
                 
-                print(f"Trade executed successfully: {action} {shares} shares of {ticker} at ${current_price}")
+                print(f"\nTrade executed successfully: {action} {shares} shares of {ticker} at ${current_price}")
                 return True
                 
             except Exception as e:
                 print(f"Error executing trade: {e}")
+                import traceback
+                print(f"Traceback: {traceback.format_exc()}")
                 return False
                 
         except Exception as e:
             print(f"Error in execute_trade: {e}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return False
 
     def load_watchlist(self):
@@ -1559,18 +1635,43 @@ class TradingBot:
     def get_position_size_decision(self, ticker, stock_data, stock_research, portfolio_value, available_cash):
         """Get LLM decision on position sizing with improved debugging"""
         try:
-            print(f"\nAnalyzing position size for {ticker}...")
+            print("\n=== Position Size Analysis Debug ===")
+            print(f"Ticker: {ticker}")
+            print(f"Stock Data Type: {type(stock_data)}")
+            print(f"Stock Data: {json.dumps(stock_data, indent=2)}")
             print(f"Available Cash: ${available_cash:.2f}")
             print(f"Portfolio Value: ${portfolio_value:.2f}")
-            print(f"Current Price: ${stock_data['current_price']:.2f}")
             
+            # Validate stock_data
+            if not isinstance(stock_data, dict):
+                print(f"Error: stock_data is not a dictionary, got {type(stock_data)}")
+                return None
+                
+            current_price = stock_data.get('current_price')
+            print(f"Current Price Type: {type(current_price)}")
+            print(f"Current Price Value: {current_price}")
+            
+            if not isinstance(current_price, (int, float, np.float64)):
+                print(f"Error: Invalid current_price type: {type(current_price)}")
+                return None
+                
+            # Convert numpy float to regular float
+            current_price = float(current_price)
+            
+            if current_price <= 0:
+                print(f"Error: Invalid current_price value: {current_price}")
+                return None
+
             # Calculate maximum shares based on available cash and risk limits
             max_position_value = min(available_cash * 0.25, portfolio_value * 0.25)  # Max 25% of either
-            max_shares = int(max_position_value / stock_data['current_price'])
+            max_shares = int(max_position_value / current_price)
+            
+            print(f"Max Position Value: ${max_position_value:.2f}")
+            print(f"Max Shares Possible: {max_shares}")
             
             prompt = f"""
             Determine position size for {ticker} trade with these parameters:
-            - Current Price: ${stock_data['current_price']:.2f}
+            - Current Price: ${current_price:.2f}
             - Daily Change: {stock_data.get('daily_change', 0):.2f}%
             - Momentum: {stock_data.get('momentum', 0):.2f}
             - Available Cash: ${available_cash:.2f}
@@ -1587,8 +1688,10 @@ class TradingBot:
             }}
             """
             
+            print("\nSending prompt to LLM...")
             response = self.get_ollama_response(prompt)
-            print(f"\nLLM Response: {response}")  # Debug print
+            print(f"\nLLM Raw Response Type: {type(response)}")
+            print(f"LLM Raw Response: {response}")
             
             if response:
                 try:
@@ -1600,38 +1703,91 @@ class TradingBot:
                             cleaned_response = cleaned_response.split('```json')[1]
                         if cleaned_response.endswith('```'):
                             cleaned_response = cleaned_response.rsplit('```', 1)[0]
+                        print(f"\nCleaned Response: {cleaned_response}")
                         decision = json.loads(cleaned_response.strip())
                     else:
                         decision = response
                     
+                    print(f"\nParsed Decision Type: {type(decision)}")
+                    print(f"Parsed Decision: {json.dumps(decision, indent=2)}")
+                    
+                    # Validate decision structure
+                    if not isinstance(decision, dict):
+                        print(f"Error: Decision is not a dictionary, got {type(decision)}")
+                        return None
+                    
+                    if 'action' not in decision or 'shares' not in decision:
+                        print("Error: Missing required fields in decision")
+                        return None
+                    
+                    # Validate shares value
+                    shares = decision['shares']
+                    print(f"\nShares value type: {type(shares)}")
+                    print(f"Shares value: {shares}")
+                    
+                    # Convert shares to integer
+                    try:
+                        shares = int(float(shares))
+                        decision['shares'] = shares
+                        print(f"Converted shares to: {shares} (type: {type(shares)})")
+                    except (ValueError, TypeError) as e:
+                        print(f"Error converting shares to integer: {e}")
+                        return None
+                    
                     # Validate and adjust the decision
                     if decision['action'] == 'BUY':
-                        # Limit buy size
-                        max_shares = int(max_position_value / stock_data['current_price'])
-                        decision['shares'] = min(decision['shares'], max_shares)
+                        print(f"\nProcessing BUY decision...")
+                        print(f"Max shares allowed: {max_shares}")
+                        print(f"Requested shares: {shares}")
+                        decision['shares'] = min(shares, max_shares)
+                        print(f"Adjusted buy shares to: {decision['shares']}")
                         
                     elif decision['action'] == 'SELL':
-                        # Can't sell more than we own
-                        current_shares = self.portfolio.get(ticker, 0)
-                        decision['shares'] = min(decision['shares'], current_shares)
+                        print(f"\nProcessing SELL decision...")
+                        current_position = self.portfolio.get(ticker, 0)
+                        print(f"Current position data: {current_position}")
                         
-                        if decision['shares'] <= 0:
-                            print("No shares to sell")
-                            return None
+                        # Extract shares from position dictionary or use 0 if not found
+                        if isinstance(current_position, dict):
+                            current_shares = float(current_position.get('shares', 0))
+                        else:
+                            current_shares = float(current_position)
+                        
+                        print(f"Extracted current shares: {current_shares}")
+                        print(f"Requested sell shares: {shares}")
+                        
+                        # Ensure we have valid numbers for comparison
+                        try:
+                            current_shares = float(current_shares)
+                            shares_to_sell = min(shares, int(current_shares))
+                            decision['shares'] = shares_to_sell
+                            print(f"Adjusted sell shares to: {shares_to_sell}")
+                        except (ValueError, TypeError) as e:
+                            print(f"Error converting shares for comparison: {e}")
+                            decision['shares'] = 0
+                        
+                        print(f"Final shares value: {decision['shares']}")
                     
                     print(f"\nFinal Decision: {json.dumps(decision, indent=2)}")
                     return decision
                     
                 except json.JSONDecodeError as e:
-                    print(f"Error parsing decision: {e}")
+                    print(f"Error parsing decision JSON: {e}")
                     print(f"Raw response: {response}")
+                    return None
+                except Exception as e:
+                    print(f"Error processing decision: {e}")
+                    print(f"Decision data: {decision if 'decision' in locals() else 'Not available'}")
+                    import traceback
+                    print(f"Traceback: {traceback.format_exc()}")
                     return None
                     
             return None
             
         except Exception as e:
             print(f"Error in position sizing: {e}")
-            print(f"Stock data: {stock_data}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return None
 
     def execute_position_adjustment(self, adjustments):
