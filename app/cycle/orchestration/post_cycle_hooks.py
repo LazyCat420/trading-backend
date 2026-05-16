@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from app.services.pipeline_service import PipelineService
 
@@ -217,7 +218,6 @@ async def run_post_cycle_hooks(
     # ── Decoupled Async Eval Engine: process traces immediately without blocking ──
     try:
         from app.autoresearch.eval_worker import run_eval_worker
-        import asyncio
         # Create an async task to run the eval worker without delaying the current trading cycle
         asyncio.create_task(run_eval_worker(limit=10))
     except Exception as eval_err:

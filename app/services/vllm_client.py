@@ -708,12 +708,15 @@ class VLLMClient:
                 
             # ── Routing: Prism /agent vs direct vLLM ──
             # Controlled by PRISM_AGENT_ROUTING toggle:
-            #   True  = route through Prism /agent (agentic loop, tool execution, native logging)
+            #   True  = route ALL endpoints through Prism /agent
+            #           (agentic loop, tool execution, native logging)
             #   False = direct vLLM + offline shadow-log to Prism
+            # NOTE: Jetson was previously excluded from Prism routing.
+            # As of Phase 3 (Unified Telemetry), ALL endpoints route
+            # through Prism so that every request is tracked and visible.
             use_prism_agent = (
                 self.prism_client.enabled
                 and settings.PRISM_AGENT_ROUTING
-                and ep.name != "jetson"  # Prism Gateway proxies to a single backend; bypass for Jetson
             )
             prism_routed = False
 
@@ -792,8 +795,11 @@ class VLLMClient:
                         )
                     )
                 except Exception as prism_err:
-                    logger.debug(
-                        "[PRISM] Shadow log task creation failed: %s", prism_err
+                    logger.warning(
+                        "[PRISM] ⚠️ Shadow log task creation failed for %s on %s: %s",
+                        meta.get("agent_name", "unknown"),
+                        ep.name,
+                        prism_err,
                     )
 
             # Record Graph Attention from <think> content

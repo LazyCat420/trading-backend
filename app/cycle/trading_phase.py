@@ -14,6 +14,7 @@ Portfolio Gate:
     BEFORE executing any BUY decision. Prevents overexposure.
 """
 
+import asyncio
 import logging
 import time
 from app.trading.paper_trader import buy, sell, get_portfolio
@@ -185,7 +186,6 @@ async def execute_decisions(
             # ── Pre-Trade Agent: run calculator tool chain before buying ──
             pre_trade_decision = None
             try:
-                import asyncio
                 from app.agents.pre_trade_agent import run_pre_trade
 
                 pre_trade_decision = await asyncio.wait_for(
@@ -242,7 +242,6 @@ async def execute_decisions(
                 size_pct * 100,
                 portfolio.get("cash", 0),
             )
-            import asyncio
 
             try:
                 result = await asyncio.wait_for(
@@ -314,7 +313,6 @@ async def execute_decisions(
                 continue
 
             logger.debug("[PIPELINE]   [%s] EXECUTING SELL", ticker)
-            import asyncio
 
             try:
                 result = await asyncio.wait_for(

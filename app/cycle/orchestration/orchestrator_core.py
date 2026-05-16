@@ -292,8 +292,7 @@ class OrchestratorCoreMixin:
             # ── Trigger AutoResearch ──
             try:
                 from app.pipeline.analysis.autoresearch import run_autoresearch
-                import asyncio
-                # Fire and forget auto-research
+                # Fire and forget auto-research (asyncio already imported at module level)
                 asyncio.create_task(run_autoresearch(ctx.cycle_id, dict(cls._cycle_summary)))
                 logger.info("[CYCLE] Triggered AutoResearch for cycle %s", ctx.cycle_id)
             except Exception as ar_err:
