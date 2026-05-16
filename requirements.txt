@@ -1,0 +1,73 @@
+# ============================================================
+# Production Dependencies (Docker image)
+# ============================================================
+# For testing/dev deps, see requirements-dev.txt
+
+# Core: HTTP client, config, env
+httpx==0.28.1
+pydantic-settings==2.13.1
+python-dotenv==1.2.2
+paramiko==4.0.0
+
+# Data Collection
+yfinance==1.2.0
+psycopg[binary,pool]==3.2.6
+pgvector==0.3.6
+finnhub-python==2.4.27
+edgartools==5.25.1
+beautifulsoup4==4.14.3
+fredapi==0.5.2
+
+# Processors
+ta==0.11.0
+pandas==3.0.1
+scikit-learn>=1.3.0
+
+# Reddit/YouTube/News Collectors
+feedparser==6.0.12
+cloudscraper>=1.2.71
+trafilatura>=1.6.0
+ddgs>=9.14.0
+youtube-transcript-api==1.2.4
+yt-dlp==2026.3.17
+markdownify>=0.13.0
+
+# RLM (Recursive Language Models — MIT CSAIL)
+# Pinned: monkey-patch in rlm_wrapper.py depends on rlm.core.rlm.get_client
+rlms==0.1.1
+
+# RAG / Embeddings
+rank-bm25==0.2.2
+
+# Web Server
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+sse-starlette==2.4.1
+python-multipart==0.0.20
+orjson>=3.10.0
+
+# Scheduling
+APScheduler==3.11.2
+pytz==2026.1.post1
+
+# Math / Scientific Computing (Brain Graph)
+numpy>=1.26.0
+
+# Runtime Toolbelt
+tenacity>=8.5.0
+structlog>=24.4.0
+pandera>=0.20.4
+concurrent-log-handler>=0.9.25
+
+# MongoDB (Prism integration)
+motor==3.4.0
+pymongo>=4.0,<4.9  # motor 3.4.0 uses cursor._QUERY_OPTIONS, removed in 4.9
+
+# Evaluation (judge_agent.py — runs in live pipeline, NOT dev-only)
+deepeval>=2.0.0
+rouge-score>=0.1.2
+
+# HTTP compatibility
+urllib3==1.26.18
+chardet==5.2.0
+

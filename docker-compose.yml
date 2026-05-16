@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  trading-cycle-backend:
+    image: trading-cycle-backend:latest
+    container_name: trading-cycle-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=America/Los_Angeles
+      - DATABASE_URL=postgresql://trader:${POSTGRES_PASSWORD:-trading_bot_pass}@10.0.0.16:5433/trading_bot
+    volumes:
+      - /usr/share/zoneinfo/America/Los_Angeles:/etc/localtime:ro
+      - ./logs:/app/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
