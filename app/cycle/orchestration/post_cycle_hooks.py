@@ -215,13 +215,15 @@ async def run_post_cycle_hooks(
             cp_err,
         )
 
-    # ── Decoupled Async Eval Engine: process traces immediately without blocking ──
+    # ── Decoupled Async Eval Engine: process traces immediately (BOUNDED) ──
     try:
         from app.autoresearch.eval_worker import run_eval_worker
-        # Create an async task to run the eval worker without delaying the current trading cycle
-        asyncio.create_task(run_eval_worker(limit=10))
+        # Bounded eval — no more fire-and-forget zombie tasks
+        await asyncio.wait_for(run_eval_worker(limit=10), timeout=30)
+    except asyncio.TimeoutError:
+        logger.debug("[PIPELINE] [EVAL WORKER] Timeout (30s) — cancelling.")
     except Exception as eval_err:
         logger.debug(
-            "[PIPELINE] [EVAL WORKER] Failed to spawn async eval worker (non-fatal): %s",
+            "[PIPELINE] [EVAL WORKER] Failed (non-fatal): %s",
             eval_err,
         )

@@ -71,13 +71,8 @@ async def run_single_cycle(
         cycle_id=cycle_id,
     )
 
-    # Set up the mixin state for standalone execution
-    OrchestratorCoreMixin._state = {"status": "idle"}
-    OrchestratorCoreMixin._cycle_summary = {}
-    OrchestratorCoreMixin.emit = lambda *a, **k: logger.info(
-        "[cycle] %s %s", a[1] if len(a) > 1 else "", a[2] if len(a) > 2 else ""
-    )
-    OrchestratorCoreMixin.save_state = lambda *a, **k: None
+    # Initialize the pipeline state using the db state manager
+    OrchestratorCoreMixin.load_state()
 
     logger.info(
         "[cycle_backend] Starting cycle %s | tickers=%s",
@@ -108,11 +103,120 @@ async def run_single_cycle(
         return {"cycle_id": cycle_id, "status": "error", "error": str(e)}
 
 
-async def run_scheduler(
-    interval_minutes: int = 30,
-    tickers: list[str] | None = None,
-) -> None:
-    """Run cycles on a schedule until shutdown is requested."""
+async def poll_system_commands(shutdown: asyncio.Event):
+    """Background loop to pick up manual triggers from the frontend."""
+    from app.db.connection import get_db
+    import json
+    
+    logger.info("[cycle_backend] Started system commands poller.")
+    
+    while not shutdown.is_set():
+        try:
+            with get_db() as db:
+                row = db.execute(
+                    "SELECT id, command_type, payload FROM system_commands WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1"
+                ).fetchone()
+                
+                if row:
+                    job_id, cmd_type, payload_val = row
+                    db.execute(
+                        "UPDATE system_commands SET status = 'running', started_at = CURRENT_TIMESTAMP WHERE id = %s", 
+                        [job_id]
+                    )
+                    
+                    try:
+                        payload = json.loads(payload_val) if isinstance(payload_val, str) else (payload_val or {})
+                        result = None
+                        
+                        logger.info(f"[cycle_backend] Processing command {cmd_type} ({job_id})")
+                        
+                        if cmd_type == "START_CYCLE":
+                            result = await run_single_cycle(tickers=payload.get("tickers"))
+                        elif cmd_type == "ANALYZE_TICKER":
+                            from app.pipeline.analysis.decision_engine import analyze_ticker
+                            result = await analyze_ticker(payload.get("ticker"), cycle_id="manual_run")
+                        elif cmd_type == "MORNING_BRIEFING":
+                            from app.pipeline.analysis.morning_briefing import generate_morning_briefing
+                            result = await generate_morning_briefing()
+                        elif cmd_type == "FLASH_BRIEFING":
+                            from app.services.flash_briefing import generate_flash_briefing
+                            result = await generate_flash_briefing()
+                        elif cmd_type == "STOP_CYCLE":
+                            from app.services.pipeline_service import PipelineService
+                            result = await PipelineService.stop_cycle()
+                        elif cmd_type == "PAUSE_CYCLE":
+                            from app.services.pipeline_service import PipelineService
+                            PipelineService.pause_cycle()
+                            result = {"status": "paused"}
+                        elif cmd_type == "RESUME_CYCLE":
+                            from app.services.pipeline_service import PipelineService
+                            await PipelineService.resume_cycle()
+                            result = {"status": "resumed"}
+                        elif cmd_type == "RESUME_INTERRUPTED":
+                            from app.services.pipeline_service import PipelineService
+                            result = await PipelineService.resume_interrupted_cycle()
+                        elif cmd_type == "DISCARD_CHECKPOINT":
+                            from app.services.pipeline_service import PipelineService
+                            result = PipelineService.discard_checkpoint()
+                        elif cmd_type == "FORCE_CHECKPOINT":
+                            from app.services.pipeline_service import PipelineService
+                            PipelineService.force_save_checkpoint()
+                            result = {"status": "checkpoint_saved"}
+                        elif cmd_type == "REFRESH_SCHEDULE":
+                            from app.services.cycle_scheduler import SchedulerService
+                            SchedulerService.refresh_job(payload.get("job_id"))
+                            result = {"status": "schedule_refreshed"}
+                        elif cmd_type == "AUTORESEARCH":
+                            from app.pipeline.analysis.autoresearch import run_autoresearch
+                            asyncio.create_task(run_autoresearch(payload.get("cycle_id"), payload.get("cycle_summary")))
+                            result = {"status": "autoresearch_started"}
+                        elif cmd_type == "DEPLOY_FIX":
+                            from app.cognition.evolution.deployer import deploy_fix_to_disk
+                            result = deploy_fix_to_disk(payload.get("fix_id"))
+                        elif cmd_type == "ROLLBACK_FIX":
+                            from app.cognition.evolution.deployer import rollback_fix
+                            result = rollback_fix(payload.get("fix_id"))
+                        elif cmd_type == "ACTIVATE_BRAIN_GRAPH":
+                            from app.cognition.ontology.ontology_builder import BrainGraph
+                            ticker = payload.get("ticker")
+                            max_hops = payload.get("max_hops", 3)
+                            seeded = BrainGraph.seed_from_ticker_metadata(ticker)
+                            graph_res = BrainGraph.spreading_activation(seed_node_ids=[ticker], max_hops=max_hops)
+                            graph_res["seeded"] = seeded
+                            result = graph_res
+                        elif cmd_type == "EVALUATE_STRATEGY":
+                            from app.cognition.evaluation.strategy_auditor import evaluate_strategy
+                            asyncio.create_task(evaluate_strategy(cycle_id=payload.get("cycle_id"), refresh_pending=True))
+                            result = {"status": "evaluation_started"}
+                        elif cmd_type == "GENERATE_MORNING_BRIEFING":
+                            from app.pipeline.analysis.morning_briefing import generate_morning_briefing
+                            asyncio.create_task(generate_morning_briefing())
+                            result = {"status": "briefing_started"}
+                            
+                        db.execute(
+                            "UPDATE system_commands SET status = 'completed', completed_at = CURRENT_TIMESTAMP, result = %s WHERE id = %s", 
+                            [json.dumps(result), job_id]
+                        )
+                        logger.info(f"[cycle_backend] Completed command {job_id}")
+                    except Exception as e:
+                        logger.error(f"[cycle_backend] Command {job_id} failed: {e}")
+                        db.execute(
+                            "UPDATE system_commands SET status = 'error', completed_at = CURRENT_TIMESTAMP, error_message = %s WHERE id = %s", 
+                            [str(e), job_id]
+                        )
+        except Exception as e:
+            logger.error("[cycle_backend] Poller error: %s", e)
+            
+        try:
+            await asyncio.wait_for(shutdown.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
+            pass
+
+
+async def run_worker(tickers: list[str] | None = None) -> None:
+    """Run the backend worker (scheduler + poller) until shutdown."""
+    from app.services.cycle_scheduler import SchedulerService
+    
     shutdown = asyncio.Event()
 
     def _request_shutdown():
@@ -126,40 +230,18 @@ async def run_scheduler(
         except NotImplementedError:
             signal.signal(sig, lambda s, f: _request_shutdown())
 
-    cycle_num = 0
-    logger.info(
-        "[cycle_backend] Scheduler started | interval=%dm | tickers=%s",
-        interval_minutes,
-        tickers or "auto-select",
-    )
-
-    while not shutdown.is_set():
-        cycle_num += 1
-        cycle_id = f"sched-{int(time.time())}-{cycle_num}"
-
-        try:
-            summary = await run_single_cycle(
-                tickers=tickers,
-                cycle_id=cycle_id,
-            )
-            logger.info(
-                "[cycle_backend] Cycle %d done: %s",
-                cycle_num,
-                summary.get("status", "unknown"),
-            )
-        except Exception as e:
-            logger.error("[cycle_backend] Cycle %d crashed: %s", cycle_num, e)
-
-        # Wait for the next cycle or shutdown
-        try:
-            await asyncio.wait_for(
-                shutdown.wait(),
-                timeout=interval_minutes * 60,
-            )
-        except asyncio.TimeoutError:
-            pass  # Normal — time for the next cycle
-
-    logger.info("[cycle_backend] Scheduler stopped after %d cycles.", cycle_num)
+    # Start APScheduler (which runs DB schedules + background jobs)
+    SchedulerService.start()
+    
+    # Start the system commands poller
+    poller_task = asyncio.create_task(poll_system_commands(shutdown))
+    
+    # Keep the main loop alive
+    await shutdown.wait()
+    
+    # Cleanup
+    SchedulerService.stop()
+    await poller_task
 
 
 def main():
@@ -171,7 +253,6 @@ def main():
     ap = argparse.ArgumentParser(description="Trading Cycle Backend")
     ap.add_argument("--once", action="store_true", help="Run one cycle and exit")
     ap.add_argument("--tickers", type=str, help="Comma-separated tickers (e.g. AAPL,NVDA)")
-    ap.add_argument("--interval", type=int, default=30, help="Minutes between cycles (default: 30)")
     args = ap.parse_args()
 
     tickers = [t.strip() for t in args.tickers.split(",")] if args.tickers else None
@@ -180,10 +261,7 @@ def main():
         result = asyncio.run(run_single_cycle(tickers=tickers))
         print(f"Result: {result}")
     else:
-        asyncio.run(run_scheduler(
-            interval_minutes=args.interval,
-            tickers=tickers,
-        ))
+        asyncio.run(run_worker(tickers=tickers))
 
 
 if __name__ == "__main__":

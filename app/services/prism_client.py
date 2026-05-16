@@ -30,6 +30,7 @@ class PrismClient:
         self.username = settings.PRISM_USERNAME
         self.enabled = settings.PRISM_ENABLED
         self.agent = settings.PRISM_AGENT
+        self.offline_sync_enabled = settings.OFFLINE_SYNC_ENABLED  # runtime toggle
         self._sessions: dict[str, str] = {}
         self._client: httpx.AsyncClient | None = None
         self._is_healthy = False
@@ -246,6 +247,9 @@ class PrismClient:
         are grouped under one Prism session for easier auditing.
         """
         if not self.enabled:
+            return
+        if not self.offline_sync_enabled:
+            logger.debug("[PRISM] Offline sync disabled — skipping log for %s", agent_name)
             return
 
         conversation_id = str(uuid.uuid4())

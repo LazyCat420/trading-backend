@@ -75,7 +75,7 @@ async def reflect_on_trajectory(
 
         user_prompt = f"### TRAJECTORY\n{trajectory_text}\n\n### EXTRACTED LESSON:"
 
-        result = await llm.chat(
+        response_text, tokens, ms = await llm.chat(
             system=system_prompt,
             user=user_prompt,
             priority=Priority.LOW,  # Run in background without blocking core trading
@@ -85,7 +85,7 @@ async def reflect_on_trajectory(
             bot_id="system",
         )
 
-        lesson = result.get("text", "").strip()
+        lesson = response_text.strip() if response_text else ""
         if not lesson:
             logger.warning("[Reflector] LLM returned empty lesson.")
             return
@@ -177,7 +177,7 @@ def get_spotlight_tools(limit: int = 5) -> list[str]:
                 """
                 SELECT tool_name, COUNT(*) as usage_count 
                 FROM tool_usage_stats 
-                WHERE created_at > CURRENT_TIMESTAMP - INTERVAL '7 days'
+                WHERE called_at > CURRENT_TIMESTAMP - INTERVAL '7 days'
                 GROUP BY tool_name
                 ORDER BY usage_count ASC
                 LIMIT %s

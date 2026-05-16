@@ -855,14 +855,6 @@ CREATE TABLE IF NOT EXISTS agent_experiences (
     last_applied    TIMESTAMP WITH TIME ZONE
 );
 
-CREATE TABLE IF NOT EXISTS tool_playbook (
-    id              TEXT PRIMARY KEY,
-    agent_name      TEXT,
-    tool_name       TEXT,
-    playbook_text   TEXT,
-    success_rate    DOUBLE PRECISION DEFAULT 0.0,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 CREATE INDEX IF NOT EXISTS idx_agent_experiences_name ON agent_experiences(agent_name);
 
 -- ══════════════════════════════════════════
@@ -1909,6 +1901,21 @@ CREATE TABLE IF NOT EXISTS pending_evolution_fixes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_pending_evo_fixes_status ON pending_evolution_fixes(status);
+
+-- ══════════════════════════════════════════
+-- STABLE HARNESS REGISTRY
+-- Tracks the last known-good version of evolved files.
+-- Written by mark_stable() after probation passes.
+-- Read by the Debate Council as a fallback starting point.
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS stable_harnesses (
+    target_type     TEXT NOT NULL,
+    target_name     TEXT NOT NULL,
+    fix_id          TEXT NOT NULL,         -- FK to pending_evolution_fixes.id
+    stable_content  TEXT NOT NULL,         -- snapshot of the known-good file content
+    marked_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (target_type, target_name)
+);
 
 -- ══════════════════════════════════════════
 -- SANDBOX COMMAND APPROVALS

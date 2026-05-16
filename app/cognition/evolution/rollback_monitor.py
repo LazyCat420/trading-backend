@@ -72,9 +72,23 @@ def check_probation_fixes(current_cycle_id: str) -> dict:
                         summary["rolled_back"] += 1
                     else:
                         logger.info(
-                            "[ROLLBACK-MONITOR] Fix %s metrics stable.",
+                            "[ROLLBACK-MONITOR] Fix %s metrics stable — marking as STABLE.",
                             fix_id,
                         )
+                        # Promote to stable registry so future debates use this as starting point
+                        try:
+                            from app.cognition.evolution.deployer import mark_stable
+                            mark_result = mark_stable(fix_id)
+                            if "error" in mark_result:
+                                logger.warning(
+                                    "[ROLLBACK-MONITOR] Failed to mark %s stable: %s",
+                                    fix_id, mark_result["error"],
+                                )
+                        except Exception as ms_err:
+                            logger.warning(
+                                "[ROLLBACK-MONITOR] mark_stable failed for %s: %s",
+                                fix_id, ms_err,
+                            )
                         summary["passed"] += 1
 
                 except Exception as e:

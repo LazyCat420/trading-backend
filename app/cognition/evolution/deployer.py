@@ -157,3 +157,100 @@ def _create_backup(file_path: Path, fix_id: str) -> Path | None:
     except Exception as e:
         logger.warning("[EVO-DEPLOY] Backup creation failed: %s", e)
         return None
+
+
+# ═══════════════════════════════════════════════════════════════
+# STABLE STATE REGISTRY — Track known-good versions of evolved files
+# ═══════════════════════════════════════════════════════════════
+
+
+def mark_stable(fix_id: str) -> dict:
+    """Mark a deployed fix as 'stable' after it passes probation.
+
+    Called by the Rollback Monitor when a fix survives its probation window
+    without metric degradation. The stable content is snapshot'd so future
+    debates can use it as a known-good starting point.
+    """
+    with get_db() as db:
+        row = db.execute(
+            "SELECT target_type, target_name, proposed_fix, status "
+            "FROM pending_evolution_fixes WHERE id = %s",
+            [fix_id],
+        ).fetchone()
+
+        if not row:
+            return {"error": f"Fix {fix_id} not found"}
+
+        if row[3] != "deployed":
+            return {"error": f"Fix status is '{row[3]}', expected 'deployed'"}
+
+        target_type = row[0]
+        target_name = row[1]
+        stable_content = row[2]
+
+        try:
+            # Upsert into the stable_harnesses registry
+            db.execute(
+                """INSERT INTO stable_harnesses
+                (target_type, target_name, fix_id, stable_content, marked_at)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (target_type, target_name) DO UPDATE SET
+                    fix_id = EXCLUDED.fix_id,
+                    stable_content = EXCLUDED.stable_content,
+                    marked_at = EXCLUDED.marked_at
+                """,
+                [target_type, target_name, fix_id, stable_content],
+            )
+
+            # Update the fix status
+            db.execute(
+                "UPDATE pending_evolution_fixes "
+                "SET status = 'stable', probation_until = NULL "
+                "WHERE id = %s",
+                [fix_id],
+            )
+
+            logger.info(
+                "[EVO-DEPLOY] Marked fix %s as STABLE for %s/%s",
+                fix_id,
+                target_type,
+                target_name,
+            )
+            return {
+                "status": "stable",
+                "fix_id": fix_id,
+                "target": f"{target_type}/{target_name}",
+            }
+        except Exception as e:
+            logger.error("[EVO-DEPLOY] Failed to mark stable: %s", e)
+            return {"error": str(e)}
+
+
+def get_stable_version(target_type: str, target_name: str) -> str | None:
+    """Retrieve the last known-good (stable) version of a target file.
+
+    Returns the stable content string, or None if no stable version exists.
+    Used by the Debate Council as a fallback starting point when the current
+    disk version is broken.
+    """
+    with get_db() as db:
+        try:
+            row = db.execute(
+                "SELECT stable_content FROM stable_harnesses "
+                "WHERE target_type = %s AND target_name = %s",
+                [target_type, target_name],
+            ).fetchone()
+
+            if row and row[0]:
+                logger.debug(
+                    "[EVO-DEPLOY] Found stable version for %s/%s (%d chars)",
+                    target_type,
+                    target_name,
+                    len(row[0]),
+                )
+                return row[0]
+            return None
+        except Exception as e:
+            logger.debug("[EVO-DEPLOY] Stable lookup failed: %s", e)
+            return None
+

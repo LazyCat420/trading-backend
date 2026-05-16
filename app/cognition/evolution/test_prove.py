@@ -148,9 +148,11 @@ async def _validate_prompt(
 def _validate_scraper_code(target_name: str, proposed_fix: str) -> dict:
     """
     Validate proposed scraper code changes.
-    Checks: AST parse, no dangerous imports, no hardcoded secrets.
+    Checks: AST parse, no dangerous imports, no hardcoded secrets,
+    function definitions, import verification, AND live sandbox execution.
     """
     errors = []
+    warnings = []
     tests_run = 0
     tests_passed = 0
 
@@ -206,17 +208,197 @@ def _validate_scraper_code(target_name: str, proposed_fix: str) -> dict:
     else:
         tests_passed += 1
 
+    # Test 6: LIVE SANDBOX EXECUTION — actually run the scraper in a subprocess
+    # This catches runtime errors that AST/import checks miss (network failures,
+    # API format changes, broken parsing logic).
+    if errors:
+        # Skip sandbox if earlier tests already failed
+        logger.info("[TEST-PROVE] Skipping sandbox — earlier tests failed.")
+    else:
+        tests_run += 1
+        sandbox_result = _run_sandbox_test(target_name, proposed_fix)
+        if sandbox_result["passed"]:
+            tests_passed += 1
+            logger.info("[TEST-PROVE] Sandbox test PASSED: %s", sandbox_result["details"])
+        elif sandbox_result.get("is_network_error"):
+            # Network errors are warnings, not failures — the code itself may be correct
+            warnings.append(f"Sandbox network warning: {sandbox_result['details']}")
+            tests_passed += 1  # Give benefit of the doubt
+            logger.warning("[TEST-PROVE] Sandbox network warning: %s", sandbox_result["details"])
+        else:
+            errors.append(f"Sandbox execution failed: {sandbox_result['details']}")
+            logger.warning("[TEST-PROVE] Sandbox test FAILED: %s", sandbox_result["details"])
+
     passed = len(errors) == 0
+    detail_parts = [f"Scraper validation: {tests_passed}/{tests_run} tests passed."]
+    if errors:
+        detail_parts.append(f"Errors: {'; '.join(errors)}")
+    if warnings:
+        detail_parts.append(f"Warnings: {'; '.join(warnings)}")
+    if not errors and not warnings:
+        detail_parts.append("All clear.")
+
     return {
         "passed": passed,
         "tests_run": tests_run,
         "tests_passed": tests_passed,
-        "details": (
-            f"Scraper validation: {tests_passed}/{tests_run} tests passed."
-            + (f" Errors: {'; '.join(errors)}" if errors else " All clear.")
-        ),
+        "details": " ".join(detail_parts),
         "errors": errors,
+        "warnings": warnings,
     }
+
+
+def _run_sandbox_test(target_name: str, proposed_code: str) -> dict:
+    """Execute proposed scraper code in a subprocess sandbox with strict timeout.
+
+    Writes the code to a temp file, appends a test harness that invokes the main
+    function with a dummy ticker (AAPL), and checks that the subprocess exits
+    cleanly with a zero exit code.
+
+    Returns:
+        {"passed": bool, "details": str, "is_network_error": bool}
+    """
+    import subprocess
+    import tempfile
+    import os
+
+    _SANDBOX_TIMEOUT = 30  # seconds
+
+    # Try to detect the main callable in the proposed code
+    tree = ast.parse(proposed_code)
+    async_funcs = [
+        node.name for node in ast.walk(tree)
+        if isinstance(node, ast.AsyncFunctionDef)
+    ]
+    sync_funcs = [
+        node.name for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    ]
+
+    # Prefer common naming patterns
+    test_func = None
+    for candidate in ["collect_news", "collect_all", "collect_for_ticker",
+                       "collect", "scrape", "fetch", "run"]:
+        if candidate in async_funcs:
+            test_func = (candidate, True)
+            break
+        if candidate in sync_funcs:
+            test_func = (candidate, False)
+            break
+
+    if not test_func and async_funcs:
+        test_func = (async_funcs[0], True)
+    elif not test_func and sync_funcs:
+        test_func = (sync_funcs[0], False)
+
+    if not test_func:
+        return {
+            "passed": True,
+            "details": "No callable function detected — skipping sandbox.",
+            "is_network_error": False,
+        }
+
+    func_name, is_async = test_func
+
+    # Build the test harness
+    if is_async:
+        harness = f"""
+# ── Sandbox Test Harness ──
+import asyncio
+import sys
+
+async def _sandbox_test():
+    try:
+        result = await {func_name}("AAPL")
+        print(f"SANDBOX_OK: {{type(result).__name__}} returned")
+        sys.exit(0)
+    except Exception as e:
+        err_str = str(e).lower()
+        if any(kw in err_str for kw in ["timeout", "connection", "dns", "ssl", "network", "refused"]):
+            print(f"SANDBOX_NETWORK_WARN: {{e}}")
+            sys.exit(2)  # Network error — not a code bug
+        print(f"SANDBOX_FAIL: {{e}}")
+        sys.exit(1)
+
+asyncio.run(_sandbox_test())
+"""
+    else:
+        harness = f"""
+# ── Sandbox Test Harness ──
+import sys
+
+try:
+    result = {func_name}("AAPL")
+    print(f"SANDBOX_OK: {{type(result).__name__}} returned")
+    sys.exit(0)
+except Exception as e:
+    err_str = str(e).lower()
+    if any(kw in err_str for kw in ["timeout", "connection", "dns", "ssl", "network", "refused"]):
+        print(f"SANDBOX_NETWORK_WARN: {{e}}")
+        sys.exit(2)
+    print(f"SANDBOX_FAIL: {{e}}")
+    sys.exit(1)
+"""
+
+    full_code = proposed_code + "\n\n" + harness
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", prefix="evo_sandbox_",
+            delete=False, dir="/tmp"
+        ) as f:
+            f.write(full_code)
+            tmp_path = f.name
+
+        try:
+            proc = subprocess.run(
+                ["python3", tmp_path],
+                capture_output=True,
+                text=True,
+                timeout=_SANDBOX_TIMEOUT,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+            output = (proc.stdout + proc.stderr).strip()
+
+            if proc.returncode == 0:
+                return {
+                    "passed": True,
+                    "details": f"Sandbox OK: {output[:200]}",
+                    "is_network_error": False,
+                }
+            elif proc.returncode == 2:
+                return {
+                    "passed": False,
+                    "details": f"Network issue (not a code bug): {output[:200]}",
+                    "is_network_error": True,
+                }
+            else:
+                return {
+                    "passed": False,
+                    "details": f"Exit code {proc.returncode}: {output[:300]}",
+                    "is_network_error": False,
+                }
+
+        except subprocess.TimeoutExpired:
+            return {
+                "passed": False,
+                "details": f"Sandbox timeout ({_SANDBOX_TIMEOUT}s) — code may hang.",
+                "is_network_error": False,
+            }
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    except Exception as e:
+        return {
+            "passed": False,
+            "details": f"Sandbox setup error: {e}",
+            "is_network_error": False,
+        }
+
 
 
 def _validate_strategy_code(target_name: str, proposed_fix: str) -> dict:

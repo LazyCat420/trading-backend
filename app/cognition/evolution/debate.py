@@ -98,6 +98,34 @@ class EvolutionDebateCouncil:
                 logger.error("[EVO-DEBATE] Target mapping failed: %s", e)
                 resolved_content = f"# Could not resolve target: {e}"
 
+        # ── 0b. STABLE FALLBACK: prefer last known-good version if disk is broken ──
+        try:
+            from app.cognition.evolution.deployer import get_stable_version
+
+            stable = get_stable_version(target_type, target_name)
+            if stable:
+                # If disk content is missing/broken, use the stable version
+                disk_broken = (
+                    not resolved_content
+                    or resolved_content.startswith("# File not found")
+                    or resolved_content.startswith("# Could not resolve")
+                    or len(resolved_content.strip()) < 50
+                )
+                if disk_broken:
+                    logger.info(
+                        "[EVO-DEBATE] Disk content broken — using STABLE version for %s/%s (%d chars)",
+                        target_type, target_name, len(stable),
+                    )
+                    resolved_content = stable
+                else:
+                    # Even if disk is OK, append stable version as reference
+                    logger.debug(
+                        "[EVO-DEBATE] Stable version available for %s/%s (using current disk)",
+                        target_type, target_name,
+                    )
+        except Exception as stbl_err:
+            logger.debug("[EVO-DEBATE] Stable fallback lookup failed: %s", stbl_err)
+
         # ── Evidence Gathering (Phase 1: online research) ──
         evidence_context = ""
         try:

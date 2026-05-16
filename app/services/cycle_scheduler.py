@@ -14,7 +14,6 @@ from fastapi import HTTPException
 
 from app.pipeline.orchestration.cycle_control import cycle_control
 from app.db.connection import get_db
-from app.routers.pipeline import start_cycle, CycleRequest
 from app.services.bot_manager import get_active_bot_id
 from app.trading.paper_trader import check_stop_losses, check_take_profits
 
@@ -147,18 +146,30 @@ class SchedulerService:
             except Exception:
                 tickers = []
 
-            req = CycleRequest(
-                tickers=tickers,
-                collect=bool(s["collect"]),
-                analyze=bool(s["analyze"]),
-                trade=s["trade"] if s["trade"] is not None else None,
-                max_tickers=s.get("max_tickers"),
-            )
+            # Dispatch cycle via system_commands table (picked up by cycle_main poller)
+            payload = {
+                "tickers": tickers,
+                "collect": bool(s["collect"]),
+                "analyze": bool(s["analyze"]),
+                "trade": bool(s["trade"]) if s["trade"] is not None else True,
+                "max_tickers": s.get("max_tickers"),
+            }
 
             run_status = "ok"
             err_msg = ""
             try:
-                res = await start_cycle(req)
+                # Check if a cycle is already running before dispatching
+                state_row = db.execute(
+                    "SELECT status FROM pipeline_state WHERE singleton_id = 'current'"
+                ).fetchone()
+                if state_row and state_row[0] not in ("idle", "done", "error", "stopped", "interrupted"):
+                    raise HTTPException(409, f"Cycle already running: {state_row[0]}")
+
+                cmd_id = f"sch-cmd-{uuid.uuid4().hex[:8]}"
+                db.execute(
+                    "INSERT INTO system_commands (id, command_type, payload) VALUES (%s, %s, %s)",
+                    [cmd_id, "START_CYCLE", json.dumps(payload)]
+                )
                 logger.info(
                     "[SCHEDULER] Successfully triggered cycle run for schedule %s.",
                     schedule_id,

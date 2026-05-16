@@ -87,12 +87,14 @@ class OrchestratorCoreMixin:
                 ("scout", getattr(cls, "_scout_task", None)),
                 ("consumer", getattr(cls, "_consumer_task", None)),
                 ("checkpoint", getattr(cls, "_checkpoint_task", None)),
+                ("autoresearch", getattr(cls, "_autoresearch_task", None)),
             ]:
                 if task and not task.done():
                     task.cancel()
             cls._scout_task = None
             cls._consumer_task = None
             cls._checkpoint_task = None
+            cls._autoresearch_task = None
 
             # Re-pause the system so background tasks go dormant
             # until the next cycle is explicitly started.
@@ -107,12 +109,12 @@ class OrchestratorCoreMixin:
     async def _execute_cycle_impl(cls, ctx: Any, bot_id: str) -> None:
         """
         Executes the concurrent cycle:
-          Phase 1 (Health) → Concurrent Core (Collection + Macro + Analysis) → Trading → Fire-and-Forget Housekeeping
+          Phase 1 (Health) → Concurrent Core (Collection + Macro + Analysis) → Trading → Bounded Housekeeping
 
         Collection pushes tickers into an analysis queue as they finish.
         Analysis workers consume immediately — no waiting for all collection.
         Macro scout runs in parallel with collection.
-        Post-trade housekeeping is fire-and-forget (doesn't block cycle completion).
+        Post-cycle housekeeping and AutoResearch are timeout-bounded to prevent zombie loops.
         """
         try:
             from app.utils.trace import set_trace_id
@@ -265,16 +267,15 @@ class OrchestratorCoreMixin:
                 cls._state["status"] = "traded"
                 cls.emit("traded", "trading", "Trade execution completed", status="ok")
 
-            # ── Phase 6: Post-Enrichment (fire-and-forget housekeeping) ──
+            # ── Phase 6: Post-Enrichment (bounded housekeeping) ──
             cls._state["status"] = "persisted"
-            cls.emit("persisted", "post", "Persisting results and launching background housekeeping", status="ok")
+            cls.emit("persisted", "post", "Persisting results and launching bounded housekeeping", status="ok")
             await run_phase6_post(
                 ctx, bot_id, results, trade_result, cls.emit, cls._state, cls._cycle_summary
             )
-            
+
             cls._state["status"] = "evaluated"
             cls.emit("evaluated", "post", "Cycle evaluations and metrics collected", status="ok")
-            
 
             ended = datetime.now(timezone.utc).isoformat()
             cls._cycle_summary["status"] = "done"
@@ -289,12 +290,28 @@ class OrchestratorCoreMixin:
             except Exception as e:
                 logger.warning("Failed to clear checkpoint on success: %s", e)
 
-            # ── Trigger AutoResearch ──
+            # ── Trigger AutoResearch (BOUNDED — was fire-and-forget, caused zombie loops) ──
+            _AUTORESEARCH_TIMEOUT = 120  # seconds — hard cap
             try:
                 from app.pipeline.analysis.autoresearch import run_autoresearch
-                # Fire and forget auto-research (asyncio already imported at module level)
-                asyncio.create_task(run_autoresearch(ctx.cycle_id, dict(cls._cycle_summary)))
-                logger.info("[CYCLE] Triggered AutoResearch for cycle %s", ctx.cycle_id)
+
+                cls._autoresearch_task = asyncio.create_task(
+                    run_autoresearch(ctx.cycle_id, dict(cls._cycle_summary))
+                )
+                logger.info("[CYCLE] Triggered AutoResearch for cycle %s (timeout=%ds)", ctx.cycle_id, _AUTORESEARCH_TIMEOUT)
+                try:
+                    await asyncio.wait_for(cls._autoresearch_task, timeout=_AUTORESEARCH_TIMEOUT)
+                    logger.info("[CYCLE] AutoResearch completed successfully.")
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "[CYCLE] AutoResearch timeout (%ds) — cancelling to prevent zombie loop",
+                        _AUTORESEARCH_TIMEOUT,
+                    )
+                    cls._autoresearch_task.cancel()
+                    try:
+                        await cls._autoresearch_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
             except Exception as ar_err:
                 logger.warning("[CYCLE] Failed to trigger AutoResearch: %s", ar_err)
 

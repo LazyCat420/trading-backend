@@ -534,7 +534,7 @@ async def stream_hermes_chat(
             import asyncio
 
             prism_client = PrismClient()
-            if prism_client.enabled:
+            if prism_client.enabled and prism_client.offline_sync_enabled:
                 asyncio.create_task(
                     prism_client.offline_log(
                         messages=messages,

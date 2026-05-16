@@ -147,7 +147,11 @@ async def run_phase6_post(
     except Exception as e:
         logger.warning("Results enrichment failed: %s", e)
 
-    # 2. Purge Pass — fire-and-forget (non-blocking)
+    # 2. Purge Pass — bounded housekeeping (no more fire-and-forget zombies)
+    # All background tasks are gathered with a strict timeout so they can't
+    # leak and keep the event loop alive for hours after the cycle ends.
+    _HOUSEKEEPING_TIMEOUT = 120  # seconds — hard cap on all post-cycle work
+
     if ctx.analyze:
         async def _bg_purge():
             try:
@@ -197,70 +201,93 @@ async def run_phase6_post(
             except Exception as bench_err:
                 logger.error("Benchmark recording failed: %s", bench_err)
 
-        # Launch all housekeeping as fire-and-forget background tasks.
-        # These run after the cycle is marked "done" and don't block trading.
-        emit("purge", "start", "Launching background housekeeping...", status="ok")
-        asyncio.create_task(_bg_purge())
-        asyncio.create_task(_bg_knowledge_purge())
-        asyncio.create_task(_bg_janitor())
-        asyncio.create_task(_bg_benchmarks())
-        logger.info("[CYCLE] All housekeeping tasks launched in background (fire-and-forget)")
-
-        # Meta Audit Agent & Quant Research Agent — post-cycle self-auditing (fire-and-forget)
+        # ── Housekeeping: gathered with strict timeout (no orphan tasks) ──
+        emit("purge", "start", "Launching bounded housekeeping...", status="ok")
         try:
-            import traceback
-            from app.agents.meta_audit_agent import run_meta_audit
-            from app.agents.quant_research_agent import run_quant_research
-            from app.db.pipeline_state import PipelineStateDB
+            await asyncio.wait_for(
+                asyncio.gather(
+                    _bg_purge(),
+                    _bg_knowledge_purge(),
+                    _bg_janitor(),
+                    _bg_benchmarks(),
+                    return_exceptions=True,
+                ),
+                timeout=_HOUSEKEEPING_TIMEOUT,
+            )
+            logger.info("[CYCLE] All housekeeping tasks completed within %ds", _HOUSEKEEPING_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[CYCLE] Housekeeping timeout (%ds) — cancelling remaining tasks",
+                _HOUSEKEEPING_TIMEOUT,
+            )
+        except Exception as hk_err:
+            logger.error("[CYCLE] Housekeeping gather failed: %s", hk_err)
 
-            async def _guarded_task(coro, task_name: str, cycle_id: str, bot_id: str):
-                """Wrapper that ensures fire-and-forget tasks log failures."""
-                try:
-                    await coro
-                except asyncio.CancelledError:
-                    logger.info("[%s] Task cancelled (server shutdown).", task_name)
-                except Exception as e:
-                    logger.error("[%s] Failed: %s", task_name, e)
-                    try:
-                        PipelineStateDB.log_execution_error(
-                            cycle_id=cycle_id,
-                            phase="post_trade",
-                            ticker="system",
-                            error_type=f"{task_name}_failure",
-                            error_message=str(e)[:500],
-                            stack_trace=traceback.format_exc()[:2000],
-                        )
-                    except Exception:
-                        pass
-
-            bot_id_resolved = bot_id
+        # ── Post-cycle agents: gathered with strict timeout (no orphan tasks) ──
+        async def _run_post_cycle_agents():
             try:
-                from app.services.bot_manager import get_active_bot_id
-                bot_id_resolved = get_active_bot_id()
-            except Exception:
-                pass
+                import traceback
+                from app.agents.meta_audit_agent import run_meta_audit
+                from app.agents.quant_research_agent import run_quant_research
 
-            asyncio.create_task(_guarded_task(
-                run_meta_audit(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
-                "meta_audit",
-                ctx.cycle_id,
-                bot_id_resolved,
-            ))
-            
-            asyncio.create_task(_guarded_task(
-                run_quant_research(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
-                "quant_research",
-                ctx.cycle_id,
-                bot_id_resolved,
-            ))
-            
+                bot_id_resolved = bot_id
+                try:
+                    from app.services.bot_manager import get_active_bot_id
+                    bot_id_resolved = get_active_bot_id()
+                except Exception:
+                    pass
+
+                # Run both agents with individual error handling
+                async def _safe_agent(coro, name):
+                    try:
+                        await coro
+                    except asyncio.CancelledError:
+                        logger.info("[%s] Cancelled (timeout or shutdown).", name)
+                    except Exception as e:
+                        logger.error("[%s] Failed: %s", name, e)
+                        try:
+                            from app.db.pipeline_state import PipelineStateDB
+                            PipelineStateDB.log_execution_error(
+                                cycle_id=ctx.cycle_id,
+                                phase="post_trade",
+                                ticker="system",
+                                error_type=f"{name}_failure",
+                                error_message=str(e)[:500],
+                                stack_trace=traceback.format_exc()[:2000],
+                            )
+                        except Exception:
+                            pass
+
+                await asyncio.gather(
+                    _safe_agent(
+                        run_meta_audit(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
+                        "meta_audit",
+                    ),
+                    _safe_agent(
+                        run_quant_research(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
+                        "quant_research",
+                    ),
+                    return_exceptions=True,
+                )
+            except Exception as agent_err:
+                logger.warning("Post-cycle agents failed (non-fatal): %s", agent_err)
+
+        try:
             emit(
                 "evaluated",
                 "post_cycle_agents",
-                "Meta audit and Quant research agents launched (background).",
+                "Running post-cycle agents (bounded)...",
                 status="ok",
             )
-        except Exception as audit_err:
-            logger.warning("Post-cycle agent launch failed (non-fatal): %s", audit_err)
-
-
+            await asyncio.wait_for(
+                _run_post_cycle_agents(),
+                timeout=_HOUSEKEEPING_TIMEOUT,
+            )
+            logger.info("[CYCLE] Post-cycle agents completed within %ds", _HOUSEKEEPING_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[CYCLE] Post-cycle agents timeout (%ds) — cancelling",
+                _HOUSEKEEPING_TIMEOUT,
+            )
+        except Exception as pca_err:
+            logger.warning("Post-cycle agent launch failed (non-fatal): %s", pca_err)

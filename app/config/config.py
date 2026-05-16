@@ -182,6 +182,7 @@ class Settings(BaseSettings):
     PRISM_AGENT_ROUTING: bool = False  # False = direct vLLM + offline sync (avoids Prism's agentic loop conflicting with local tool execution)
     PRISM_MONGO_URI: str = "mongodb://10.0.0.16:27017/?directConnection=true"
     PRISM_MONGO_DB: str = "prism"
+    OFFLINE_SYNC_ENABLED: bool = True  # Toggle offline shadow-logging to Prism (can also be toggled at runtime via API)
 
     # ── SEC 13F Tracking ──
     SEC_USER_AGENT: str = "vllm-trading-bot analysis@example.com"

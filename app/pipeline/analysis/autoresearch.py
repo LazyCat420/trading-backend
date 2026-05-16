@@ -230,12 +230,15 @@ async def run_autoresearch(cycle_id: str, cycle_summary: dict) -> dict:
         except Exception as gap_err:
             logger.warning("[AUTORESEARCH] Data gap resolution failed: %s", gap_err)
 
-        # Trigger Evolutionary Debate Council
+        # Trigger Evolutionary Debate Council (BOUNDED — no more fire-and-forget)
+        _EVO_TIMEOUT = 60  # seconds
         try:
             from app.pipeline.analysis.evolution_router import router
-            import asyncio as _ar_asyncio
 
-            _ar_asyncio.create_task(router.run_router(cycle_id))
+            await asyncio.wait_for(router.run_router(cycle_id), timeout=_EVO_TIMEOUT)
+            logger.info("[AUTORESEARCH] Evolution Router completed.")
+        except asyncio.TimeoutError:
+            logger.warning("[AUTORESEARCH] Evolution Router timeout (%ds) — cancelling.", _EVO_TIMEOUT)
         except Exception as e:
             logger.error("[AUTORESEARCH] Failed to trigger Evolution Router: %s", e)
 
@@ -250,14 +253,15 @@ async def run_autoresearch(cycle_id: str, cycle_summary: dict) -> dict:
         except Exception as dir_err:
             logger.warning("[AUTORESEARCH] Directive generation failed: %s", dir_err)
 
-        # Trigger Benchmark Agent for Constitution review
+        # Trigger Benchmark Agent for Constitution review (BOUNDED)
+        _BENCH_TIMEOUT = 60  # seconds
         try:
             from app.pipeline.analysis.benchmark_agent import run_benchmark_agent
-            import asyncio as _ar_asyncio
 
-            # Fire and forget
-            _ar_asyncio.create_task(run_benchmark_agent(cycle_id))
-            logger.info("[AUTORESEARCH] Triggered Benchmark Agent.")
+            await asyncio.wait_for(run_benchmark_agent(cycle_id), timeout=_BENCH_TIMEOUT)
+            logger.info("[AUTORESEARCH] Benchmark Agent completed.")
+        except asyncio.TimeoutError:
+            logger.warning("[AUTORESEARCH] Benchmark Agent timeout (%ds) — cancelling.", _BENCH_TIMEOUT)
         except Exception as bench_err:
             logger.error(
                 "[AUTORESEARCH] Failed to trigger Benchmark Agent: %s", bench_err

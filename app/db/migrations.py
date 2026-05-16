@@ -673,6 +673,9 @@ def _fix_eth_cagr_data(conn):
     _safe_add_column(conn, "agent_traces", "endpoint_name", "TEXT")
     _safe_add_column(conn, "agent_traces", "model_name", "TEXT")
     _safe_add_column(conn, "tool_playbook", "task_type", "TEXT")
+    _safe_add_column(conn, "tool_playbook", "recommended_tool_sequence", "TEXT")
+    _safe_add_column(conn, "tool_playbook", "stop_conditions", "TEXT")
+    _safe_add_column(conn, "tool_playbook", "bad_patterns_to_avoid", "TEXT")
     try:
         with conn.cursor() as cur:
             cur.execute("CREATE INDEX IF NOT EXISTS idx_tool_playbook_task ON tool_playbook(task_type)")
@@ -762,6 +765,33 @@ def _fix_eth_cagr_data(conn):
                     PRIMARY KEY (ticker, source)
                 )
             """)
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+    # ── System Commands Queue (Frontend -> Backend Bridge) ──
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS system_commands (
+                    id              TEXT PRIMARY KEY,
+                    command_type    TEXT NOT NULL,
+                    payload         JSONB DEFAULT '{}',
+                    status          TEXT DEFAULT 'pending',
+                    result          JSONB,
+                    error_message   TEXT,
+                    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    started_at      TIMESTAMPTZ,
+                    completed_at    TIMESTAMPTZ
+                )
+            """)
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_system_commands_status "
+                "ON system_commands(status)"
+            )
             conn.commit()
     except Exception:
         try:
