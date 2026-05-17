@@ -138,6 +138,11 @@ async def poll_system_commands(shutdown: asyncio.Event):
                         
                         if cmd_type == "START_CYCLE":
                             from app.services.pipeline_service import PipelineService
+                            # Sync in-memory state from DB before checking guards.
+                            # Without this, stale in-memory state (e.g. 'starting' from
+                            # a previous failed attempt) will reject the command even
+                            # though the DB has been reset to 'idle'.
+                            PipelineService.load_state()
                             result = await PipelineService.start_cycle(tickers=payload.get("tickers", []))
                         elif cmd_type == "ANALYZE_TICKER":
                             from app.pipeline.analysis.decision_engine import analyze_ticker
