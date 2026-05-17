@@ -14,6 +14,9 @@ set -e
 echo "[cycle-backend] Python: $(/opt/venv/bin/python --version 2>&1 || echo 'NOT FOUND')"
 echo "[cycle-backend] Starting trading cycle backend..."
 
+# Ensure log directories exist (volume mounts override Dockerfile mkdir)
+mkdir -p logs/cycles logs/v2 memory 2>/dev/null || true
+
 ARGS=""
 
 if [ "${CYCLE_ONCE}" = "true" ]; then
