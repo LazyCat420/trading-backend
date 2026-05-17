@@ -287,12 +287,17 @@ async def run(
                             )
                         new_tickers = capped_new
 
+                    from app.cycle.orchestration.priority_queue import PRIORITY_DISCOVERED
                     for t in new_tickers:
-                        analysis_queue.put_nowait(t)
+                        # Use hasattr check for PriorityAnalysisQueue vs plain Queue
+                        if hasattr(analysis_queue, 'put_nowait') and hasattr(analysis_queue, 'classify'):
+                            analysis_queue.put_nowait(t, priority=PRIORITY_DISCOVERED)
+                        else:
+                            analysis_queue.put_nowait(t)
                     logger.info(
                         "[PIPELINE] [TRACK A] Pushed %d newly discovered tickers "
-                        "to analysis queue (dedup will filter any already-processed)",
-                        len(new_tickers),
+                        "to analysis queue at priority=%d (dedup filters duplicates)",
+                        len(new_tickers), PRIORITY_DISCOVERED,
                     )
                     emit(
                         "analyzing",

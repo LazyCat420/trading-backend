@@ -175,7 +175,16 @@ class OrchestratorCoreMixin:
                 macro_memo_holder["memo"] += f"\n\n[URGENT] The bot has woken up specifically because an order trigger was hit: {ctx.trigger_type}. Evaluate this immediately and decide whether to execute the trade, hold, or adjust the trigger.\n\n"
 
             # ── Analysis Queue (tickers flow from collection → analysis) ──
-            analysis_queue = asyncio.Queue() if (ctx.analyze and not _skip_analyze and not _skip_collect) else None
+            # Priority queue ensures portfolio holdings are analyzed first.
+            analysis_queue = None
+            if ctx.analyze and not _skip_analyze and not _skip_collect:
+                from app.cycle.orchestration.priority_queue import PriorityAnalysisQueue
+                _triage = cls._state.get("triage", {})
+                analysis_queue = PriorityAnalysisQueue(
+                    position_tickers=set(cls._state.get("position_tickers", [])),
+                    deep_tickers=set(_triage.get("deep", [])),
+                    glance_tickers=set(_triage.get("glance", [])),
+                )
 
             # ── Launch Analysis Workers (background, consumes from queue) ──
             analysis_task = None
@@ -219,21 +228,27 @@ class OrchestratorCoreMixin:
                 # per-ticker collection pushes these same tickers later.
                 if analysis_queue is not None and ctx.tickers:
                     _prepush_count = 0
+                    _prio_counts = {}
                     for t in ctx.tickers:
-                        analysis_queue.put_nowait(t)
+                        analysis_queue.put_nowait(t)  # Auto-classifies priority
+                        _prio = analysis_queue.classify(t)
+                        _prio_counts[_prio] = _prio_counts.get(_prio, 0) + 1
                         _prepush_count += 1
+                    _prio_labels = {0: "portfolio", 1: "deep", 2: "watchlist", 3: "discovered", 4: "glance"}
+                    _prio_summary = ", ".join(
+                        f"{_prio_labels.get(p, f'p{p}')}={c}" for p, c in sorted(_prio_counts.items())
+                    )
                     cls.emit(
                         "analyzing",
                         "watchlist_prepush",
-                        f"Pre-pushed {_prepush_count} watchlist tickers for immediate analysis "
-                        f"(cached data — analysts start NOW while collection runs)",
+                        f"Pre-pushed {_prepush_count} tickers for immediate analysis "
+                        f"(priority: {_prio_summary})",
                         status="ok",
-                        data={"tickers": list(ctx.tickers)[:20], "count": _prepush_count},
+                        data={"tickers": list(ctx.tickers)[:20], "count": _prepush_count, "priorities": _prio_counts},
                     )
                     logger.info(
-                        "[CYCLE] Pre-pushed %d watchlist tickers to analysis queue "
-                        "(analysts start immediately, collection runs in parallel)",
-                        _prepush_count,
+                        "[CYCLE] Pre-pushed %d tickers to priority queue (%s)",
+                        _prepush_count, _prio_summary,
                     )
 
             elif _skip_analyze:
