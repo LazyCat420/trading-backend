@@ -106,11 +106,11 @@ async def get_market_data(ticker: str) -> str:
     source="finnhub",
 )
 async def get_finnhub_news(ticker: str) -> str:
-    from app.collectors.finnhub_collector import collect_news
+    from app.collectors.news_collector import collect_finnhub_news
     from app.services.api_rate_limiter import rate_limiter
 
     async with rate_limiter.acquire("finnhub"):
-        await collect_news(ticker)
+        await collect_finnhub_news(ticker)
 
     with get_db() as db:
         rows = db.execute(

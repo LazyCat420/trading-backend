@@ -28,83 +28,14 @@ def _get_client() -> finnhub.Client:
 
 async def collect_news(ticker: str, days_back: int = 7) -> int:
     """
-    Fetch company news from Finnhub via a Smart Delta Sync.
-    Queries the newest article in the DB and only requests news
-    starting from that date to minimize API payloads.
-    Returns the true number of *new* rows inserted.
+    DEPRECATED: Proxy to the robust Trafilatura-powered news collector.
+    The raw Finnhub API only returns cut-off summaries. 
+    This proxy ensures all news scraping goes through the unified engine 
+    which visits URLs to extract full article bodies.
     """
-    with get_db() as db:
-        today = datetime.date.today()
-
-        # 1. Check database for newest timestamp
-        row = db.execute(
-            "SELECT MAX(published_at) FROM news_articles WHERE ticker = %s AND source = 'finnhub'",
-            [ticker],
-        ).fetchone()
-        if row and row[0]:
-            try:
-                # Parse '2023-10-05 14:00:00' to datetime
-                last_dt = datetime.datetime.fromisoformat(row[0].replace("Z", "+00:00"))
-                from_date = last_dt.date()
-            except Exception:
-                from_date = today - datetime.timedelta(days=days_back)
-        else:
-            # Scenario A: First time / empty
-            from_date = today - datetime.timedelta(days=days_back)
-
-        # 2. Fetch from API using the dynamic date window
-        try:
-            client = _get_client()
-            import asyncio
-
-            articles = await asyncio.to_thread(
-                lambda: client.company_news(ticker, _from=str(from_date), to=str(today))
-            )
-        except Exception as e:
-            logger.info(f"[finnhub] Error fetching news for {ticker}: {e}")
-            return 0
-
-        if not articles:
-            logger.info(f"[finnhub] No news for {ticker}")
-            return 0
-
-        count = 0
-        for a in articles:
-            article_id = hashlib.md5(
-                f"{a.get('headline', '')}{a.get('datetime', '')}".encode()
-            ).hexdigest()
-
-            # 3. True Deduplication (Avoid overwriting AI summaries!)
-            exists = db.execute(
-                "SELECT 1 FROM news_articles WHERE id = %s", [article_id]
-            ).fetchone()
-            if exists:
-                continue
-
-            published = datetime.datetime.fromtimestamp(
-                a.get("datetime", 0), tz=datetime.UTC
-            )
-
-            db.execute(
-                """
-                INSERT INTO news_articles
-                (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'finnhub', CURRENT_TIMESTAMP)
-            """,
-                [
-                    article_id,
-                    ticker,
-                    a.get("headline", ""),
-                    a.get("source", ""),
-                    a.get("url", ""),
-                    published,
-                    a.get("summary", ""),
-                ],
-            )
-            count += 1
-
-        logger.info(f"[finnhub] {ticker}: {count} NEW articles written (Smart Delta)")
-        return count
+    from app.collectors.news_collector import collect_finnhub_news
+    logger.info(f"[finnhub_collector] Proxying collect_news({ticker}) to robust news_collector...")
+    return await collect_finnhub_news(ticker, days=days_back)
 
 
 async def collect_analyst_targets(ticker: str) -> bool:

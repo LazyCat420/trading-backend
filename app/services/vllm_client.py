@@ -94,6 +94,34 @@ class QueueItem:
 VALID_ROLES = ("collector", "analyst", "trader", "training")
 
 
+# ── Role-Based Routing Taxonomy ─────────────────────────────────────────
+# Maps agent names to their required hardware role/tier.
+# 'collector' = Jetson (35B), 'analyst' / 'trader' = DGX Spark (120B)
+AGENT_ROLE_ROUTING = {
+    # Lightweight tasks -> Jetson
+    "hermes_research": "collector",
+    "summarizer": "collector",
+    "data_janitor": "collector",
+    "retriever": "collector",
+    "user_chat": "collector",
+    "collector": "collector",
+    
+    # Complex reasoning -> DGX Spark
+    "technical": "analyst",
+    "fundamental": "analyst",
+    "sentiment": "analyst",
+    "fund_flow": "analyst",
+    "risk": "analyst",
+    "comparative": "analyst",
+    "trading_phase": "trader",
+    "decision_engine": "trader",
+    "deepeval_judge": "analyst",
+    "strategy_evaluator": "analyst",
+    "judge_evaluator": "analyst",
+    "debate": "analyst",
+}
+
+
 # ── Smart Queue Constants ──────────────────────────────────────────────
 # Max queue depth per endpoint = max_concurrent * this multiplier.
 # Beyond this, requests overflow to the next-best endpoint.
@@ -263,7 +291,7 @@ class VLLMClient:
             if ep.enabled and ep.role != "training"
         ]
 
-    def _pick_best_endpoint(self, requested_model: str | None = None) -> VLLMEndpoint:
+    def _pick_best_endpoint(self, requested_model: str | None = None, agent_name: str | None = None) -> VLLMEndpoint:
         """Capacity-aware endpoint selection.
 
         Picks the endpoint with the lowest combined load (active + queued),
@@ -271,6 +299,9 @@ class VLLMClient:
         
         If requested_model is provided, strictly filters candidates to only 
         those endpoints hosting that specific model.
+        
+        If agent_name is provided, routes to the appropriate hardware tier 
+        (Jetson vs DGX Spark) based on task complexity.
         """
         candidates = [
             ep
@@ -278,6 +309,28 @@ class VLLMClient:
             if ep.enabled and ep.role != "training" and ep.model
         ]
         
+        # Role-based routing: filter by required role if defined in taxonomy
+        if agent_name:
+            required_role = None
+            for key, role in AGENT_ROLE_ROUTING.items():
+                if agent_name.startswith(key):
+                    required_role = role
+                    break
+            
+            if required_role:
+                # If analyst or trader, we can use any DGX (they both run 120B). 
+                # If collector, we use Jetson.
+                if required_role in ("analyst", "trader"):
+                    acceptable_roles = ("analyst", "trader")
+                else:
+                    acceptable_roles = ("collector",)
+                
+                role_candidates = [ep for ep in candidates if ep.role in acceptable_roles]
+                if role_candidates:
+                    candidates = role_candidates
+                else:
+                    logger.warning("[VLLM] No active endpoint found for role tier '%s'. Falling back.", required_role)
+
         # Strictly filter by model if requested
         if requested_model:
             model_candidates = [ep for ep in candidates if ep.model == requested_model]
@@ -1325,10 +1378,10 @@ class VLLMClient:
         elif model_override:
             # Caller explicitly requested a specific model — find an endpoint
             # that hosts it, or fall back to the best available endpoint.
-            target_ep = self._pick_best_endpoint(requested_model=model_override)
+            target_ep = self._pick_best_endpoint(requested_model=model_override, agent_name=agent_name)
         else:
             # No override — just pick the least loaded endpoint
-            target_ep = self._pick_best_endpoint()
+            target_ep = self._pick_best_endpoint(agent_name=agent_name)
 
         # The model we actually send is ALWAYS from the target endpoint.
         # model_override is only used to influence endpoint selection above,
@@ -1478,9 +1531,9 @@ class VLLMClient:
                     f"Endpoint name override '{endpoint_override}' not found"
                 )
         elif model_override:
-            target_ep = self._pick_best_endpoint(requested_model=model_override)
+            target_ep = self._pick_best_endpoint(requested_model=model_override, agent_name=agent_name)
         else:
-            target_ep = self._pick_best_endpoint()
+            target_ep = self._pick_best_endpoint(agent_name=agent_name)
 
         effective_model = target_ep.model or model_override or self.model
 
