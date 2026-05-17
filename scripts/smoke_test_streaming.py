@@ -95,7 +95,7 @@ async def run_streaming_test(ticker: str, timeout: int, verbose: bool):
     }
 
     poll_interval = 2
-    last_event_id = 0
+    last_event_count = 0
 
     print(f"[2/6] Monitoring streaming events (timeout={timeout}s)...")
     print()
@@ -111,16 +111,24 @@ async def run_streaming_test(ticker: str, timeout: int, verbose: bool):
 
         # Poll for new events
         with get_db() as db:
-            events = db.execute(
-                "SELECT id, phase, step, detail, status, elapsed_ms, timestamp "
-                "FROM pipeline_events WHERE cycle_id = %s AND id > %s "
-                "ORDER BY id ASC",
-                [cycle_id, last_event_id],
-            ).fetchall()
+            total_count = db.execute(
+                "SELECT COUNT(*) FROM pipeline_events WHERE cycle_id = %s",
+                [cycle_id],
+            ).fetchone()[0]
+
+            if total_count > last_event_count:
+                events = db.execute(
+                    "SELECT phase, step, detail, status, elapsed_ms, timestamp "
+                    "FROM pipeline_events WHERE cycle_id = %s "
+                    "ORDER BY timestamp ASC OFFSET %s",
+                    [cycle_id, last_event_count],
+                ).fetchall()
+            else:
+                events = []
 
         for ev in events:
-            _id, _phase, _step, _detail, _status, _ms, _ts = ev
-            last_event_id = _id
+            _phase, _step, _detail, _status, _ms, _ts = ev
+            last_event_count += 1
 
             # Track milestones
             if _step == "watchlist_prepush" and milestones["watchlist_prepush"] is None:
