@@ -183,6 +183,15 @@ class OrchestratorCoreMixin:
                 cls._state["status"] = "started"
                 cls.emit("started", "concurrent", "Starting concurrent collection + analysis", status="ok")
 
+                if analysis_queue is not None:
+                    cls.emit(
+                        "analyzing",
+                        "queue_created",
+                        f"Analysis queue created — workers will wait for collection to push tickers",
+                        status="running",
+                        data={"mode": "queue", "initial_tickers": len(ctx.tickers)},
+                    )
+
                 async def _analysis_bg():
                     """Run analysis workers that consume from the queue."""
                     _auditor.phase_entry(
@@ -200,6 +209,33 @@ class OrchestratorCoreMixin:
 
                 analysis_task = asyncio.create_task(_analysis_bg())
                 logger.info("[CYCLE] Launched analysis workers in background (consuming from queue)")
+
+                # ── STREAMING: Pre-push watchlist tickers for immediate analysis ──
+                # Watchlist tickers have cached data from prior cycles (prices,
+                # fundamentals, recent news). Push them to the analysis queue NOW
+                # so workers start processing within seconds — don't wait for
+                # global collection (RSS=10min) to finish first.
+                # Dedup in phase4_analysis.py prevents double-processing when
+                # per-ticker collection pushes these same tickers later.
+                if analysis_queue is not None and ctx.tickers:
+                    _prepush_count = 0
+                    for t in ctx.tickers:
+                        analysis_queue.put_nowait(t)
+                        _prepush_count += 1
+                    cls.emit(
+                        "analyzing",
+                        "watchlist_prepush",
+                        f"Pre-pushed {_prepush_count} watchlist tickers for immediate analysis "
+                        f"(cached data — analysts start NOW while collection runs)",
+                        status="ok",
+                        data={"tickers": list(ctx.tickers)[:20], "count": _prepush_count},
+                    )
+                    logger.info(
+                        "[CYCLE] Pre-pushed %d watchlist tickers to analysis queue "
+                        "(analysts start immediately, collection runs in parallel)",
+                        _prepush_count,
+                    )
+
             elif _skip_analyze:
                 cls.emit(
                     "analyzing",
@@ -214,8 +250,25 @@ class OrchestratorCoreMixin:
                     ctx.cycle_id, "collecting", ticker_count=len(ctx.tickers)
                 )
 
+                _collection_start = time.monotonic()
                 ctx.tickers = await run_phase2_collection(
                     ctx, cls.emit, cls._state, analysis_queue=analysis_queue
+                )
+                _collection_elapsed = int(time.monotonic() - _collection_start)
+
+                _queue_depth = analysis_queue.qsize() if analysis_queue else 0
+                cls.emit(
+                    "collecting",
+                    "collection_complete",
+                    f"Collection finished: {len(ctx.tickers)} tickers in {_collection_elapsed}s. "
+                    f"Analysis queue depth: {_queue_depth}",
+                    status="ok",
+                    data={
+                        "tickers_count": len(ctx.tickers),
+                        "elapsed_s": _collection_elapsed,
+                        "queue_depth": _queue_depth,
+                    },
+                    elapsed_ms=_collection_elapsed * 1000,
                 )
 
                 _auditor.phase_exit(
@@ -233,9 +286,25 @@ class OrchestratorCoreMixin:
             if analysis_queue is not None:
                 from app.config import settings as _s
                 _worker_count = _s.V2_TICKER_CONCURRENCY or 3
+                _pre_sentinel_depth = analysis_queue.qsize()
                 for _ in range(_worker_count):
                     analysis_queue.put_nowait(None)  # sentinel
-                logger.info("[CYCLE] Collection done — sent %d sentinels to analysis queue", _worker_count)
+                logger.info(
+                    "[CYCLE] Collection done — sent %d sentinels to analysis queue "
+                    "(queue had %d items before sentinels)",
+                    _worker_count, _pre_sentinel_depth,
+                )
+                cls.emit(
+                    "analyzing",
+                    "sentinels_sent",
+                    f"Collection done → {_worker_count} shutdown signals sent to workers. "
+                    f"Queue had {_pre_sentinel_depth} tickers pending.",
+                    status="ok",
+                    data={
+                        "sentinel_count": _worker_count,
+                        "queue_depth_before_sentinels": _pre_sentinel_depth,
+                    },
+                )
 
             # ── Wait for macro scout to finish ──
             if macro_task is not None:

@@ -253,7 +253,23 @@ async def run_global_collection(
             from app.collectors.news_collector import collect_all as collect_news_rss
 
             limit_f = 3 if intensity == "micro" else 6 if intensity == "light" else None
-            news_rss = await collect_news_rss(limit_feeds=limit_f)
+            # Hard timeout: RSS was the dominant bottleneck (10+ min in some cycles).
+            # Proceed with whatever was collected before the timeout.
+            RSS_TIMEOUT = 300  # 5 minutes max
+            try:
+                news_rss = await asyncio.wait_for(collect_news_rss(limit_feeds=limit_f), timeout=RSS_TIMEOUT)
+            except asyncio.TimeoutError:
+                ms = elapsed_ms(t0)
+                logger.warning("[PIPELINE]   [News RSS] TIMEOUT after %ds — proceeding with partial results", RSS_TIMEOUT)
+                _summary["collector_ok"] += 1  # partial success
+                emit(
+                    "collecting",
+                    "news_rss",
+                    f"News RSS TIMEOUT after {RSS_TIMEOUT}s — proceeding with partial data",
+                    status="warning",
+                    elapsed_ms=ms,
+                )
+                return
             ms = elapsed_ms(t0)
             results["collectors"]["news_rss"] = {"articles": news_rss}
             record_collection("news_rss", rows=news_rss)

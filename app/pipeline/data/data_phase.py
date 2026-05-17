@@ -145,234 +145,270 @@ async def run(
     janitor_task = asyncio.create_task(_run_janitor_bg())
 
     from app.pipeline.data.data_global_collection import run_global_collection
-
-    await run_global_collection(
-        tickers=tickers,
-        force_global=force_global,
-        intensity=intensity,
-        emit=emit,
-        results=results,
-        _summary=_summary,
-    )
-
-    # ═══════════════════════════════════════════════════════════
-    # PASS 2: TICKER DISCOVERY
-    # ═══════════════════════════════════════════════════════════
     from app.config import settings
 
     _effective_cap = max_tickers if max_tickers is not None else settings.MAX_ANALYSIS_TICKERS
     _protected = set(position_tickers) if position_tickers else set()
 
-    from app.pipeline.data.data_ticker_discovery import run_ticker_discovery_and_gates
-
-    discovered_tickers = await run_ticker_discovery_and_gates(
-        tickers=list(tickers),
-        discovered_tickers=[],
-        emit=emit,
-        results=results,
-        _summary=_summary,
-    )
     # ═══════════════════════════════════════════════════════════
-    # PASS 3: MERGE — combine watchlist + discovered tickers
-    # Only merge discovered tickers if we have room under the cap.
-    # When max_tickers is small (e.g. 1), the selector already filled
-    # the cap, so we skip merging to avoid processing 50-100 extra.
-    # Discovery still RUNS (populates discovered_tickers DB table for
-    # future cycles) — we just don't merge them into THIS cycle.
+    # STREAMING ARCHITECTURE: Two parallel tracks
     #
-    # NOTE: _effective_cap is a HARD TOTAL ceiling (positions + non-positions),
-    # not just a non-position cap. This matches the ticker_selector behavior.
+    # Track A (background): Global collection → Discovery → Merge
+    #   Finds NEW tickers and pushes them to the analysis queue.
+    #   RSS can take 10+ minutes — we don't block on it.
+    #
+    # Track B (foreground): Per-ticker collection for WATCHLIST tickers
+    #   Starts immediately. Watchlist tickers have cached data from
+    #   prior cycles. Analysis workers are already consuming them.
+    #
+    # Both tracks push tickers to the analysis_queue. Dedup in the
+    # analysis workers (phase4_analysis.py _seen_tickers) prevents
+    # double-processing.
     # ═══════════════════════════════════════════════════════════
 
-    original_tickers = list(tickers)
-    _at_cap = len(tickers) >= _effective_cap
+    # Shared list for discovered tickers to merge after both tracks complete
+    _discovered_final: list[str] = []
+    _discovery_merged_tickers: list[str] = []
 
-    if _at_cap and discovered_tickers:
-        logger.info(
-            "[PIPELINE]   [merge] Skipping discovery merge — already at hard cap "
-            "(%d total tickers >= %d cap). %d discovered tickers "
-            "saved to DB for future cycles.",
-            len(tickers),
-            _effective_cap,
-            len(discovered_tickers),
-        )
+    async def _track_a_global_and_discovery():
+        """Track A: Global collection → Discovery → Merge → push new tickers to queue."""
+        nonlocal tickers
+
+        logger.info("[PIPELINE] [TRACK A] Starting global collection + discovery (background)")
         emit(
             "collecting",
-            "merge",
-            f"Skipping discovery merge — already at hard cap ({len(tickers)}/{_effective_cap}). "
-            f"{len(discovered_tickers)} tickers saved for future cycles.",
-            status="ok",
-            data={
-                "skipped": True,
-                "discovered_count": len(discovered_tickers),
-                "cap": _effective_cap,
-                "current_total": len(tickers),
-            },
+            "track_a_start",
+            "Background track: global collection → discovery → merge",
+            status="running",
         )
-    elif discovered_tickers:
-        # Add discovered tickers not already in watchlist
-        new_tickers = [t for t in discovered_tickers if t not in tickers]
-        if new_tickers:
-            tickers = list(tickers) + new_tickers
+
+        # ── Pass 1: Global Collection ──
+        await run_global_collection(
+            tickers=tickers,
+            force_global=force_global,
+            intensity=intensity,
+            emit=emit,
+            results=results,
+            _summary=_summary,
+        )
+
+        # ── Pass 2: Ticker Discovery ──
+        from app.pipeline.data.data_ticker_discovery import run_ticker_discovery_and_gates
+
+        discovered_tickers = await run_ticker_discovery_and_gates(
+            tickers=list(tickers),
+            discovered_tickers=[],
+            emit=emit,
+            results=results,
+            _summary=_summary,
+        )
+
+        # ── Pass 3: Merge discovered tickers ──
+        original_tickers = list(tickers)
+        _at_cap = len(tickers) >= _effective_cap
+
+        if _at_cap and discovered_tickers:
+            logger.info(
+                "[PIPELINE]   [merge] Skipping discovery merge — already at hard cap "
+                "(%d total tickers >= %d cap). %d discovered tickers "
+                "saved to DB for future cycles.",
+                len(tickers),
+                _effective_cap,
+                len(discovered_tickers),
+            )
             emit(
                 "collecting",
                 "merge",
-                f"Merged {len(new_tickers)} discovered tickers: {', '.join(new_tickers[:15])}",
+                f"Skipping discovery merge — already at hard cap ({len(tickers)}/{_effective_cap}). "
+                f"{len(discovered_tickers)} tickers saved for future cycles.",
                 status="ok",
                 data={
-                    "original": original_tickers,
-                    "added": new_tickers,
-                    "total": len(tickers),
+                    "skipped": True,
+                    "discovered_count": len(discovered_tickers),
+                    "cap": _effective_cap,
+                    "current_total": len(tickers),
                 },
             )
-            logger.info(
-                f"[PIPELINE]   [merge] Added {len(new_tickers)} discovered tickers"
-            )
-            logger.info(
-                f"[PIPELINE]   [merge] Full ticker list ({len(tickers)}): {', '.join(tickers)}"
-            )
+        elif discovered_tickers:
+            # Add discovered tickers not already in watchlist
+            new_tickers = [t for t in discovered_tickers if t not in tickers]
+            if new_tickers:
+                _discovery_merged_tickers.extend(new_tickers)
+                emit(
+                    "collecting",
+                    "merge",
+                    f"Merged {len(new_tickers)} discovered tickers: {', '.join(new_tickers[:15])}",
+                    status="ok",
+                    data={
+                        "original": original_tickers,
+                        "added": new_tickers,
+                        "total": len(tickers) + len(new_tickers),
+                    },
+                )
+                logger.info(
+                    f"[PIPELINE]   [merge] Added {len(new_tickers)} discovered tickers"
+                )
 
-    # Apply ticker cap: protect positions, cap total including positions.
-    # IMPORTANT: Open portfolio positions get priority but still count against the cap.
-    if len(tickers) > _effective_cap:
-        # Split into protected (positions) and unprotected
-        protected_kept = [t for t in tickers if t in _protected]
-        unprotected = [t for t in tickers if t not in _protected]
+                # ── Push newly discovered tickers to analysis queue ──
+                # These tickers are NEW (not on watchlist), so per-ticker
+                # collection hasn't run for them yet. Push them so analysis
+                # workers can start assessing them with whatever DB data exists.
+                # The V2 pipeline's data_completeness check will fill gaps.
+                if analysis_queue is not None:
+                    # Apply cap before pushing
+                    all_tickers = list(tickers) + new_tickers
+                    if len(all_tickers) > _effective_cap:
+                        # Protect positions, cap the rest
+                        protected_kept = [t for t in all_tickers if t in _protected]
+                        unprotected = [t for t in all_tickers if t not in _protected]
+                        remaining_slots = max(0, _effective_cap - len(protected_kept))
+                        # Prefer watchlist tickers over discovered
+                        watchlist_set = set(original_tickers) - _protected
+                        wl_from_watchlist = [t for t in unprotected if t in watchlist_set]
+                        others = [t for t in unprotected if t not in watchlist_set]
+                        capped_wl = wl_from_watchlist[:remaining_slots]
+                        remaining_after_wl = remaining_slots - len(capped_wl)
+                        capped_unprotected = capped_wl + others[:max(0, remaining_after_wl)]
+                        capped_new = [t for t in capped_unprotected if t in new_tickers]
+                        dropped = len(new_tickers) - len(capped_new)
+                        if dropped:
+                            emit(
+                                "collecting",
+                                "ticker_cap",
+                                f"Hard cap enforced at {_effective_cap} total: "
+                                f"kept {len(protected_kept)} positions + "
+                                f"{len(capped_unprotected)} others, dropped {dropped} discovered",
+                                status="ok",
+                                data={
+                                    "cap": _effective_cap,
+                                    "positions_kept": len(protected_kept),
+                                    "dropped": dropped,
+                                },
+                            )
+                        new_tickers = capped_new
 
-        # Positions fill the cap first; remaining slots go to non-position tickers
-        remaining_slots = max(0, _effective_cap - len(protected_kept))
+                    for t in new_tickers:
+                        analysis_queue.put_nowait(t)
+                    logger.info(
+                        "[PIPELINE] [TRACK A] Pushed %d newly discovered tickers "
+                        "to analysis queue (dedup will filter any already-processed)",
+                        len(new_tickers),
+                    )
+                    emit(
+                        "analyzing",
+                        "discovery_push",
+                        f"Pushed {len(new_tickers)} discovered tickers to analysis queue",
+                        status="ok",
+                        data={"count": len(new_tickers), "tickers": new_tickers[:20]},
+                    )
 
-        # Among unprotected, prefer original watchlist over discovered.
-        watchlist_set = set(original_tickers) - _protected
-        wl_from_watchlist = [t for t in unprotected if t in watchlist_set]
-        others = [t for t in unprotected if t not in watchlist_set]
+        _discovered_final.extend(discovered_tickers or [])
+        logger.info("[PIPELINE] [TRACK A] Global collection + discovery complete")
 
-        # Cap watchlist tickers first, then fill remaining slots with discovered
-        capped_wl = wl_from_watchlist[:remaining_slots]
-        remaining_after_wl = remaining_slots - len(capped_wl)
-        capped_unprotected = capped_wl + others[: max(0, remaining_after_wl)]
-
-        before = len(tickers)
-        tickers = protected_kept + capped_unprotected
-        dropped = before - len(tickers)
+    async def _track_b_perticker():
+        """Track B: Per-ticker collection for watchlist tickers (starts immediately)."""
+        logger.info(
+            "[PIPELINE] [TRACK B] Starting per-ticker collection for %d watchlist tickers (immediate)",
+            len(tickers),
+        )
         emit(
             "collecting",
-            "ticker_cap",
-            f"Hard cap enforced at {_effective_cap} total: "
-            f"kept {len(protected_kept)} positions + "
-            f"{len(capped_unprotected)} others, dropped {dropped}",
-            status="ok",
-            data={
-                "cap": _effective_cap,
-                "positions_kept": len(protected_kept),
-                "kept": len(tickers),
-                "dropped": dropped,
-            },
-        )
-        logger.info(
-            "[PIPELINE]   [cap] Hard cap at %d total tickers "
-            "(positions: %d, non-position: %d, dropped %d)",
-            _effective_cap,
-            len(protected_kept),
-            len(capped_unprotected),
-            dropped,
+            "track_b_start",
+            f"Foreground track: per-ticker collection for {len(tickers)} watchlist tickers (starts NOW)",
+            status="running",
         )
 
-    # ── Safety net: guarantee TOTAL invariant regardless of upstream bugs ──
-    if len(tickers) > _effective_cap:
-        logger.warning(
-            "[PIPELINE]   [SAFETY NET] Total ticker count %d exceeds hard cap %d — "
-            "hard-truncating to enforce invariant",
-            len(tickers),
-            _effective_cap,
-        )
-        # Positions first, then non-position, but total never exceeds cap
-        _kept_positions = [t for t in tickers if t in _protected][:_effective_cap]
-        _remaining = _effective_cap - len(_kept_positions)
-        _kept_non_pos = [t for t in tickers if t not in _protected][:_remaining]
-        tickers = _kept_positions + _kept_non_pos
+        # ── Pass 3.5: GATHER METADATA & INSTITUTIONAL DATA ──
+        # Run metadata enrichment for watchlist tickers before per-ticker collection
+        _meta_task = None
+        if tickers:
+            try:
+                from app.graph.sector_collector import collect_metadata
 
-    # ═══════════════════════════════════════════════════════════
-    # PASS 3.5: GATHER METADATA & INSTITUTIONAL DATA
-    # ═══════════════════════════════════════════════════════════
-    # 1. Ensure all tickers have sector/industry metadata for peer comparison.
-    #    Awaited before Pass 4 so downstream analysis has sector data (Fix #7).
-    #    Task reference stored for cleanup on shutdown (Fix #5).
-    _meta_task = None
-    if tickers:
-        try:
-            from app.graph.sector_collector import collect_metadata
-
-            _meta_task = asyncio.create_task(collect_metadata(tickers))
-            _meta_task.add_done_callback(
-                lambda t: (
-                    logger.error(
-                        "[PIPELINE]   [Metadata] Background task FAILED: %s",
-                        t.exception(),
+                _meta_task = asyncio.create_task(collect_metadata(list(tickers)))
+                _meta_task.add_done_callback(
+                    lambda t: (
+                        logger.error(
+                            "[PIPELINE]   [Metadata] Background task FAILED: %s",
+                            t.exception(),
+                        )
+                        if t.exception()
+                        else None
                     )
-                    if t.exception()
-                    else None
                 )
-            )
-            logger.info(
-                f"[PIPELINE]   [Metadata] Launched background enrichment for {len(tickers)} tickers"
-            )
-        except Exception as e:
-            logger.info(f"[PIPELINE]   [Metadata] Enrichment skipped: {e}")
-
-    # 2. Global institutional holders (Fix #6: freshness gate + profiler wrapping)
-    async with pipeline_profiler.phase("pass3_5_institutional"):
-        try:
-            from app.collectors.sec_collector import collect_all_tickers_institutional
-
-            if tickers and should_collect("institutional"):
-                emit(
-                    "collecting",
-                    "institutional",
-                    "Fetching institutional holders...",
-                    status="running",
-                )
-                inst = await collect_all_tickers_institutional(tickers)
-                results["collectors"]["institutional_yf"] = inst
-                total = sum(inst.values())
-                record_collection("institutional", rows=total)
                 logger.info(
-                    f"[PIPELINE]   [Institutional] {total} holders across {len(tickers)} tickers"
+                    f"[PIPELINE]   [Metadata] Launched background enrichment for {len(tickers)} tickers"
                 )
-                emit(
-                    "collecting",
-                    "institutional",
-                    f"Got {total} institutional holders across {len(tickers)} tickers",
-                    status="ok",
-                )
-            elif tickers:
-                emit(
-                    "collecting",
-                    "institutional",
-                    "Institutional: fresh, skipped",
-                    status="skipped",
-                )
-                logger.debug("[PIPELINE]   [Institutional] fresh, skipping")
-        except Exception as e:
-            logger.info(f"[PIPELINE]   [Institutional] skipped: {e}")
-            emit(
-                "collecting",
-                "institutional",
-                f"Institutional skipped: {e}",
-                status="error",
-            )
+            except Exception as e:
+                logger.info(f"[PIPELINE]   [Metadata] Enrichment skipped: {e}")
 
-    # 3. Await metadata enrichment before starting per-ticker collection (Fix #7)
-    if _meta_task is not None:
-        try:
-            await asyncio.wait_for(_meta_task, timeout=30.0)
-            logger.info("[PIPELINE]   [Metadata] Enrichment complete before Pass 4")
-        except asyncio.TimeoutError:
-            logger.warning(
-                "[PIPELINE]   [Metadata] Enrichment timed out (30s), proceeding"
-            )
-        except Exception as e:
-            logger.warning("[PIPELINE]   [Metadata] Enrichment failed: %s", e)
+        # Global institutional holders
+        async with pipeline_profiler.phase("pass3_5_institutional"):
+            try:
+                from app.collectors.sec_collector import collect_all_tickers_institutional
+
+                if tickers and should_collect("institutional"):
+                    emit(
+                        "collecting",
+                        "institutional",
+                        "Fetching institutional holders...",
+                        status="running",
+                    )
+                    inst = await collect_all_tickers_institutional(list(tickers))
+                    results["collectors"]["institutional_yf"] = inst
+                    total = sum(inst.values())
+                    record_collection("institutional", rows=total)
+                    logger.info(
+                        f"[PIPELINE]   [Institutional] {total} holders across {len(tickers)} tickers"
+                    )
+                    emit(
+                        "collecting",
+                        "institutional",
+                        f"Got {total} institutional holders across {len(tickers)} tickers",
+                        status="ok",
+                    )
+                elif tickers:
+                    emit(
+                        "collecting",
+                        "institutional",
+                        "Institutional: fresh, skipped",
+                        status="skipped",
+                    )
+                    logger.debug("[PIPELINE]   [Institutional] fresh, skipping")
+            except Exception as e:
+                logger.info(f"[PIPELINE]   [Institutional] skipped: {e}")
+                emit(
+                    "collecting",
+                    "institutional",
+                    f"Institutional skipped: {e}",
+                    status="error",
+                )
+
+        # Await metadata enrichment before starting per-ticker collection
+        if _meta_task is not None:
+            try:
+                await asyncio.wait_for(_meta_task, timeout=30.0)
+                logger.info("[PIPELINE]   [Metadata] Enrichment complete before Pass 4")
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "[PIPELINE]   [Metadata] Enrichment timed out (30s), proceeding"
+                )
+            except Exception as e:
+                logger.warning("[PIPELINE]   [Metadata] Enrichment failed: %s", e)
+
+        # ── Per-ticker collection ──
+        from app.pipeline.data.data_perticker_collection import run_perticker_collection
+
+        await run_perticker_collection(
+            tickers=list(tickers),
+            _glance_set=_glance_set,
+            _deep_set=_deep_set,
+            emit=emit,
+            results=results,
+            _summary=_summary,
+            analysis_queue=analysis_queue,
+        )
+        logger.info("[PIPELINE] [TRACK B] Per-ticker collection complete")
 
     # ═══════════════════════════════════════════════════════════
     # Start Continuous Summarization Background Task
@@ -421,17 +457,44 @@ async def run(
 
     summarizer_bg_task = asyncio.create_task(_continuous_summarization())
 
-    from app.pipeline.data.data_perticker_collection import run_perticker_collection
-
-    await run_perticker_collection(
-        tickers=tickers,
-        _glance_set=_glance_set,
-        _deep_set=_deep_set,
-        emit=emit,
-        results=results,
-        _summary=_summary,
-        analysis_queue=analysis_queue,
+    # ═══════════════════════════════════════════════════════════
+    # RUN BOTH TRACKS IN PARALLEL
+    # Track A: Global collection → Discovery → Merge (background)
+    # Track B: Per-ticker collection (starts immediately)
+    # ═══════════════════════════════════════════════════════════
+    emit(
+        "collecting",
+        "parallel_start",
+        f"Starting parallel tracks: global+discovery (background) + "
+        f"per-ticker collection for {len(tickers)} watchlist tickers (immediate)",
+        status="running",
     )
+
+    await asyncio.gather(
+        _track_a_global_and_discovery(),
+        _track_b_perticker(),
+    )
+
+    # Merge discovered tickers into the main ticker list for downstream phases
+    if _discovery_merged_tickers:
+        merged_set = set(tickers)
+        for t in _discovery_merged_tickers:
+            if t not in merged_set:
+                tickers = list(tickers) + [t]
+                merged_set.add(t)
+
+    # ── Safety net: guarantee TOTAL invariant regardless of upstream bugs ──
+    if len(tickers) > _effective_cap:
+        logger.warning(
+            "[PIPELINE]   [SAFETY NET] Total ticker count %d exceeds hard cap %d — "
+            "hard-truncating to enforce invariant",
+            len(tickers),
+            _effective_cap,
+        )
+        _kept_positions = [t for t in tickers if t in _protected][:_effective_cap]
+        _remaining = _effective_cap - len(_kept_positions)
+        _kept_non_pos = [t for t in tickers if t not in _protected][:_remaining]
+        tickers = _kept_positions + _kept_non_pos
     
     # Signal summarizer to finish up
     _collection_done = True

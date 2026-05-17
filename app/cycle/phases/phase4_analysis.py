@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import time
 from typing import Callable, Any
 
 from app.config import settings
@@ -50,10 +51,19 @@ async def run_phase4_analysis(
     worker_count = settings.V2_TICKER_CONCURRENCY or 3
 
     # Determine which queue to use
-    if analysis_queue is not None:
+    is_queue_mode = analysis_queue is not None
+    if is_queue_mode:
         # Queue mode: workers consume from the external queue fed by collection.
         # Sentinels are added by the orchestrator after collection finishes.
         work_queue = analysis_queue
+        emit(
+            "analyzing",
+            "queue_mode",
+            f"Analysis workers in QUEUE mode — waiting for collection to feed tickers. "
+            f"Queue depth: {work_queue.qsize()}",
+            status="running",
+            data={"mode": "queue", "queue_depth": work_queue.qsize(), "worker_count": worker_count},
+        )
     else:
         # Batch mode: pre-populate a local queue with all tickers + sentinels.
         work_queue = asyncio.Queue()
@@ -61,9 +71,18 @@ async def run_phase4_analysis(
             work_queue.put_nowait(t)
         for _ in range(worker_count):
             work_queue.put_nowait(None)
+        emit(
+            "analyzing",
+            "batch_mode",
+            f"Analysis workers in BATCH mode — {len(ctx.tickers)} tickers pre-loaded",
+            status="running",
+            data={"mode": "batch", "queue_depth": work_queue.qsize(), "worker_count": worker_count},
+        )
 
     analyzed_count = 0
     count_lock = asyncio.Lock()
+    _worker_start_time = time.monotonic()
+    _seen_tickers: set[str] = set()  # Dedup: prevents double-analysis when tickers arrive from multiple sources
 
     def _get_macro_memo() -> str:
         """Read the current macro memo, whether it's a string or a dict holder."""
@@ -73,17 +92,73 @@ async def run_phase4_analysis(
 
     async def _worker(worker_id: int):
         nonlocal analyzed_count
+        logger.info("[CYCLE] [Worker %d] Started — waiting for tickers from queue", worker_id)
+        emit(
+            "analyzing",
+            f"worker_{worker_id}_ready",
+            f"Worker {worker_id}/{worker_count} started, waiting for tickers...",
+            status="running",
+            data={"worker_id": worker_id, "queue_depth": work_queue.qsize()},
+        )
+
+        tickers_processed = 0
         while True:
+            # Log that we're waiting (helps diagnose queue starvation)
+            _wait_start = time.monotonic()
             ticker = await work_queue.get()
+            _wait_ms = int((time.monotonic() - _wait_start) * 1000)
+
             if ticker is None:
+                logger.info(
+                    "[CYCLE] [Worker %d] Received sentinel — shutting down after %d tickers",
+                    worker_id, tickers_processed,
+                )
+                emit(
+                    "analyzing",
+                    f"worker_{worker_id}_done",
+                    f"Worker {worker_id} finished: {tickers_processed} tickers processed",
+                    status="ok",
+                    data={"worker_id": worker_id, "tickers_processed": tickers_processed},
+                )
                 work_queue.task_done()
                 break
 
+            tickers_processed += 1
+            _remaining = work_queue.qsize()
+            logger.info(
+                "[CYCLE] [Worker %d] Got %s (waited %dms, %d remaining in queue)",
+                worker_id, ticker, _wait_ms, _remaining,
+            )
+            emit(
+                "analyzing",
+                f"worker_got_{ticker}",
+                f"Worker {worker_id} → {ticker} (queue: {_remaining} remaining, waited {_wait_ms}ms)",
+                status="running",
+                data={
+                    "worker_id": worker_id, "ticker": ticker,
+                    "queue_depth": _remaining, "wait_ms": _wait_ms,
+                },
+            )
+
+            # ── Dedup gate: skip if another worker already processed this ticker ──
+            if ticker in _seen_tickers:
+                logger.info(
+                    "[CYCLE] [Worker %d] Skipping %s — already analyzed by another worker",
+                    worker_id, ticker,
+                )
+                emit(
+                    "analyzing",
+                    f"worker_dedup_{ticker}",
+                    f"Worker {worker_id}: {ticker} skipped (already analyzed)",
+                    status="skipped",
+                    data={"worker_id": worker_id, "ticker": ticker},
+                )
+                work_queue.task_done()
+                continue
+            _seen_tickers.add(ticker)
+
             from app.cycle.orchestration.cycle_control import cycle_control
             await cycle_control.wait_if_paused()
-
-            logger.info(f"[CYCLE] [Worker {worker_id}] Analyzing {ticker}")
-            logger.info("[phase4] ticker=%s using v2 pipeline", ticker)
 
             # Check triage tier
             _triage_state = state.get("triage", {})
@@ -99,6 +174,7 @@ async def run_phase4_analysis(
             current_macro_memo = _get_macro_memo()
 
             result = None
+            _ticker_start = time.monotonic()
             try:
                 # Wrap the ENTIRE ticker analysis in a strict wait_for
                 # so one bad LLM call doesn't hang the worker forever.
@@ -115,14 +191,30 @@ async def run_phase4_analysis(
                     timeout=_ticker_timeout,
                 )
 
+                _ticker_elapsed_ms = int((time.monotonic() - _ticker_start) * 1000)
                 if result:
                     async with count_lock:
                         results.append(result)
                         analyzed_count += 1
+                    _action = result.get("action", "?")
+                    _conf = result.get("confidence", 0)
+                    logger.info(
+                        "[CYCLE] [Worker %d] Completed %s → %s@%d%% in %dms (%d/%d done)",
+                        worker_id, ticker, _action, _conf, _ticker_elapsed_ms,
+                        analyzed_count, len(ctx.tickers),
+                    )
 
             except asyncio.TimeoutError:
-                err_str = f"LLM Timeout after {settings.VLLM_FUTURE_TIMEOUT}s"
-                logger.error("Analysis TIMEOUT for %s: %s", ticker, err_str)
+                _ticker_elapsed_ms = int((time.monotonic() - _ticker_start) * 1000)
+                err_str = f"LLM Timeout after {settings.ANALYSIS_WORKER_TIMEOUT_SECONDS}s"
+                logger.error("Analysis TIMEOUT for %s: %s (worker %d, %dms)", ticker, err_str, worker_id, _ticker_elapsed_ms)
+                emit(
+                    "analyzing",
+                    f"worker_timeout_{ticker}",
+                    f"⏰ Worker {worker_id}: {ticker} TIMEOUT after {_ticker_elapsed_ms}ms",
+                    status="error",
+                    data={"worker_id": worker_id, "ticker": ticker, "elapsed_ms": _ticker_elapsed_ms},
+                )
                 async with count_lock:
                     errors.append(ticker)
                     results.append(
@@ -136,8 +228,16 @@ async def run_phase4_analysis(
                         }
                     )
             except Exception as e:
+                _ticker_elapsed_ms = int((time.monotonic() - _ticker_start) * 1000)
                 err_str = str(e)
-                logger.error("Analysis crashed for %s: %s", ticker, err_str)
+                logger.error("Analysis crashed for %s: %s (worker %d, %dms)", ticker, err_str, worker_id, _ticker_elapsed_ms)
+                emit(
+                    "analyzing",
+                    f"worker_crash_{ticker}",
+                    f"💥 Worker {worker_id}: {ticker} CRASHED — {err_str[:100]}",
+                    status="error",
+                    data={"worker_id": worker_id, "ticker": ticker, "error": err_str[:300], "elapsed_ms": _ticker_elapsed_ms},
+                )
                 async with count_lock:
                     errors.append(ticker)
                     results.append(
@@ -154,7 +254,40 @@ async def run_phase4_analysis(
                 work_queue.task_done()
 
     logger.info(f"[CYCLE] Launching {worker_count} analysis worker threads")
+    emit(
+        "analyzing",
+        "workers_launching",
+        f"Launching {worker_count} analysis workers (timeout={settings.ANALYSIS_WORKER_TIMEOUT_SECONDS}s/ticker)",
+        status="running",
+        data={"worker_count": worker_count, "timeout_per_ticker": settings.ANALYSIS_WORKER_TIMEOUT_SECONDS},
+    )
     workers = [asyncio.create_task(_worker(i)) for i in range(worker_count)]
+
+    # ── Progress heartbeat — logs status every 15 seconds while analysis is running ──
+    async def _progress_heartbeat():
+        """Emit periodic progress so the frontend never shows stale state."""
+        while True:
+            await asyncio.sleep(15)
+            _elapsed = int(time.monotonic() - _worker_start_time)
+            _qsize = work_queue.qsize() if work_queue else 0
+            _active_workers = sum(1 for w in workers if not w.done())
+            emit(
+                "analyzing",
+                "heartbeat",
+                f"Analysis: {analyzed_count} done, {len(errors)} errors, "
+                f"queue={_qsize}, workers={_active_workers}/{worker_count}, "
+                f"elapsed={_elapsed}s",
+                status="running",
+                data={
+                    "analyzed": analyzed_count,
+                    "errors": len(errors),
+                    "queue_depth": _qsize,
+                    "active_workers": _active_workers,
+                    "elapsed_s": _elapsed,
+                },
+            )
+
+    heartbeat_task = asyncio.create_task(_progress_heartbeat())
 
     # We wait for the queue to be fully processed or a global safety timeout.
     # Since individual tickers are strictly timed out, the workers should never hit this global timeout.
@@ -173,6 +306,19 @@ async def run_phase4_analysis(
         )
         for w in workers:
             w.cancel()
+    finally:
+        # Always cancel the heartbeat when analysis completes
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
+            pass
+
+    _total_elapsed = int(time.monotonic() - _worker_start_time)
+    logger.info(
+        "[CYCLE] Analysis phase complete: %d analyzed, %d errors, %ds elapsed",
+        analyzed_count, len(errors), _total_elapsed,
+    )
 
     # Calculate summary metrics
     for r in results:
@@ -209,9 +355,9 @@ async def run_phase4_analysis(
     emit(
         "analyzing",
         "pipeline_done",
-        "Analysis complete",
+        f"Analysis complete: {analyzed_count} analyzed, {len(errors)} errors, {_total_elapsed}s elapsed",
         status="ok",
-        data={"analyzed": analyzed_count, "errors": errors},
+        data={"analyzed": analyzed_count, "errors": errors, "elapsed_s": _total_elapsed},
     )
 
     # Universal hard-fail check (Moved out of legacy else-block)
@@ -225,5 +371,3 @@ async def run_phase4_analysis(
         raise RuntimeError("Analysis produced zero results")
 
     return results
-
-

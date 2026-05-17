@@ -204,6 +204,37 @@ async def poll_system_commands(shutdown: asyncio.Event):
                             from app.pipeline.analysis.morning_briefing import generate_morning_briefing
                             asyncio.create_task(generate_morning_briefing())
                             result = {"status": "briefing_started"}
+                        elif cmd_type == "RUN_MARKET_COLLECTION":
+                            from app.collectors.market_regime_collector import collect_market_data
+                            from app.data.market_regime_engine import compute_market_regime, compute_sector_breadth
+                            async def _do_market_collect():
+                                await collect_market_data(period=payload.get("period", "6mo"))
+                                await compute_market_regime()
+                                await compute_sector_breadth()
+                            asyncio.create_task(_do_market_collect())
+                            result = {"status": "market_collection_started"}
+                        elif cmd_type == "RUN_FRED_COLLECTION":
+                            from app.services.boot_service import BootService
+                            asyncio.create_task(BootService._startup_fred_refresh())
+                            result = {"status": "fred_collection_started"}
+                        elif cmd_type == "COLLECT_SP500_DATA":
+                            from app.data.sp500_universe import load_sp500_universe
+                            from app.data.sp500_price_collector import collect_sp500_prices
+                            async def _do_sp500_collect():
+                                await load_sp500_universe(enrich=payload.get("enrich", False))
+                                await collect_sp500_prices(period=payload.get("price_period", "6mo"))
+                            asyncio.create_task(_do_sp500_collect())
+                            result = {"status": "sp500_collection_started"}
+                        elif cmd_type == "REFRESH_SECTORS":
+                            from app.data.sector_aggregator import compute_sector_performance
+                            from app.data.sector_correlation_engine import compute_all_correlations
+                            from app.data.rotation_detector import detect_rotations
+                            async def _do_refresh_sectors():
+                                await compute_sector_performance()
+                                await compute_all_correlations()
+                                await detect_rotations()
+                            asyncio.create_task(_do_refresh_sectors())
+                            result = {"status": "refresh_sectors_started"}
                             
                         db.execute(
                             "UPDATE system_commands SET status = 'completed', completed_at = CURRENT_TIMESTAMP, result = %s WHERE id = %s", 

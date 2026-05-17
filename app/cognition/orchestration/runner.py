@@ -91,7 +91,11 @@ async def execute_v2_pipeline(
     t0 = time.monotonic()
     from app.pipeline.data.data_completeness import check_and_fill
 
-    data_report = await check_and_fill(ticker, emit=emit)
+    try:
+        data_report = await asyncio.wait_for(check_and_fill(ticker, emit=emit), timeout=30.0)
+    except asyncio.TimeoutError:
+        logger.warning("[V2] Data completeness TIMEOUT for %s (30s) — proceeding without gap fill", ticker)
+        data_report = {}
     ms0 = elapsed_ms(t0)
     filled = data_report.get("filled", [])
     if filled:
@@ -116,7 +120,10 @@ async def execute_v2_pipeline(
 
         await cycle_control.wait_if_paused()
         t1 = time.monotonic()
-        ontology_ctx = await OntologyBuilder().execute(ticker, {"cycle_id": cycle_id})
+        ontology_ctx = await asyncio.wait_for(
+            OntologyBuilder().execute(ticker, {"cycle_id": cycle_id}),
+            timeout=15.0,
+        )
         ms1 = elapsed_ms(t1)
         stages.append("ontology")
         stage_timings["ontology"] = ms1
@@ -145,7 +152,12 @@ async def execute_v2_pipeline(
 
     await cycle_control.wait_if_paused()
     t2 = time.monotonic()
-    packet = await build_evidence_packet(ticker)
+    try:
+        packet = await asyncio.wait_for(build_evidence_packet(ticker), timeout=30.0)
+    except asyncio.TimeoutError:
+        logger.error("[V2] Evidence packet build TIMEOUT for %s (30s)", ticker)
+        emit("analyzing", f"v2_evidence_timeout_{ticker}", f"{ticker}: Evidence build TIMEOUT", status="error")
+        raise
     ms2 = elapsed_ms(t2)
     stages.append("evidence_build")
     stage_timings["evidence_build"] = ms2
@@ -392,9 +404,17 @@ async def execute_v2_pipeline(
     )
     await cycle_control.wait_if_paused()
     t_orch = time.monotonic()
-    agent_insights, orch_tokens = await MetaOrchestrator.orchestrate(
-        ticker, packet, sufficiency, cycle_id, bot_id, is_highly_redundant
-    )
+    try:
+        agent_insights, orch_tokens = await asyncio.wait_for(
+            MetaOrchestrator.orchestrate(
+                ticker, packet, sufficiency, cycle_id, bot_id, is_highly_redundant
+            ),
+            timeout=60.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (60s) — proceeding without agent insights", ticker)
+        agent_insights, orch_tokens = {}, 0
+        emit("analyzing", f"v2_orchestrator_timeout_{ticker}", f"{ticker}: MetaOrchestrator TIMEOUT", status="warning")
     total_tokens += orch_tokens
     ms_orch = elapsed_ms(t_orch)
     stages.append("meta_orchestration")
@@ -650,16 +670,24 @@ async def execute_v2_pipeline(
 
     await cycle_control.wait_if_paused()
     t6 = time.monotonic()
-    thesis, thesis_tokens = await generate_thesis(
-        entity_id=ticker,
-        packet=packet,
-        bias="neutral",
-        cycle_id=cycle_id,
-        bot_id=bot_id,
-        extra_context=extra_context,
-        watchlist=watchlist or [],
-        held=held,
-    )
+    try:
+        thesis, thesis_tokens = await asyncio.wait_for(
+            generate_thesis(
+                entity_id=ticker,
+                packet=packet,
+                bias="neutral",
+                cycle_id=cycle_id,
+                bot_id=bot_id,
+                extra_context=extra_context,
+                watchlist=watchlist or [],
+                held=held,
+            ),
+            timeout=120.0,
+        )
+    except asyncio.TimeoutError:
+        logger.error("[V2] Thesis generation TIMEOUT for %s (120s)", ticker)
+        emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM TIMEOUT", status="error")
+        raise
     total_tokens += thesis_tokens
     ms6 = elapsed_ms(t6)
     stages.append("thesis_generation")
