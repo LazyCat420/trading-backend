@@ -46,6 +46,8 @@ COPY cycle_main.py ./cycle_main.py
 COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
+RUN mkdir -p /app/logs/cycles /app/logs/v2 /app/memory
+
 RUN chown -R appusr:appgrp /app
 
 ENV PYTHONPATH="/app"
