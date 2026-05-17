@@ -168,7 +168,7 @@ async def _summarize_youtube_batch(
 
     async def _do_one(video_id, title, channel, transcript):
         user_text = (
-            f"Title: {title}\nChannel: {channel}\nTranscript:\n{transcript[:4000]}"
+            f"Title: {title}\nChannel: {channel}\nTranscript:\n{transcript[:15000]}"
         )
         summary, tokens = await _summarize_one(
             YOUTUBE_SYSTEM,
@@ -347,7 +347,7 @@ async def _summarize_reddit_batch(
 
     # ── Step 2: Summarize substantial posts individually ──
     async def _do_one_substantial(post_id, title, body, subreddit):
-        user_text = f"Subreddit: r/{subreddit}\nTitle: {title}\nPost:\n{body[:3000]}"
+        user_text = f"Subreddit: r/{subreddit}\nTitle: {title}\nPost:\n{body[:15000]}"
         response, tokens = await _summarize_one(
             REDDIT_SYSTEM_JSON,
             user_text,
@@ -480,7 +480,7 @@ async def _summarize_news_batch(
                 "q_score": 0,
             }
 
-        user_text = f"Title: {title}\nArticle:\n{summary_raw[:2000]}"
+        user_text = f"Title: {title}\nArticle:\n{summary_raw[:15000]}"
         response, tokens = await _summarize_one(
             NEWS_SYSTEM_JSON,
             user_text,

@@ -84,7 +84,7 @@ async def evaluate_relevance(text: str, context: str = "") -> dict:
         try:
             response, _, _ = await llm.chat(
                 system=current_prompt,
-                user=JANITOR_PROMPT.format(text=text[:3000], context=context),
+                user=JANITOR_PROMPT.format(text=text[:15000], context=context),
                 temperature=0.1,
                 max_tokens=800,
                 priority=Priority.LOW,
@@ -111,7 +111,7 @@ async def evaluate_relevance(text: str, context: str = "") -> dict:
                 critic_res, _, _ = await llm.chat(
                     system="You are a strict QA API. Respond ONLY in JSON.",
                     user=CRITIC_PROMPT.format(
-                        status=status, reason=data.get("reason", ""), context=context, text=text[:3000]
+                        status=status, reason=data.get("reason", ""), context=context, text=text[:15000]
                     ),
                     temperature=0.1,
                     max_tokens=150,

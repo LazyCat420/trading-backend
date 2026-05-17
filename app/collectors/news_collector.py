@@ -76,7 +76,7 @@ RSS_FEEDS = {
 }
 
 
-def _extract_text_from_html(html: str, max_chars: int = 500) -> str:
+def _extract_text_from_html(html: str, max_chars: int = 15000) -> str:
     """Extract readable text from HTML using Trafilatura."""
     import trafilatura
     
@@ -150,7 +150,7 @@ def _is_cloudflare_domain(url: str) -> bool:
 
 
 async def _scrape_article_body(
-    url: str, client: SmartClient, max_chars: int = 1500
+    url: str, client: SmartClient, max_chars: int = 15000
 ) -> str:
     """Fetch article URL and extract visible text as summary.
 
@@ -923,7 +923,7 @@ def _clean_deep_read(text: str) -> str | None:
     return cleaned
 
 
-async def deep_read_article(url: str, max_chars: int = 3000) -> str | None:
+async def deep_read_article(url: str, max_chars: int = 15000) -> str | None:
     """Deep-read a news article URL for full article body.
 
     Fallback chain:
@@ -993,7 +993,7 @@ async def deep_read_article(url: str, max_chars: int = 3000) -> str | None:
 
 
 async def deep_read_top_articles(
-    ticker: str, limit: int = 3, max_chars: int = 3000
+    ticker: str, limit: int = 3, max_chars: int = 15000
 ) -> list[dict]:
     """Deep-read the top N most recent articles for a ticker.
 

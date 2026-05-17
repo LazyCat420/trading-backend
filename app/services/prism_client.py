@@ -190,7 +190,7 @@ class PrismClient:
             "agenticLoopEnabled": agentic_mode,
             "conversationMeta": {
                 "title": title,
-                "systemPrompt": system_prompt[:3000],
+                "systemPrompt": system_prompt[:15000],
                 "settings": {
                     "provider": "vllm",
                     "model": model,
@@ -283,7 +283,7 @@ class PrismClient:
             "messages": full_messages,
             "conversationMeta": {
                 "title": title,
-                "systemPrompt": system_prompt[:3000] if system_prompt else "",
+                "systemPrompt": system_prompt[:15000] if system_prompt else "",
             },
         }
 
@@ -376,7 +376,7 @@ class PrismClient:
             "agenticLoopEnabled": True,
             "conversationMeta": {
                 "title": title,
-                "systemPrompt": system_prompt[:3000],
+                "systemPrompt": system_prompt[:15000],
                 "settings": {
                     "provider": "vllm",
                     "model": model,

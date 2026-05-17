@@ -10,7 +10,7 @@ Usage:
     python -m cycle_main --once              # run one cycle and exit
     python -m cycle_main --tickers AAPL,NVDA # override tickers
 
-This is the entrypoint for the trading-cycle-backend Docker container.
+This is the entrypoint for the trading-backend Docker container.
 """
 
 import asyncio
@@ -20,13 +20,16 @@ import os
 import signal
 import sys
 import time
+import json
+import uvicorn
+from fastapi import FastAPI
 
 # ── Ensure the shared codebase is importable ────────────────────
-# The Docker container mounts vllm-trading-bot at /app/shared
-# In dev, PYTHONPATH should include the vllm-trading-bot directory
+# The Docker container mounts trading-frontend at /app/shared
+# In dev, PYTHONPATH should include the trading-frontend directory
 SHARED_CODE = os.environ.get(
     "SHARED_CODEBASE_PATH",
-    os.path.join(os.path.dirname(__file__), "..", "vllm-trading-bot"),
+    os.path.join(os.path.dirname(__file__), "..", "trading-frontend"),
 )
 if os.path.isdir(SHARED_CODE) and SHARED_CODE not in sys.path:
     sys.path.insert(0, SHARED_CODE)
@@ -41,9 +44,13 @@ async def run_single_cycle(
 ) -> dict:
     """Execute one full trading cycle and return the summary."""
     from app.cycle.core import PipelineContext
+    from app.cycle.orchestration.state_manager import PipelineStateMixin
     from app.cycle.orchestration.orchestrator_core import OrchestratorCoreMixin
     from app.services.bot_manager import get_active_bot_id
     from unittest.mock import MagicMock
+
+    class CycleEngine(OrchestratorCoreMixin, PipelineStateMixin):
+        pass
 
     if not cycle_id:
         cycle_id = f"cycle-{int(time.time())}"
@@ -52,8 +59,7 @@ async def run_single_cycle(
         from app.cycle.orchestration.lifecycle_controller import LifecycleControllerMixin
         try:
             from app.pipeline.ticker_selector import TickerSelector
-            selector = TickerSelector()
-            tickers = await selector.select()
+            tickers = TickerSelector.select_tickers_for_cycle(requested_tickers=[], cap=50)
         except Exception as e:
             logger.warning("[cycle_backend] Ticker selection failed: %s", e)
             tickers = ["AAPL"]
@@ -72,7 +78,7 @@ async def run_single_cycle(
     )
 
     # Initialize the pipeline state using the db state manager
-    OrchestratorCoreMixin.load_state()
+    CycleEngine.load_state()
 
     logger.info(
         "[cycle_backend] Starting cycle %s | tickers=%s",
@@ -82,9 +88,9 @@ async def run_single_cycle(
     t0 = time.monotonic()
 
     try:
-        await OrchestratorCoreMixin._execute_cycle(ctx)
+        await CycleEngine._execute_cycle(ctx)
         elapsed = time.monotonic() - t0
-        summary = OrchestratorCoreMixin._cycle_summary
+        summary = CycleEngine._cycle_summary
         summary["elapsed_s"] = round(elapsed, 1)
         logger.info(
             "[cycle_backend] Cycle %s completed in %.1fs",
@@ -131,7 +137,8 @@ async def poll_system_commands(shutdown: asyncio.Event):
                         logger.info(f"[cycle_backend] Processing command {cmd_type} ({job_id})")
                         
                         if cmd_type == "START_CYCLE":
-                            result = await run_single_cycle(tickers=payload.get("tickers"))
+                            from app.services.pipeline_service import PipelineService
+                            result = await PipelineService.start_cycle(tickers=payload.get("tickers", []))
                         elif cmd_type == "ANALYZE_TICKER":
                             from app.pipeline.analysis.decision_engine import analyze_ticker
                             result = await analyze_ticker(payload.get("ticker"), cycle_id="manual_run")
@@ -198,14 +205,18 @@ async def poll_system_commands(shutdown: asyncio.Event):
                             [json.dumps(result), job_id]
                         )
                         logger.info(f"[cycle_backend] Completed command {job_id}")
-                    except Exception as e:
+                    except BaseException as e:
                         logger.error(f"[cycle_backend] Command {job_id} failed: {e}")
                         db.execute(
                             "UPDATE system_commands SET status = 'error', completed_at = CURRENT_TIMESTAMP, error_message = %s WHERE id = %s", 
                             [str(e), job_id]
                         )
-        except Exception as e:
+                        if isinstance(e, asyncio.CancelledError):
+                            raise
+        except BaseException as e:
             logger.error("[cycle_backend] Poller error: %s", e)
+            if isinstance(e, asyncio.CancelledError):
+                raise
             
         try:
             await asyncio.wait_for(shutdown.wait(), timeout=2.0)
@@ -244,6 +255,32 @@ async def run_worker(tickers: list[str] | None = None) -> None:
     await poller_task
 
 
+async def start_health_server(shutdown_event: asyncio.Event):
+    app = FastAPI(title="Trading Cycle Backend Health")
+    @app.get("/health")
+    def health():
+        return {"status": "ok", "service": "trading-backend"}
+
+    @app.get("/status")
+    def status(summary_only: bool = False):
+        from app.cycle.orchestration.state_manager import PipelineStateMixin
+        return PipelineStateMixin.get_current_state(summary_only=summary_only)
+
+    config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="error")
+    server = uvicorn.Server(config)
+    
+    async def _serve():
+        try:
+            await server.serve()
+        except asyncio.CancelledError:
+            pass
+
+    task = asyncio.create_task(_serve())
+    await shutdown_event.wait()
+    server.should_exit = True
+    await task
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -253,6 +290,7 @@ def main():
     ap = argparse.ArgumentParser(description="Trading Cycle Backend")
     ap.add_argument("--once", action="store_true", help="Run one cycle and exit")
     ap.add_argument("--tickers", type=str, help="Comma-separated tickers (e.g. AAPL,NVDA)")
+    ap.add_argument("--interval", type=int, help="Legacy interval arg, ignored")
     args = ap.parse_args()
 
     tickers = [t.strip() for t in args.tickers.split(",")] if args.tickers else None
@@ -261,8 +299,28 @@ def main():
         result = asyncio.run(run_single_cycle(tickers=tickers))
         print(f"Result: {result}")
     else:
-        asyncio.run(run_worker(tickers=tickers))
+        async def _run_all():
+            shutdown = asyncio.Event()
+            
+            def _request_shutdown():
+                shutdown.set()
 
+            loop = asyncio.get_running_loop()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                try:
+                    loop.add_signal_handler(sig, _request_shutdown)
+                except NotImplementedError:
+                    pass
+
+            worker_task = asyncio.create_task(run_worker(tickers=tickers))
+            health_task = asyncio.create_task(start_health_server(shutdown))
+            
+            await asyncio.gather(worker_task, health_task)
+            
+        try:
+            asyncio.run(_run_all())
+        except KeyboardInterrupt:
+            pass
 
 if __name__ == "__main__":
     main()

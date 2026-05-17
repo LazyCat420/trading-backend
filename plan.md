@@ -1,157 +1,53 @@
-# Trading Pipeline Debugging & Refactoring Plan
+# Plan: Trading Run Fixes & Data Pipeline Consolidation
 
-> **Status**: Implementation COMPLETE — all 6 phases built.  
-> **Last Updated**: 2026-05-16
+<architecture_plan>
+1. **Remove Redundant Janitor Agent**: The `janitor_agent.py` and its invocation in `data_phase.py` will be completely removed. The summarizer will handle all data gating and discarding logic.
+2. **Standardize Database Lookup**: We will strictly use the `ticker_metadata` table (or whichever table has a clean `name` column) for mapping ticker symbols to full company names. This lookup will be wrapped in a pure wrapper function.
+3. **Fix the Infinite Summarizer/Offline Sync Loop**: The `_continuous_summarization` loop in `data_phase.py` hangs when the summarizer repeatedly fetches the same items due to a failed update, or it runs indefinitely if collection hangs. We will:
+    - Add a `max_retries` counter or mark items as `failed` in the DB if the update fails, preventing the exact same articles from being reprocessed forever.
+    - Suppress redundant `[PRISM] Offline log saved` prints if they are flooding the console, so the main pipeline progress is visible.
+4. **No-Truncation Discard Visibility (Frontend)**: When data is discarded by the gatekeeper, it must be properly logged and surfaced to the user via the frontend (or console logs). CRITICAL: We will ensure that NO TRUNCATION occurs in the system prompts, user texts, or model reports when logging. The full story behind the discard must be preserved so the user can accurately evaluate the gatekeeper's decision.
+5. **Update Summarizer System Prompt**: The prompt (`NEWS_SYSTEM_JSON` and `REDDIT_SYSTEM_JSON` in `summarizer.py`) will be relaxed. It will explicitly state: "If the data lacks technical details but still tells a meaningful story or narrative about the company's fundamentals, management, or market environment, you MUST ACCEPT IT and summarize the story."
+</architecture_plan>
 
----
+<data_and_interfaces>
+```python
+# In app/utils/db_metadata.py (New or updated wrapper file)
+def get_company_name_from_ticker(ticker: str) -> str:
+    """
+    Queries the ticker_metadata table to return the full company name for a given ticker.
+    Returns the ticker itself if no name is found.
+    """
+    pass
 
-## 1. How LLM Requests are Triggered (The Architecture)
+# In app/processors/summarizer.py
+def _parse_reddit_json_response(response: str) -> dict:
+    """
+    Parses JSON. We will update this to ensure `discard` reasons are cleanly extracted
+    and we will log a clear WARNING/INFO indicating what was discarded and why.
+    """
+    pass
 
-The routing of LLM requests to the DGX Spark and Jetson boxes is controlled primarily by the following files:
-
-*   **`app/services/vllm_client.py`**: Heart of LLM routing. Priority queue (HIGH, NORMAL, LOW) per hardware endpoint. Dynamically probes endpoints for active model names.
-*   **`app/services/prism_client.py`**: Client for Prism Gateway. Routes through `/agent` proxy or falls back to offline shadow logging.
-*   **`app/pipeline/analysis/decision_engine.py`**: Triggers LLM workloads (specialist agents, RLM analysis, Glance Tier checks).
-
-**How Routing Works in `vllm_client.py`:**
-*   **ALL endpoints** (including Jetson) now route through Prism when `PRISM_AGENT_ROUTING=True` *(Phase 3 change)*
-*   When `PRISM_AGENT_ROUTING=False`: direct vLLM + offline shadow-log to Prism
-
----
-
-## 2. Why the pipeline was processing without hitting Prism for 10 hours
-
-### A. The Bypasses & Fallbacks (Direct Routing) — **FIXED in Phase 3**
-1.  ~~**Jetson Bypass**: Jetson requests explicitly bypassed Prism~~ → **Now routes through Prism**
-2.  **Health Check Fallback**: If `prism_client.check_health()` fails, falls back to direct vLLM
-3.  ~~**Shadow Log Failures**: Silently swallowed at debug level~~ → **Now surfaces as warnings**
-
-### B. Aggressive Caching & Triage Tiers
-1.  **Data Sufficiency Gate**: Bypasses scraping when data is sufficient
-2.  **Glance Tier Skip**: Returns cached thesis when no material change detected
-
-### C. The Queue Dispatcher is Stuck
-1.  **KV Cache Protection**: Pauses when `cache_usage >= 0.90`
-2.  **Circuit Breaker**: Pauses after consecutive batch timeouts
-
----
-
-## 3. How the Logic *Should* Be Working
-
-1.  **Triggering**: Trading cycle starts → tickers triaged into tiers (Deep, Standard, Glance)
-2.  **Data Collection**: Tickers collect data concurrently. Cache hits skip scraping.
-3.  **Analysis**: Tickers hit `decision_engine.py`
-    *   Glance: cheap LLM change-detection check
-    *   Standard/Deep: specialist agents → RLM Config C → optionally Debate Config D
-4.  **Execution**: All requests go through `vllm_client.py` → routed via Prism or direct
-
----
-
-## 4. Current State of the Agentic Loop & Subagents
-
-### What's implemented:
-*   **`app/tools/subagent_tools.py`**: Primary agents can spawn research subagents with **dynamic tool provisioning** *(Phase 4)*
-*   **`app/tools/prism_agent_harness.py`**: Prism-delegated agent loop with local fallback *(Phase 6)*
-*   **`app/tools/script_sandbox.py`**: Sandboxed Python execution for quant equations *(Phase 5)*
-*   **`app/tools/executor.py`**: Local agentic loop (used as fallback when Prism is unavailable)
-
-### How subagent tool provisioning works (Phase 4):
-Parent agents can now pass `enabled_tools: ["search_web", "scrape_url", "get_market_data"]` when spawning a subagent. The subagent only receives those tools, preventing context bloat.
-
-### How the Onion Layered Architecture works (Phase 6):
+def log_discarded_item(item_id: str, reason: str, full_original_text: str) -> None:
+    """
+    Logs the discarded item to a visible channel (frontend evaluation log or db)
+    so the user can audit the gatekeeper's decisions. 
+    Crucially: the full_original_text is NOT truncated.
+    """
+    pass
 ```
-Layer 1 (trading-cycle-backend) → Defines tools, holds data state
-Layer 2 (Prism Gateway)         → Runs agentic loop, tracks everything
-Layer 3 (Hermes/vLLM)           → Executes raw LLM completions
-```
+</data_and_interfaces>
 
----
+<implementation>
+**Step 1**: Delete `app/pipeline/data/data_janitor.py` and remove references to it in `data_phase.py` (Pass 1.6).
 
-## 5. Phased Implementation (COMPLETED)
+**Step 2**: In `app/processors/summarizer.py`, update `NEWS_SYSTEM_JSON`, `REDDIT_SYSTEM_JSON`, and `REDDIT_CONSOLIDATED_SYSTEM`:
+- Add instructions: "Do NOT discard if the text is vague but contains a relevant narrative/story that impacts fundamentals. Summarize the story."
+- Include dynamic context via the `get_company_name_from_ticker` function, so it knows "NVO" is "Novo Nordisk".
 
-### ✅ Phase 1: Diagnostic Script
-*   **File**: `diagnose_pipeline.py`
-*   **What it does**: Checks endpoint health, Prism status, recent LLM logs, endpoint call distribution, cycle audit events, and Glance skip counts.
-*   **Run**: `python diagnose_pipeline.py`
+**Step 3**: In `summarizer.py`, inside `_summarize_news_batch` and `_summarize_reddit_batch`, whenever `action == "discard"`, invoke `log_discarded_item` to output a highly visible report (and store it for frontend evaluation) that includes the exact reason and the full, UNTRUNCATED original text. Ensure no legacy 150-word truncations exist in this pipeline.
 
-### ✅ Phase 2: Verify Triage & Cache Gates
-*   **Covered by**: `diagnose_pipeline.py` (queries `cycle_audit_log` for Glance SKIPs)
+**Step 4**: In `data_phase.py`, modify the `_continuous_summarization` `while` loop to ensure it has a maximum iteration count or gracefully tracks failure states so it does not endlessly query and fail on the same rows, which creates the "offline sync" log flood.
 
-### ✅ Phase 3: Unify Prism Telemetry
-*   **File**: `app/services/vllm_client.py`
-*   **Changes**:
-    - Removed Jetson Prism bypass — ALL endpoints now route through Prism when `PRISM_AGENT_ROUTING=True`
-    - Shadow log errors surfaced as warnings instead of debug-level silencing
-
-### ✅ Phase 4: Dynamic Subagent Tool Provisioning
-*   **File**: `app/tools/subagent_tools.py`
-*   **Changes**:
-    - `spawn_research_subagent` now accepts optional `enabled_tools` parameter
-    - Parent agents specify exactly which tools a subagent receives
-    - Falls back to all tools if no valid tools match the whitelist
-
-### ✅ Phase 5: Custom Agentic Tool Creation (Python Sandbox)
-*   **Files**: `app/tools/script_sandbox.py`, `app/tools/sandbox_runner.py`
-*   **Changes**:
-    - New `execute_quant_script` tool with Pydantic validation
-    - DATA injection — agent passes data dict, code operates on it
-    - RestrictedPython guardrails: no filesystem, no network, no imports beyond math/json/statistics
-    - Old `run_python_script` preserved as deprecated alias
-
-### ✅ Phase 6: Onion Layered Architecture (Prism Agent Harness)
-*   **File**: `app/tools/prism_agent_harness.py` (NEW)
-*   **Changes**:
-    - `run_prism_agent()` delegates the full agentic loop to Prism `/agent`
-    - Prism runs the loop, tracks every step natively
-    - Transparent fallback to local `executor.py` when Prism is unhealthy
-    - `subagent_tools.py` updated to use Prism-first routing
-
----
-
-## 6. Files Changed
-
-| File | Phase | Change |
-|------|-------|--------|
-| `diagnose_pipeline.py` | 1 | Diagnostic script |
-| `app/services/vllm_client.py` | 3 | Removed Jetson bypass, surfaced shadow log errors |
-| `app/tools/subagent_tools.py` | 4, 6 | Dynamic tool provisioning + Prism-first routing |
-| `app/tools/sandbox_runner.py` | 5 | Upgraded sandbox with DATA injection & blocked imports |
-| `app/tools/script_sandbox.py` | 5 | New `execute_quant_script` tool with Pydantic models |
-| `app/tools/prism_agent_harness.py` | 6 | NEW: Prism-delegated agent harness |
-| `app/tools/__init__.py` | 5, 6 | Registered new tools in exports |
-| `plan.md` | — | This file |
-
----
-
-## 7. How to Test
-
-```bash
-# Phase 1: Run diagnostics
-python diagnose_pipeline.py
-
-# Phase 5: Test sandbox guardrails (should block)
-python -c "
-from app.tools.sandbox_runner import run_isolated
-run_isolated('import os; print(os.listdir(\".\"))')
-"
-
-# Phase 5: Test sandbox happy path
-python -c "
-from app.tools.sandbox_runner import run_isolated
-import json
-run_isolated(
-    'prices = DATA[\"prices\"]; avg = sum(prices)/len(prices); print(json.dumps({\"avg_price\": avg}))',
-    json.dumps({\"prices\": [100, 102, 98, 105]})
-)
-"
-```
-
----
-
-## 8. Configuration Reference
-
-| Setting | Default | Effect |
-|---------|---------|--------|
-| `PRISM_ENABLED` | `True` | Master toggle for Prism integration |
-| `PRISM_AGENT_ROUTING` | `False` | `True` = route ALL endpoints through Prism `/agent` |
-| `PRISM_AGENT` | `CUSTOM_MARKET_ALPHA` | Prism agent persona for routing |
+**Step 5**: Wait for the USER to audit the database logs to identify specific edge cases for context enrichment failures before deploying specific alias rules.
+</implementation>

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Trading Cycle Backend — Build & Deploy to Synology NAS
+# Trading Backend — Build & Deploy to Synology NAS
 #
 # Thin wrapper — all logic lives in ../deploy-kit/lib.sh
 #
@@ -12,8 +12,8 @@
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-IMAGE_NAME="trading-cycle-backend"
-DISPLAY_NAME="⚙️ Trading Cycle Backend"
+IMAGE_NAME="trading-backend"
+DISPLAY_NAME="⚙️ Trading Backend"
 SKIP_ENV_DEPLOY=true
 
 PRE_BUILD() {

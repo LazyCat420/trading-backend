@@ -1,12 +1,12 @@
 # ============================================================
-# Trading Cycle Backend — Docker Build
+# Trading Backend — Docker Build
 # ============================================================
 # Runs the autonomous trading cycle (collect → analyze → trade)
 # as a standalone container with its own copy of the backend code.
 #
 # Build:
-#   cd sun/trading-cycle-backend
-#   docker build -t trading-cycle-backend .
+#   cd sun/trading-backend
+#   docker build -t trading-backend .
 # ============================================================
 
 FROM python:3.11-slim AS deps

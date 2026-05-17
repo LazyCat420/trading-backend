@@ -317,7 +317,7 @@ def get_crawl_config(
 
 async def scrape_url(
     url: str,
-    max_chars: int = 5000,
+    max_chars: int = 15000,
     screenshot: bool = False,
     scan_full_page: bool = False,
     css_selector: str | None = None,
@@ -384,7 +384,7 @@ async def scrape_url(
 
 async def scrape_urls_batch(
     urls: list[str],
-    max_chars: int = 5000,
+    max_chars: int = 15000,
     fast: bool = True,
     rate_limit_delay: float = 2.0,
 ) -> list[dict]:
@@ -450,7 +450,7 @@ async def scrape_urls_batch(
 
 async def scrape_urls(
     urls: list[str],
-    max_chars: int = 5000,
+    max_chars: int = 15000,
     rate_limit_delay: float = 5.0,
 ) -> list[dict]:
     """Scrape multiple URLs sequentially with rate limiting.

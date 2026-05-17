@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  trading-cycle-backend:
-    image: trading-cycle-backend:latest
-    container_name: trading-cycle-backend
+  trading-backend:
+    image: trading-backend:latest
+    container_name: trading-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -13,6 +13,8 @@ services:
     volumes:
       - /usr/share/zoneinfo/America/Los_Angeles:/etc/localtime:ro
       - ./logs:/app/logs
+    ports:
+      - "3031:8080"
     logging:
       driver: json-file
       options:

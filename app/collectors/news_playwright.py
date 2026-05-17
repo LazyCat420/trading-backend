@@ -22,7 +22,7 @@ import sys
 
 
 def scrape_article_sync(
-    url: str, headless: bool = True, timeout_ms: int = 20000, max_chars: int = 3000
+    url: str, headless: bool = True, timeout_ms: int = 20000, max_chars: int = 15000
 ) -> str | None:
     """Scrape article body using Playwright stealth browser.
 
