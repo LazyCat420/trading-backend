@@ -155,6 +155,11 @@ class VLLMEndpoint:
     # unreachable during model discovery. Distinguished from manual disable
     # so the re-discovery task knows it can re-enable it automatically.
     auto_disabled: bool = field(default=False, repr=False)
+    # True when the vLLM server is reachable but has no model loaded yet
+    # (e.g., Jetson Orin AGX takes 10+ min to load a large model).
+    # Distinguished from offline (unreachable) so the system can give
+    # informative errors and poll faster for model readiness.
+    loading: bool = field(default=False, repr=False)
 
     # Auto-populated by discover_roles()
     model: str | None = field(default=None, repr=False)
@@ -292,7 +297,7 @@ class VLLMClient:
         ]
 
     def _pick_best_endpoint(self, requested_model: str | None = None, agent_name: str | None = None) -> VLLMEndpoint:
-        """Capacity-aware endpoint selection.
+        """Capacity-aware endpoint selection with cross-role fallback.
 
         Picks the endpoint with the lowest combined load (active + queued),
         accounting for timeout penalties and queue overflow.
@@ -302,16 +307,23 @@ class VLLMClient:
         
         If agent_name is provided, routes to the appropriate hardware tier 
         (Jetson vs DGX Spark) based on task complexity.
+        
+        CROSS-ROLE FALLBACK: If the preferred tier has no ready endpoints
+        (e.g., Jetson model still loading), routes to ANY available endpoint
+        regardless of role assignment. This prevents timeouts when one box
+        is starting up.
         """
-        candidates = [
+        # Step 1: All endpoints with models loaded
+        all_ready = [
             ep
             for ep in self._endpoints.values()
             if ep.enabled and ep.role != "training" and ep.model
         ]
+        candidates = list(all_ready)
         
         # Role-based routing: filter by required role if defined in taxonomy
+        required_role = None
         if agent_name:
-            required_role = None
             for key, role in AGENT_ROLE_ROUTING.items():
                 if agent_name.startswith(key):
                     required_role = role
@@ -329,7 +341,21 @@ class VLLMClient:
                 if role_candidates:
                     candidates = role_candidates
                 else:
-                    logger.warning("[VLLM] No active endpoint found for role tier '%s'. Falling back.", required_role)
+                    # CROSS-ROLE FALLBACK: preferred tier has no ready endpoints.
+                    # Route to ANY available endpoint with a model loaded.
+                    if all_ready:
+                        fallback_names = ', '.join(ep.name for ep in all_ready)
+                        logger.warning(
+                            "[VLLM] 🔀 No %s-tier endpoints have models loaded. "
+                            "Cross-routing '%s' to available endpoints: [%s]",
+                            required_role, agent_name, fallback_names,
+                        )
+                        candidates = all_ready
+                    else:
+                        logger.warning(
+                            "[VLLM] No active endpoint found for role tier '%s' and no fallbacks. ",
+                            required_role,
+                        )
 
         # Strictly filter by model if requested
         if requested_model:
@@ -340,9 +366,21 @@ class VLLMClient:
                 logger.warning("[VLLM] Requested model '%s' not found on any active endpoint. Falling back.", requested_model)
 
         if not candidates:
-            # Fallback: any enabled endpoint
-            candidates = [ep for ep in self._endpoints.values() if ep.enabled]
+            # Fallback: any enabled endpoint with a model
+            candidates = [ep for ep in self._endpoints.values() if ep.enabled and ep.model]
+        
         if not candidates:
+            # Check if any endpoints are in loading state
+            loading_eps = [
+                ep for ep in self._endpoints.values()
+                if ep.loading
+            ]
+            if loading_eps:
+                loading_names = ', '.join(ep.name for ep in loading_eps)
+                raise RuntimeError(
+                    f"No models ready — {len(loading_eps)} endpoint(s) still loading: "
+                    f"[{loading_names}]. Requests will succeed once model loading completes."
+                )
             raise RuntimeError("No vLLM endpoints available")
 
         # Prefer non-overloaded endpoints
@@ -350,6 +388,16 @@ class VLLMClient:
         pool = non_overloaded if non_overloaded else candidates
 
         best = min(pool, key=lambda ep: ep.load_score)
+        # Log cross-routing at INFO level so it's visible in docker logs
+        if required_role and best.role not in (required_role,):
+            # Check if the original role group was also acceptable
+            if required_role in ("analyst", "trader") and best.role in ("analyst", "trader"):
+                pass  # Same tier, not a cross-route
+            else:
+                logger.info(
+                    "[QUEUE] 🔀 Cross-route: %s (needs %s-tier) → %s (%s-tier, model=%s)",
+                    agent_name, required_role, best.name, best.role, best.model,
+                )
         logger.debug(
             "[QUEUE] Smart route → %s (score=%.0f, active=%d/%d, queued=%d)%s",
             best.name,
@@ -1745,8 +1793,18 @@ class VLLMClient:
                             ep.url,
                             ep.model,
                         )
+                        ep.loading = False
                         successful_endpoints += 1
+                    else:
+                        # Server responded but no models loaded — LOADING state
+                        ep.loading = True
+                        ep.model = None
+                        logger.info(
+                            "[VLLM] ⏳ Endpoint %s at %s is online but model is still loading",
+                            name, ep.url,
+                        )
             except Exception as e:
+                ep.loading = False
                 logger.debug("[VLLM] Failed to discover models on %s: %s", name, e)
 
         # Gather concurrently so 3 offline endpoints don't block for 15s sequentially
@@ -1758,22 +1816,39 @@ class VLLMClient:
         # If an endpoint is configured but has no model after probing, it means
         # the vLLM docker is offline or not serving any model. Auto-disable it
         # so the dispatcher doesn't try to route requests there.
+        # Endpoints in 'loading' state stay enabled — they'll have a model soon.
         for name, ep in self._endpoints.items():
-            if not ep.model and ep.enabled:
+            if not ep.model and ep.enabled and not ep.loading:
                 ep.enabled = False
                 ep.auto_disabled = True
                 logger.warning(
-                    "[VLLM] ⚠️ Endpoint %s at %s has no model loaded — auto-disabled. "
-                    "It will be re-enabled automatically when a model becomes available.",
+                    "[VLLM] ⚠️ Endpoint %s at %s is unreachable — auto-disabled. "
+                    "It will be re-enabled automatically when it comes back online.",
                     name,
                     ep.url,
                 )
+            elif not ep.model and ep.enabled and ep.loading:
+                logger.info(
+                    "[VLLM] ⏳ Endpoint %s at %s is loading — keeping enabled, "
+                    "requests will cross-route to other boxes until model is ready.",
+                    name, ep.url,
+                )
 
         if len(self._endpoints) > 0 and successful_endpoints == 0:
-            raise RuntimeError(
-                "All configured vLLM endpoints failed to respond or returned connection errors. "
-                "Please verify the inference servers are running."
-            )
+            # Check if any endpoints are loading (not truly dead)
+            loading_count = sum(1 for ep in self._endpoints.values() if ep.loading)
+            if loading_count > 0:
+                logger.warning(
+                    "[VLLM] ⚠️ No endpoints have models loaded yet, but %d are still loading. "
+                    "Will retry discovery in background. Requests will fail until a model is ready.",
+                    loading_count,
+                )
+                # Don't raise — let the system boot and rediscovery will pick them up
+            else:
+                raise RuntimeError(
+                    "All configured vLLM endpoints failed to respond or returned connection errors. "
+                    "Please verify the inference servers are running."
+                )
 
         self._roles_discovered = True
 
@@ -1968,7 +2043,18 @@ class VLLMClient:
                 await self.rediscover_endpoints()
             except Exception as e:
                 logger.debug("[VLLM] Rediscovery loop error: %s", e)
-            await asyncio.sleep(120.0)  # was 60s — reduced frequency to avoid noisy probes
+            
+            # Fast poll when any endpoint is in loading state (model being loaded)
+            # so we detect model readiness within 15s instead of waiting 2 minutes
+            any_loading = any(ep.loading for ep in self._endpoints.values())
+            any_auto_disabled = any(ep.auto_disabled for ep in self._endpoints.values())
+            if any_loading:
+                logger.debug("[VLLM] Fast rediscovery (15s) — endpoint(s) loading")
+                await asyncio.sleep(15.0)
+            elif any_auto_disabled:
+                await asyncio.sleep(60.0)  # Medium poll for offline endpoints
+            else:
+                await asyncio.sleep(120.0)  # Normal poll when everything is healthy
 
     async def rediscover_endpoints(self):
         """Re-probe all endpoints for model availability.
