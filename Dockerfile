@@ -5,8 +5,8 @@
 # as a standalone container with its own copy of the backend code.
 #
 # Build:
-#   cd sun/trading-backend
-#   docker build -t trading-backend .
+#   cd sun/trading-service
+#   docker build -t trading-service .
 # ============================================================
 
 FROM python:3.11-slim AS deps

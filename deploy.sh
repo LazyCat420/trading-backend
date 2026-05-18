@@ -12,7 +12,7 @@
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-IMAGE_NAME="trading-backend"
+IMAGE_NAME="trading-service"
 DISPLAY_NAME="⚙️ Trading Backend"
 SKIP_ENV_DEPLOY=true
 

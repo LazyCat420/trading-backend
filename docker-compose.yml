@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  trading-backend:
-    image: trading-backend:latest
-    container_name: trading-backend
+  trading-service:
+    image: trading-service:latest
+    container_name: trading-service
     restart: unless-stopped
     env_file:
       - .env

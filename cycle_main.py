@@ -10,7 +10,7 @@ Usage:
     python -m cycle_main --once              # run one cycle and exit
     python -m cycle_main --tickers AAPL,NVDA # override tickers
 
-This is the entrypoint for the trading-backend Docker container.
+This is the entrypoint for the trading-service Docker container.
 """
 
 import asyncio
@@ -25,11 +25,11 @@ import uvicorn
 from fastapi import FastAPI
 
 # ── Ensure the shared codebase is importable ────────────────────
-# The Docker container mounts trading-frontend at /app/shared
-# In dev, PYTHONPATH should include the trading-frontend directory
+# The Docker container mounts trading-client at /app/shared
+# In dev, PYTHONPATH should include the trading-client directory
 SHARED_CODE = os.environ.get(
     "SHARED_CODEBASE_PATH",
-    os.path.join(os.path.dirname(__file__), "..", "trading-frontend"),
+    os.path.join(os.path.dirname(__file__), "..", "trading-client"),
 )
 if os.path.isdir(SHARED_CODE) and SHARED_CODE not in sys.path:
     sys.path.insert(0, SHARED_CODE)
@@ -295,7 +295,7 @@ async def start_health_server(shutdown_event: asyncio.Event):
     app = FastAPI(title="Trading Cycle Backend Health")
     @app.get("/health")
     def health():
-        return {"status": "ok", "service": "trading-backend"}
+        return {"status": "ok", "service": "trading-service"}
 
     @app.get("/status")
     def status(summary_only: bool = False):
