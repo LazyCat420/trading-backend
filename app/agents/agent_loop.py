@@ -402,19 +402,20 @@ async def run_agent_loop(
                 import uuid
                 from app.db.connection import get_db
                 
+                service_source = tool_res.get("service_source", "trading-service")
                 with get_db() as db:
                     db.execute(
                         """INSERT INTO agent_traces 
                            (id, run_id, agent_name, task_type, goal, planned_next_action, 
                             tool_name, tool_args, tool_result_summary, why_tool_was_called, 
                             tokens_before, tokens_after, latency_ms, did_tool_change_decision, 
-                            loop_step, stop_reason, endpoint_name, model_name)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                            loop_step, stop_reason, endpoint_name, model_name, service_source)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                         [
                             str(uuid.uuid4()), cycle_id, agent_name, "analysis", "execute_task", "evaluate_evidence",
                             tool_name, str(tool_args), tool_res.get("content", "")[:1000], rationale,
                             budget.current_tokens, budget.current_tokens, latency_ms, False, budget.current_turns, stop_reason,
-                            endpoint_name, model_name
+                            endpoint_name, model_name, service_source
                         ]
                     )
             except Exception as e:

@@ -1,0 +1,59 @@
+{
+  "ticker": "TEST",
+  "cycle_id": "cycle_123",
+  "timestamp": "2026-05-21T20:16:05.109986+00:00",
+  "debate_mode": "BUY-vs-SELL",
+  "verdict": {
+    "action": "SELL",
+    "confidence": 0,
+    "winner": "split",
+    "rationale": "Debate judge failed to produce verdict: 'VLLMClient' object has no attribute 'chat'",
+    "key_factor": "Judge failed: 'VLLMClient' object has no attribute 'chat'",
+    "rejected_impact": "Unable to assess"
+  },
+  "integrity": "HIGH",
+  "retry_count": 0,
+  "tokens": {
+    "bull": 600,
+    "bear": 600,
+    "cross_exam": 0,
+    "judge": 0,
+    "total": 1200
+  },
+  "persona_outcomes": {
+    "Fundamental": {
+      "bull_claims_count": 1,
+      "bear_claims_count": 1,
+      "bull_survived": 1,
+      "bear_survived": 1,
+      "winner": "split"
+    },
+    "Technical": {
+      "bull_claims_count": 1,
+      "bear_claims_count": 1,
+      "bull_survived": 1,
+      "bear_survived": 1,
+      "winner": "split"
+    },
+    "Macro_Sentiment": {
+      "bull_claims_count": 1,
+      "bear_claims_count": 1,
+      "bull_survived": 1,
+      "bear_survived": 1,
+      "winner": "split"
+    }
+  },
+  "claims": {
+    "bull_total": 2,
+    "bear_total": 2,
+    "verified_bull": [],
+    "verified_bear": [],
+    "unverified": [
+      "Revenue up 20% [fundamentals:RevGrowth=0.20]",
+      "P/E is 80 [market_data:PE=80.0]",
+      "Revenue up 20% [fundamentals:RevGrowth=0.20]",
+      "P/E is 80 [market_data:PE=80.0]"
+    ]
+  },
+  "cross_exam_summary": ""
+}

@@ -125,7 +125,7 @@ async def run_post_cycle_hooks(
 
         # ── Strategy Tracking: Record the prompt that drove this outcome ──
         if outcome_id and final_action in ("BUY", "SELL"):
-            from app.pipeline.strategy_tracker import record_strategy
+            from app.trading.strategy_tracker import record_strategy
             from app.db.connection import get_db
 
             # For the main pipeline, we track the hybrid config used

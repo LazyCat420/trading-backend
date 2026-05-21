@@ -1055,7 +1055,7 @@ async def analyze_tickers(
     # All tickers see the same memory snapshot. Mid-cycle add() calls
     # from post_cycle_learn don't affect the snapshot until next cycle.
     try:
-        from app.services.trading_memory import trading_memory
+        from app.cognition.trading_memory import trading_memory
 
         trading_memory.load_from_disk()
     except Exception as mem_err:

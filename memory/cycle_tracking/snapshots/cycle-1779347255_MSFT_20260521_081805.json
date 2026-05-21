@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 0,
+  "rationale": "Failed to parse thesis. Invalid JSON format. Raw: # MSFT \u2014 Microsoft Corporation\n**Current Price**: $413.25 | **Change**: +0.42%\n**Rating**: \u2b50\u2b50\u2b50\u2b50 (4/5 Alpha) \u2014 **BUY THE DIP**\n\n## Quick Verdict\n**WE'RE BUYING HERE.** This is a blue-chip monster trading at a discount to its intrinsic value. The funda...\n\n\ud83d\udcc5 Data timeframe: 2025-06-30 00:00 UTC to 2026-05-20 23:43 UTC\n\n\ud83d\udcdd Memory context: - [2026-05-06] pipeline_run: HOLD (conf=65)",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

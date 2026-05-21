@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 95,
+  "rationale": "AAPL must be sold immediately because the RSI(14) is 74.67457810346164, which exceeds the constitutional SELL trigger of 70, indicating extreme overbought conditions. Furthermore, the P/E of 36.636364 [fundamental_data] combined with a price of 302.25 [structured_facts] near the 52-week high of 303.2 [structured_facts] suggests limited upside and high downside risk in the current macro environment where elevated valuation multiples signal correction risk. Invalidation condition: RSI drops below ",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

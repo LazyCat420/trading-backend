@@ -1,0 +1,54 @@
+{
+  "ticker": "RLAY",
+  "cycle_id": "cycle-1779347255",
+  "timestamp": "2026-05-21T07:57:15.263577+00:00",
+  "debate_mode": "BUY-vs-SELL",
+  "verdict": {
+    "action": "SELL",
+    "confidence": 0,
+    "winner": "split",
+    "rationale": "Debate judge failed to produce verdict: No vLLM endpoints available",
+    "key_factor": "Judge failed: No vLLM endpoints available",
+    "rejected_impact": "Unable to assess"
+  },
+  "integrity": "HIGH",
+  "retry_count": 0,
+  "tokens": {
+    "bull": 0,
+    "bear": 0,
+    "cross_exam": 0,
+    "judge": 0,
+    "total": 0
+  },
+  "persona_outcomes": {
+    "Fundamental": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Technical": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Macro_Sentiment": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    }
+  },
+  "claims": {
+    "bull_total": 0,
+    "bear_total": 0,
+    "verified_bull": [],
+    "verified_bear": [],
+    "unverified": []
+  },
+  "cross_exam_summary": ""
+}

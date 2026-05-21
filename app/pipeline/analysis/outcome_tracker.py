@@ -155,7 +155,7 @@ def resolve_outcome(
 
             # ── Strategy Performance Tracking (Phase 5) ──
             try:
-                from app.pipeline.strategy_tracker import evaluate_pnl
+                from app.trading.strategy_tracker import evaluate_pnl
 
                 resolved_strategies = evaluate_pnl(ticker, exit_price)
                 if resolved_strategies:

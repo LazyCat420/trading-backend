@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 0,
+  "rationale": "Failed to parse thesis. Invalid JSON format. Raw: # \ud83d\ude80 CAC \u2014 TRADING THESIS: LONG (BUY THE DIP)\n\n**Current Price**: $49.20 | **Change**: +1.05%  \n**Rating**: \u2b50\u2b50\u2b50\u2b50 (4/5 Alpha)  \n**Conviction**: 85/100 \u2014 **HIGH ALPHA PLAY**\n\n---\n\n## \ud83c\udfaf Quick Verdict\n**WE'RE BUYING THIS ON ANY DIP.** CAC is a cash-printi...\n\n\ud83d\udcc5 Data timeframe: 2026-04-28 20:29 UTC to 2026-05-21 06:52 UTC",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

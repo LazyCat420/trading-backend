@@ -99,7 +99,7 @@ def build_rlm_prompt(
 
     if not memory_block:
         # Fallback: flat TradingMemory (Phase 1-3 compat)
-        from app.services.trading_memory import trading_memory
+        from app.cognition.trading_memory import trading_memory
 
         memory_block = trading_memory.get_frozen_snapshot() or ""
 

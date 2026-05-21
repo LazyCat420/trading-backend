@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 75,
+  "rationale": "Ross Stores qualifies for a BUY action as the RSI(14) is 47.8948025201914, satisfying the requirement to buy only if RSI < 65, while the stock maintains strong fundamentals with an ROE of 0.36678 and revenue growth of 0.122. Although the MACD is negative at -2.04 and the price is below the 20-day SMA, the current consolidation near $217.79 provides an asymmetric entry before the $231.16 resistance. This thesis is invalidated if the RSI rises above 70 or if the price breaks below the $208.20 supp",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

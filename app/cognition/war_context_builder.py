@@ -11,7 +11,7 @@ model to reason about:
 Output format: structured dict suitable for JSON serialization into prompts.
 
 Usage:
-  from app.services.war_context_builder import build_war_oil_context
+  from app.cognition.war_context_builder import build_war_oil_context
   context = build_war_oil_context(window_hours=24)
   # Inject context["prompt_block"] into the LLM system prompt
 """

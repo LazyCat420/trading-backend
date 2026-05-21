@@ -1,0 +1,18 @@
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:21.785476+00:00", "step": "v2_start", "payload": {"ticker": "GOOGL", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:21.835026+00:00", "step": "v2_start", "payload": {"ticker": "NVDA", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:21.424118+00:00", "step": "v2_start", "payload": {"ticker": "FCF", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:51.081433+00:00", "step": "v2_data_completeness", "payload": {"ticker": "GOOGL", "filled": [], "elapsed_ms": 30002}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:52.151444+00:00", "step": "v2_ontology", "payload": {"ticker": "GOOGL", "node_count": 50, "elapsed_ms": 1528}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:52.161971+00:00", "step": "v2_data_completeness", "payload": {"ticker": "NVDA", "filled": [], "elapsed_ms": 31492}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:53.797637+00:00", "step": "v2_ontology", "payload": {"ticker": "NVDA", "node_count": 50, "elapsed_ms": 1635}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:53.803281+00:00", "step": "v2_data_completeness", "payload": {"ticker": "FCF", "filled": [], "elapsed_ms": 33087}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:54.989990+00:00", "step": "v2_ontology", "payload": {"ticker": "FCF", "node_count": 14, "elapsed_ms": 1186}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:54.993449+00:00", "step": "v2_evidence_build", "payload": {"ticker": "GOOGL", "claims": 66, "structured_facts": 60, "sources": 15, "missing_fields": [], "teaser_risk": 0.0, "diversity": 4, "elapsed_ms": 2831}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:54.997985+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "GOOGL", "status": "sufficient", "blockers": [], "warnings": []}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:55.006959+00:00", "step": "v2_evidence_build", "payload": {"ticker": "NVDA", "claims": 62, "structured_facts": 60, "sources": 15, "missing_fields": [], "teaser_risk": 0.13333333333333333, "diversity": 4, "elapsed_ms": 1209}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:55.007110+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "NVDA", "status": "sufficient", "blockers": [], "warnings": []}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:55.051227+00:00", "step": "v2_memory_read", "payload": {"ticker": "GOOGL", "episodes": 0, "rules": 0}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:55.059465+00:00", "step": "v2_evidence_build", "payload": {"ticker": "FCF", "claims": 51, "structured_facts": 47, "sources": 15, "missing_fields": [], "teaser_risk": 0.13333333333333333, "diversity": 4, "elapsed_ms": 69}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:55.059597+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "FCF", "status": "sufficient", "blockers": [], "warnings": []}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:55.078646+00:00", "step": "v2_memory_read", "payload": {"ticker": "FCF", "episodes": 0, "rules": 0}}
+{"cycle_id": "cycle-1779322511", "timestamp": "2026-05-21T00:15:55.101311+00:00", "step": "v2_memory_read", "payload": {"ticker": "NVDA", "episodes": 5, "rules": 0}}

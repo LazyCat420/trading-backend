@@ -77,7 +77,7 @@ async def maybe_learn(
         # Truncate to 400 chars
         lesson = cleaned[:400]
 
-        from app.services.trading_memory import trading_memory
+        from app.cognition.trading_memory import trading_memory
 
         add_result = trading_memory.add("market", lesson)
         if not add_result.get("success"):

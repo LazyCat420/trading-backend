@@ -437,11 +437,13 @@ class ToolRegistry:
         t0 = time.monotonic()
         try:
             import os
+            service_source = "trading-service"
             if os.environ.get("USE_LAZY_TOOL_SERVICE", "false").lower() == "true":
                 import httpx
                 port = os.environ.get("LAZY_TOOL_SERVICE_PORT", "5591")
                 url = f"http://localhost:{port}/execute/{func_name}"
                 logger.info("[ToolRegistry] Forwarding execution of '%s' to lazy-tool-service: %s", func_name, url)
+                service_source = "lazy-tool-service"
                 async with httpx.AsyncClient(timeout=120.0) as client:
                     resp = await client.post(url, json=kwargs)
                     if resp.status_code != 200:
@@ -462,25 +464,29 @@ class ToolRegistry:
             result = self._truncate_result(func_name, result)
 
             elapsed_ms = int((time.monotonic() - t0) * 1000)
-            self._log_usage(func_name, agent_name, ticker, cycle_id, True, elapsed_ms)
+            self._log_usage(func_name, agent_name, ticker, cycle_id, True, elapsed_ms, service_source=service_source)
 
             return {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
                 "name": func_name,
                 "content": result,
+                "service_source": service_source,
             }
         except Exception as e:
             elapsed_ms = int((time.monotonic() - t0) * 1000)
             logger.exception("[ToolRegistry] Tool execution failed for %s", func_name)
+            import os
+            service_source = "lazy-tool-service" if os.environ.get("USE_LAZY_TOOL_SERVICE", "false").lower() == "true" else "trading-service"
             self._log_usage(
-                func_name, agent_name, ticker, cycle_id, False, elapsed_ms, str(e)
+                func_name, agent_name, ticker, cycle_id, False, elapsed_ms, str(e), service_source=service_source
             )
             return {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
                 "name": func_name,
                 "content": json.dumps({"error": str(e)}),
+                "service_source": service_source,
             }
 
     def _log_usage(
@@ -492,6 +498,7 @@ class ToolRegistry:
         success: bool = True,
         execution_ms: int = 0,
         error_message: str | None = None,
+        service_source: str = "trading-service",
     ) -> None:
         """Log a tool usage event to PostgreSQL (fire-and-forget)."""
         try:
@@ -500,8 +507,8 @@ class ToolRegistry:
             with get_db() as db:
                 db.execute(
                     "INSERT INTO tool_usage_stats "
-                    "(tool_name, agent_name, ticker, cycle_id, success, execution_ms, error_message) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    "(tool_name, agent_name, ticker, cycle_id, success, execution_ms, error_message, service_source) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                     [
                         tool_name,
                         agent_name,
@@ -510,6 +517,7 @@ class ToolRegistry:
                         success,
                         execution_ms,
                         error_message,
+                        service_source,
                     ],
                 )
         except Exception as e:

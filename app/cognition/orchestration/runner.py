@@ -1094,7 +1094,7 @@ async def execute_v2_tickers(
 
     # Load memory snapshot once for the cycle (same pattern as V1)
     try:
-        from app.services.trading_memory import trading_memory
+        from app.cognition.trading_memory import trading_memory
 
         trading_memory.load_from_disk()
     except Exception as mem_err:

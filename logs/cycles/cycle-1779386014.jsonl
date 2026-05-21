@@ -1,0 +1,7 @@
+{"cycle_id": "cycle-1779386014", "timestamp": "2026-05-21T17:54:46.866359+00:00", "step": "v2_start", "payload": {"ticker": "CHRW", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "cycle-1779386014", "timestamp": "2026-05-21T17:54:47.364448+00:00", "step": "v2_data_completeness", "payload": {"ticker": "CHRW", "filled": [], "elapsed_ms": 497}}
+{"cycle_id": "cycle-1779386014", "timestamp": "2026-05-21T17:54:48.361961+00:00", "step": "v2_ontology", "payload": {"ticker": "CHRW", "node_count": 18, "elapsed_ms": 996}}
+{"cycle_id": "cycle-1779386014", "timestamp": "2026-05-21T17:54:48.431651+00:00", "step": "v2_evidence_build", "payload": {"ticker": "CHRW", "claims": 66, "structured_facts": 60, "sources": 10, "missing_fields": [], "teaser_risk": 0.0, "diversity": 3, "elapsed_ms": 60}}
+{"cycle_id": "cycle-1779386014", "timestamp": "2026-05-21T17:54:48.435112+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "CHRW", "status": "sufficient", "blockers": [], "warnings": []}}
+{"cycle_id": "cycle-1779386014", "timestamp": "2026-05-21T17:54:48.512932+00:00", "step": "v2_memory_read", "payload": {"ticker": "CHRW", "episodes": 2, "rules": 0}}
+{"cycle_id": "cycle-1779386014", "timestamp": "2026-05-21T17:55:06.525312+00:00", "step": "v2_meta_orchestration", "payload": {"ticker": "CHRW", "agent_count": 3, "agent_keys": ["macro_risk", "sentiment", "fundamentals"], "tokens": 34110, "elapsed_ms": 18025}}

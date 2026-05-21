@@ -8,7 +8,7 @@ gives confidence bonuses to proven winners.
 Extends the existing outcome_tracker.py with prompt-level tracking.
 
 Usage:
-    from app.pipeline.strategy_tracker import (
+    from app.trading.strategy_tracker import (
         record_strategy, evaluate_pnl, compute_rankings,
         get_confidence_bonus, bench_underperformers,
     )

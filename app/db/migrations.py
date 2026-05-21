@@ -798,3 +798,8 @@ def _fix_eth_cagr_data(conn):
             conn.rollback()
         except Exception:
             pass
+
+    # ── Telemetry Logging column migrations ──
+    _safe_add_column(conn, "tool_usage_stats", "service_source", "TEXT DEFAULT 'trading-service'")
+    _safe_add_column(conn, "agent_traces", "service_source", "TEXT DEFAULT 'trading-service'")
+

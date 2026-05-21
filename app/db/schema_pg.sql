@@ -2023,6 +2023,7 @@ CREATE TABLE IF NOT EXISTS tool_usage_stats (
     success         BOOLEAN DEFAULT TRUE,
     execution_ms    INTEGER DEFAULT 0,
     error_message   TEXT,
+    service_source  TEXT DEFAULT 'trading-service',
     called_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -2143,6 +2144,7 @@ CREATE TABLE IF NOT EXISTS agent_traces (
     stop_reason         TEXT,
     endpoint_name       TEXT,
     model_name          TEXT,
+    service_source      TEXT DEFAULT 'trading-service',
     created_at          TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_agent_traces_run ON agent_traces(run_id);

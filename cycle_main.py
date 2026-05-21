@@ -318,6 +318,9 @@ async def start_health_server(shutdown_event: asyncio.Event):
         from app.cycle.orchestration.state_manager import PipelineStateMixin
         return PipelineStateMixin.get_current_state(summary_only=summary_only)
 
+    from app.services.vllm_router import router as vllm_router
+    app.include_router(vllm_router)
+
     config = uvicorn.Config(app, host="0.0.0.0", port=8080, log_level="error")
     server = uvicorn.Server(config)
     

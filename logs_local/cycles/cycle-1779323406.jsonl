@@ -1,0 +1,7 @@
+{"cycle_id": "cycle-1779323406", "timestamp": "2026-05-21T00:30:16.805119+00:00", "step": "v2_start", "payload": {"ticker": "AAPL", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "cycle-1779323406", "timestamp": "2026-05-21T00:30:46.079973+00:00", "step": "v2_data_completeness", "payload": {"ticker": "AAPL", "filled": [], "elapsed_ms": 30029}}
+{"cycle_id": "cycle-1779323406", "timestamp": "2026-05-21T00:30:47.238072+00:00", "step": "v2_ontology", "payload": {"ticker": "AAPL", "node_count": 28, "elapsed_ms": 1156}}
+{"cycle_id": "cycle-1779323406", "timestamp": "2026-05-21T00:30:47.302031+00:00", "step": "v2_evidence_build", "payload": {"ticker": "AAPL", "claims": 59, "structured_facts": 56, "sources": 13, "missing_fields": [], "teaser_risk": 0.0, "diversity": 4, "elapsed_ms": 53}}
+{"cycle_id": "cycle-1779323406", "timestamp": "2026-05-21T00:30:47.305031+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "AAPL", "status": "sufficient", "blockers": [], "warnings": []}}
+{"cycle_id": "cycle-1779323406", "timestamp": "2026-05-21T00:30:47.341476+00:00", "step": "v2_memory_read", "payload": {"ticker": "AAPL", "episodes": 0, "rules": 0}}
+{"cycle_id": "cycle-1779323406", "timestamp": "2026-05-21T00:31:20.541119+00:00", "step": "v2_meta_orchestration", "payload": {"ticker": "AAPL", "agent_count": 3, "agent_keys": ["macro_risk", "sentiment", "fundamentals"], "tokens": 8559, "elapsed_ms": 33962}}

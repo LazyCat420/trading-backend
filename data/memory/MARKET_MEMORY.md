@@ -1,0 +1,1 @@
+[AAPL] [HIGH] RSI(14) > 70 + P/E 36.6 near 52w high = strong SELL signal (95% confidence)

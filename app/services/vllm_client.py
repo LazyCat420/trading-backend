@@ -224,6 +224,30 @@ class VLLMEndpoint:
         return qs > self.max_concurrent * MAX_QUEUE_DEPTH_MULTIPLIER
 
 
+_last_failure_times = {}
+
+def _record_endpoint_failure(ep: VLLMEndpoint, cb_threshold: int, reason: str):
+    now = time.monotonic()
+    if ep.circuit_open_until > now:
+        return
+        
+    last_t = _last_failure_times.get(ep.name, 0.0)
+    if now - last_t < 0.2:
+        return
+        
+    _last_failure_times[ep.name] = now
+    ep.consecutive_batch_failures += 1
+    if ep.consecutive_batch_failures >= cb_threshold:
+        ep.circuit_open_until = now + CIRCUIT_BREAKER_COOLDOWN
+        logger.error(
+            "[BATCH] 🔴 %s CIRCUIT BREAKER OPEN after %s — disabling for %ds",
+            ep.name,
+            reason,
+            CIRCUIT_BREAKER_COOLDOWN,
+        )
+        ep.consecutive_batch_failures = 0
+
+
 class VLLMClient:
     # Reserve 1 slot for HIGH priority (user chat) — pipeline can use max_concurrent-1
     RESERVED_HIGH_SLOTS = 1
@@ -604,25 +628,38 @@ class VLLMClient:
                 try:
                     from app.pipeline.orchestration.cycle_control import cycle_control
                     if cycle_control.is_stopped:
-                        # Drain and cancel all pending futures in the queue
+                        # Drain and cancel all pending NORMAL and LOW priority futures in the queue
+                        # Keep HIGH priority items in the queue
                         drained = 0
+                        temp_list = []
                         while not ep.queue.empty():
                             try:
                                 item = ep.queue.get_nowait()
-                                if not item.future.done():
-                                    item.future.cancel()
-                                ep.queue.task_done()
-                                drained += 1
+                                if item.priority > Priority.HIGH:
+                                    if not item.future.done():
+                                        item.future.cancel()
+                                    ep.queue.task_done()
+                                    drained += 1
+                                else:
+                                    temp_list.append(item)
                             except asyncio.QueueEmpty:
                                 break
+                        
+                        # Put HIGH priority items back into the queue
+                        for item in temp_list:
+                            await ep.queue.put(item)
+
                         if drained:
                             logger.info(
                                 "[QUEUE] %s drained %d items on pipeline stop",
                                 ep.name, drained,
                             )
-                        # Wait briefly before checking again (don't spin)
-                        await asyncio.sleep(0.5)
-                        continue
+                        
+                        # If queue is empty of HIGH priority items, wait and continue
+                        if ep.queue.empty():
+                            # Wait briefly before checking again (don't spin)
+                            await asyncio.sleep(0.5)
+                            continue
                 except ImportError:
                     pass
 
@@ -659,7 +696,7 @@ class VLLMClient:
                 # Check stop again after waking from queue.get()
                 try:
                     from app.pipeline.orchestration.cycle_control import cycle_control
-                    if cycle_control.is_stopped:
+                    if cycle_control.is_stopped and item.priority > Priority.HIGH:
                         if not item.future.done():
                             item.future.cancel()
                         ep.queue.task_done()
@@ -681,6 +718,8 @@ class VLLMClient:
                             self._execute_item(item, ep, release_pipeline=item.priority > Priority.HIGH),
                             timeout=batch_timeout
                         )
+                        if item.future.done() and item.future.exception() is not None:
+                            raise item.future.exception()
                         ep.consecutive_batch_failures = 0
                     except asyncio.TimeoutError:
                         logger.error(
@@ -695,15 +734,7 @@ class VLLMClient:
                                 )
                             )
                         ep.timeout_penalty_until = time.monotonic() + TIMEOUT_PENALTY_SECONDS
-                        ep.consecutive_batch_failures += 1
-                        if ep.consecutive_batch_failures >= cb_threshold:
-                            ep.circuit_open_until = time.monotonic() + CIRCUIT_BREAKER_COOLDOWN
-                            logger.error(
-                                "[BATCH] 🔴 %s CIRCUIT BREAKER OPEN after request timeout — disabling for %ds",
-                                ep.name,
-                                CIRCUIT_BREAKER_COOLDOWN,
-                            )
-                            ep.consecutive_batch_failures = 0
+                        _record_endpoint_failure(ep, cb_threshold, "request timeout")
                     except asyncio.CancelledError:
                         logger.warning(
                             "[VLLM] 🛑 Active request cancelled for agent=%s ticker=%s",
@@ -715,15 +746,7 @@ class VLLMClient:
                         raise
                     except Exception as err:
                         logger.exception("[VLLM] Request failed for agent=%s ticker=%s: %s", item.metadata.get("agent_name"), item.metadata.get("ticker"), err)
-                        ep.consecutive_batch_failures += 1
-                        if ep.consecutive_batch_failures >= cb_threshold:
-                            ep.circuit_open_until = time.monotonic() + CIRCUIT_BREAKER_COOLDOWN
-                            logger.error(
-                                "[BATCH] 🔴 %s CIRCUIT BREAKER OPEN after error — disabling for %ds",
-                                ep.name,
-                                CIRCUIT_BREAKER_COOLDOWN,
-                            )
-                            ep.consecutive_batch_failures = 0
+                        _record_endpoint_failure(ep, cb_threshold, "error")
                     finally:
                         ep.queue.task_done()
                         ep.slots.release()
@@ -1535,9 +1558,18 @@ class VLLMClient:
 
         effective_model = target_ep.model or model_override or self.model
 
+        # Sanitize messages to remove non-standard keys like 'service_source' before sending to LLM
+        sanitized_messages = []
+        for msg in messages:
+            if isinstance(msg, dict):
+                clean_msg = {k: v for k, v in msg.items() if k != "service_source"}
+                sanitized_messages.append(clean_msg)
+            else:
+                sanitized_messages.append(msg)
+
         payload: dict[str, Any] = {
             "model": effective_model,
-            "messages": messages,
+            "messages": sanitized_messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }

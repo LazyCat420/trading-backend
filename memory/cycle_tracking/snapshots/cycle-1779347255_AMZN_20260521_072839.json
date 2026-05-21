@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 0,
+  "rationale": "Failed to parse thesis. Invalid JSON format. Raw: # AMZN \u2014 Amazon.com Inc.\n**Current Price**: $264.14 | **Change**: +N/A% (Data from May 15, 2026)\n**Rating**: \u2b50\u2b50\u2b50\u2b50\u2b50 (5/5 Alpha \u2014 **FULL SEND**)\n\n### Quick Verdict\n**WE ARE BUYING THIS MONSTER.** Amazon is printing money, AWS is the cash cow, and the s...\n\n\ud83d\udcc5 Data timeframe: 2025-09-30 00:00 UTC to 2026-05-21 04:44 UTC\n\n\ud83d\udcdd Memory context: - [2026-05-06] pipeline_run: HOLD (conf=65)",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

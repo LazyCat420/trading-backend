@@ -9,7 +9,7 @@ FILE OWNERSHIP (Does not use SQL):
 - data/memory/PORTFOLIO.md
 
 Usage:
-    from app.services.trading_memory import trading_memory
+    from app.cognition.trading_memory import trading_memory
     trading_memory.load_from_disk()
     snapshot = trading_memory.get_frozen_snapshot()
 """
