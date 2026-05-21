@@ -253,3 +253,41 @@ class TestPhase3JetsonBypassRemoved:
         assert "Unified Telemetry" in source or "ALL endpoints route" in source, (
             "Phase 3 comment about unified routing is missing from vllm_client.py"
         )
+
+
+class TestActiveRequestCancellation:
+    """Verify that VLLMClient active request tracking and cancellation works."""
+
+    def test_cancel_active_requests(self):
+        import asyncio
+        from app.services.vllm_client import VLLMClient
+
+        client = VLLMClient()
+        
+        # Mock some tasks
+        async def dummy_coro():
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                pass
+
+        loop = asyncio.get_event_loop()
+        task1 = loop.create_task(dummy_coro())
+        task2 = loop.create_task(dummy_coro())
+
+        client._active_tasks.add(task1)
+        client._active_tasks.add(task2)
+
+        # Call cancel_active_requests
+        cancelled = client.cancel_active_requests()
+        assert cancelled == 2
+
+        # Allow event loop to propagate cancellation
+        loop.run_until_complete(asyncio.sleep(0.01))
+
+        assert task1.cancelled() or task1.done()
+        assert task2.cancelled() or task2.done()
+
+        # Clean up
+        task1.cancel()
+        task2.cancel()

@@ -288,8 +288,10 @@ class LifecycleControllerMixin:
     @classmethod
     async def stop_cycle(cls) -> dict:
         from app.cycle.orchestration.cycle_control import cycle_control
+        from app.services.vllm_client import llm
 
         cycle_control.stop()
+        llm.cancel_active_requests()
 
         for name, task in [
             ("scout", getattr(cls, "_scout_task", None)),
@@ -523,6 +525,10 @@ class LifecycleControllerMixin:
         'interrupted' so that reset_on_boot() on the next startup will
         offer the user a Resume / Start Fresh choice.
         """
+        from app.services.vllm_client import llm
+
+        llm.cancel_active_requests()
+
         # If cycle already completed successfully, skip all checkpoint logic.
         # This prevents uvicorn --reload from overriding "done" to "stopped".
         current_status = cls._state.get("status", "idle")

@@ -284,6 +284,8 @@ class VLLMClient:
         self._rediscovery_task: asyncio.Task | None = None
         # Role discovery flag
         self._roles_discovered: bool = False
+        # Active background tasks representing running requests
+        self._active_tasks: set[asyncio.Task] = set()
 
     # ── Endpoint configuration ─────────────────────────────────────────
 
@@ -702,6 +704,15 @@ class VLLMClient:
                                 CIRCUIT_BREAKER_COOLDOWN,
                             )
                             ep.consecutive_batch_failures = 0
+                    except asyncio.CancelledError:
+                        logger.warning(
+                            "[VLLM] 🛑 Active request cancelled for agent=%s ticker=%s",
+                            item.metadata.get("agent_name"),
+                            item.metadata.get("ticker"),
+                        )
+                        if not item.future.done():
+                            item.future.cancel()
+                        raise
                     except Exception as err:
                         logger.exception("[VLLM] Request failed for agent=%s ticker=%s: %s", item.metadata.get("agent_name"), item.metadata.get("ticker"), err)
                         ep.consecutive_batch_failures += 1
@@ -717,7 +728,9 @@ class VLLMClient:
                         ep.queue.task_done()
                         ep.slots.release()
 
-                asyncio.create_task(run_and_release())
+                task = asyncio.create_task(run_and_release())
+                self._active_tasks.add(task)
+                task.add_done_callback(self._active_tasks.discard)
 
             except asyncio.CancelledError:
                 break
@@ -2534,10 +2547,29 @@ class VLLMClient:
             logger.info("[VLLM] Drained %d queued items on stop", total_drained)
         return total_drained
 
+    def cancel_active_requests(self) -> int:
+        """Cancel all active background vLLM HTTP requests.
+
+        Called when stopping a cycle or shutting down to prevent remote boxes
+        from processing stale requests.
+        """
+        cancelled_count = 0
+        for task in list(self._active_tasks):
+            if not task.done():
+                task.cancel()
+                cancelled_count += 1
+        if cancelled_count:
+            logger.info("[VLLM] Cancelled %d active background requests", cancelled_count)
+        return cancelled_count
+
     async def close(self):
         """Shutdown the persistent HTTP client and dispatchers."""
-        # Drain any remaining queued items first
+        # Cancel and drain active/queued requests first
+        self.cancel_active_requests()
         self.drain_queues()
+        # Wait for active tasks to finalize/cancel
+        if self._active_tasks:
+            await asyncio.gather(*self._active_tasks, return_exceptions=True)
         for ep in self._endpoints.values():
             if ep.dispatcher_task and not ep.dispatcher_task.done():
                 ep.dispatcher_task.cancel()
