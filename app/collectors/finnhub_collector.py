@@ -33,9 +33,13 @@ async def collect_news(ticker: str, days_back: int = 7) -> int:
     This proxy ensures all news scraping goes through the unified engine 
     which visits URLs to extract full article bodies.
     """
-    from app.collectors.news_collector import collect_finnhub_news
-    logger.info(f"[finnhub_collector] Proxying collect_news({ticker}) to robust news_collector...")
-    return await collect_finnhub_news(ticker, days=days_back)
+    try:
+        from app.collectors.news_collector import collect_finnhub_news
+        logger.info(f"[finnhub_collector] Proxying collect_news({ticker}) to robust news_collector...")
+        return await collect_finnhub_news(ticker, days=days_back)
+    except Exception as e:
+        logger.error(f"[finnhub_collector] Proxy call error: {e}")
+        return 0
 
 
 async def collect_analyst_targets(ticker: str) -> bool:

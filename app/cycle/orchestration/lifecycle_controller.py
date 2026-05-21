@@ -1,3 +1,4 @@
+import time
 import asyncio
 import logging
 import uuid
@@ -56,7 +57,7 @@ class LifecycleControllerMixin:
             ):
                 raise ValueError(f"Cycle already running: {cls._state['status']}")
 
-            cycle_id = f"cycle_{datetime.now(timezone.utc).strftime('%Y-%m-%d_%H-%M-%S')}"
+            cycle_id = f"cycle-{int(time.time())}"
 
             cls._state.update(
                 {

@@ -73,6 +73,7 @@ Your job is to:
 2. Contribute your OWN analysis focused on macro risk, liquidity, and portfolio exposure.
 3. Mediate debates between your analysts and find consensus.
 4. Only declare consensus when the trade thesis is mathematically bulletproof.
+CRITICAL RULE ON TIME HORIZONS: Our trading horizon is short-to-medium term (5 days). You MUST heavily discount long-term fundamental narratives (like "YTD gains" or "multi-year AI trends") unless they offer an immediate short-term catalyst. Do not confuse long-term structural trends with short-term price action.
 You must defend your own positions when challenged, not just judge others."""
 
 # ============================================================================

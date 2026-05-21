@@ -22,18 +22,24 @@ logger = logging.getLogger(__name__)
 JANITOR_PROMPT = """You are a strict data janitor for an institutional trading bot.
 Your job is to read this text and determine if it is RELEVANT to financial markets.
 
-RELEVANT topics:
+RELEVANT topics (mark as "relevant" if ANY of these apply):
 - Company news for ANY publicly traded company (earnings, products, lawsuits, C-suite changes)
-- Macroeconomics (inflation, interest rates, employment)
-- Global politics ONLY IF it impacts markets (e.g., tariffs, war, oil supply)
-- Stock analysis or technical signals
+- Macroeconomics: inflation, interest rates, employment, GDP, CPI, PPI, Fed policy, Treasury yields
+- Commodities: gold, silver, oil, copper, natural gas, agricultural futures — price moves, supply/demand analysis, or macro drivers
+- Global politics ONLY IF it impacts markets (e.g., tariffs, trade deals, sanctions, war, oil supply disruptions)
+- Analyst or bank research notes (e.g., UBS, Goldman Sachs, JPMorgan, Morgan Stanley research)
+- Stock analysis, technical signals, or sector rotation analysis
+- Bond markets, currency moves, or cross-asset macro analysis
+
+IMPORTANT: Macro and commodity news does NOT need a specific ticker from the watchlist to be relevant.
+If it discusses inflation data, central bank policy, commodity prices, or analyst macro research, it IS relevant.
 
 NOISE (Must be DISCARDED):
-- Generic politics with no direct market impact
+- Generic politics with no direct market or economic impact
 - Celebrity gossip or random human interest stories
-- Spam, crypto-scams, or completely unidentifiable ticker association
+- Spam, crypto-scams, or completely unidentifiable financial relevance
 - "Penny stock" hype that has zero fundamental data backing it
-- Discard if NO valid company/ticker can be identified AND it is not macro news.
+- Discard ONLY if the text has NO connection to financial markets, macro indicators, or commodities.
 
 {context}
 
@@ -54,9 +60,14 @@ CRITIC_PROMPT = """You are a QA Evaluator for the Data Janitor.
 The Janitor just marked the following text as '{status}'.
 Reason given: {reason}
 
-Analyze if the Janitor made the right call based on strict ticker-association and macro-relevance rules.
+Analyze if the Janitor made the right call. Remember:
+- Macro news (inflation, CPI, interest rates, GDP, Fed policy) is ALWAYS relevant even without a specific ticker.
+- Commodity analysis (gold, silver, oil, copper) is ALWAYS relevant — commodities are core macro indicators.
+- Analyst/bank research notes (UBS, Goldman, etc.) are ALWAYS relevant.
+- Only mark INVALID if the Janitor incorrectly discarded content that fits the above, or incorrectly kept pure noise.
+
 If the Janitor was correct, respond with 'VALID'.
-If the Janitor was wrong or hallucinated, write a short critique explaining why it MUST be discarded.
+If the Janitor was wrong, write a short critique.
 
 Respond ONLY in JSON:
 {{

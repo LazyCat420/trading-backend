@@ -12,6 +12,19 @@ from pydantic_settings import BaseSettings
 ROOT_DIR = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT_DIR / ".env"
 
+if not ENV_FILE.exists():
+    for parent in Path(__file__).resolve().parents:
+        if (parent / ".env").exists():
+            ENV_FILE = parent / ".env"
+            break
+        elif (parent / "trading-client" / ".env").exists():
+            ENV_FILE = parent / "trading-client" / ".env"
+            break
+        elif (parent / "trading-service" / ".env").exists():
+            ENV_FILE = parent / "trading-service" / ".env"
+            break
+
+
 # Ensure data directories exist
 DATA_DIR = ROOT_DIR / "data"
 MEMORY_DB_PATH = DATA_DIR / "memory.db"
@@ -55,7 +68,7 @@ class Settings(BaseSettings):
     )
     VLLM_FUTURE_TIMEOUT: int = 180  # seconds before a hung LLM future is killed (aligned with batch timeout)
     ANALYSIS_WORKER_TIMEOUT_SECONDS: int = (
-        300  # 5-min hard cap per ticker — aligned with debate timeout
+        600  # 10-min hard cap per ticker — aligned with debate timeout
     )
     BOT_ID: str = "lazy-trader-v4"
     COLLECTION_MAX_CONCURRENT: int = 5  # parallel per-ticker scrapers
@@ -74,6 +87,7 @@ class Settings(BaseSettings):
     PIPELINE_QUEUE_LOW_WATERMARK: int = 100
     EMBEDDING_SERVER_URL: str = "http://localhost:8001/embed"
     REDIS_URL: str = "redis://localhost:6379"
+    SCRAPER_SERVICE_URL: str = "http://scraper-service:8001"
 
     # ── Per-API Concurrency Limits ──
     # Caps concurrent requests to each external service when multiple
@@ -179,10 +193,9 @@ class Settings(BaseSettings):
     PRISM_USERNAME: str = "lazy-trader"
     PRISM_ENABLED: bool = True
     PRISM_AGENT: str = "CUSTOM_MARKET_ALPHA"  # Routes through the CUSTOM_MARKET_ALPHA persona in Prism — custom agent with tailored trading tools
-    PRISM_AGENT_ROUTING: bool = False  # False = direct vLLM + offline sync (avoids Prism's agentic loop conflicting with local tool execution)
+    PRISM_AGENT_ROUTING: bool = True  # Always route through Prism /agent as requested.
     PRISM_MONGO_URI: str = "mongodb://10.0.0.16:27017/?directConnection=true"
     PRISM_MONGO_DB: str = "prism"
-    OFFLINE_SYNC_ENABLED: bool = True  # Toggle offline shadow-logging to Prism (can also be toggled at runtime via API)
 
     # ── SEC 13F Tracking ──
     SEC_USER_AGENT: str = "vllm-trading-bot analysis@example.com"

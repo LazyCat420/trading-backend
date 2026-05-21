@@ -11,7 +11,19 @@ class LogManager:
     AB_DIR = CYCLE_DIR / "ab_results"
 
     def __init__(self):
-        self.CYCLE_DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            self.CYCLE_DIR.mkdir(parents=True, exist_ok=True)
+            # Test write access
+            test_file = self.CYCLE_DIR / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+        except (PermissionError, OSError):
+            # Fallback to local logs directory if default logs dir is not writable
+            self.BASE_DIR = Path("logs_local")
+            self.CYCLE_DIR = self.BASE_DIR / "cycles"
+            self.AB_DIR = self.CYCLE_DIR / "ab_results"
+            self.CYCLE_DIR.mkdir(parents=True, exist_ok=True)
+
         self.AB_DIR.mkdir(parents=True, exist_ok=True)
 
     @staticmethod

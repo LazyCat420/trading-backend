@@ -84,6 +84,9 @@ from app.tools.script_sandbox import execute_quant_script
 # Phase 6: Prism Agent Harness (Onion Layer)
 from app.tools.prism_agent_harness import run_prism_agent
 
+# Phase 11: LLM-Steered Data Collection
+from app.tools.collection_request_tool import request_data_collection
+
 __all__ = [
     "registry",
     "PermissionLevel",
@@ -146,4 +149,6 @@ __all__ = [
     # Phase 10: Capsule Context Tools
     "get_cycle_context",
     "get_cycle_context_all",
+    # Phase 11: LLM-Steered Data Collection
+    "request_data_collection",
 ]

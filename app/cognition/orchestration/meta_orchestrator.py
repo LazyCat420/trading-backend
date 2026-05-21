@@ -87,4 +87,34 @@ class MetaOrchestrator:
         except Exception as e:
             logger.error(f"[{entity_id}] MetaOrchestrator execution crashed: {e}")
 
+        # ── Auto-post specialist findings to TaskBoard for agent collaboration ──
+        # This enables debate agents and the thesis generator to read what
+        # each specialist discovered, creating actual inter-agent collaboration.
+        try:
+            from app.agents.task_board import task_board
+
+            for label, insight in results.items():
+                if isinstance(insight, str) and not insight.startswith("Error:"):
+                    # Truncate long insights to keep the TaskBoard manageable
+                    snippet = insight[:500] if len(insight) > 500 else insight
+                    await task_board.post_finding(
+                        source_agent=f"{label}_agent",
+                        content=snippet,
+                        ticker=entity_id,
+                        cycle_id=cycle_id,
+                        category="fact",
+                        confidence=75,
+                    )
+            if results:
+                logger.info(
+                    "[%s] MetaOrchestrator: Posted %d specialist findings to TaskBoard",
+                    entity_id, len([v for v in results.values() if not str(v).startswith("Error:")]),
+                )
+        except Exception as tb_err:
+            logger.warning(
+                "[%s] MetaOrchestrator: TaskBoard post failed (non-fatal): %s",
+                entity_id, tb_err,
+            )
+
         return results, total_tokens
+

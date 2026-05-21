@@ -453,6 +453,48 @@ async def execute_v2_pipeline(
             pos_err,
         )
 
+    # ── Step 5.65: Read team findings from TaskBoard ─────────────────
+    # Pulls findings posted by specialist agents (via MetaOrchestrator)
+    # and injects them into agent_insights so the debate sees team context.
+    team_findings_summary = ""
+    try:
+        from app.agents.task_board import task_board
+
+        findings = await task_board.get_findings(
+            ticker=ticker,
+            cycle_id=cycle_id,
+        )
+        if findings:
+            finding_lines = []
+            for f in findings[:10]:  # Cap at 10 to avoid context bloat
+                src = f.get("source_agent", "?")
+                cat = f.get("category", "fact")
+                content = f.get("content", "")[:200]
+                conf = f.get("confidence", 0)
+                finding_lines.append(
+                    f"- [{cat.upper()}] ({src}, conf={conf}): {content}"
+                )
+            team_findings_summary = "\n".join(finding_lines)
+            if agent_insights is None:
+                agent_insights = {}
+            agent_insights["team_findings"] = (
+                f"# TEAM FINDINGS FROM SPECIALIST AGENTS\n"
+                f"{len(findings)} findings shared by team:\n"
+                f"{team_findings_summary}"
+            )
+            logger.info(
+                "[V2] [COLLAB] Injected %d team findings for %s into debate context",
+                len(findings), ticker,
+            )
+            emit(
+                "analyzing",
+                f"v2_team_findings_{ticker}",
+                f"{ticker}: {len(findings)} team findings injected into debate context",
+                status="ok",
+            )
+    except Exception as tb_err:
+        logger.debug("[V2] TaskBoard read failed for %s (non-fatal): %s", ticker, tb_err)
+
     debate_result = None
     try:
         from app.cognition.debate.debate_coordinator import (

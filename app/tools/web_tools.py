@@ -528,21 +528,6 @@ async def stream_hermes_chat(
             yield f"Error: Failed to connect to Hermes stream. All endpoints unreachable. Last error: {last_error}"
             return
 
-        # If no tools were called, the LLM has finished its response.
-        if not tool_calls_this_turn:
-            from app.services.prism_client import PrismClient
-            import asyncio
-
-            prism_client = PrismClient()
-            if prism_client.enabled and prism_client.offline_sync_enabled:
-                asyncio.create_task(
-                    prism_client.offline_log(
-                        messages=messages,
-                        response_text="".join(full_response),
-                        model_name=model_name,
-                        system_prompt=system,
-                    )
-                )
             return
 
         # We had tool calls! Append the assistant's action to messages

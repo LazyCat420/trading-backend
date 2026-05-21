@@ -1,36 +1,26 @@
 """
-Reddit Collector -- Fetches posts from financial subreddits via Reddit's public JSON API.
+Reddit Collector -- Fetches posts from financial subreddits via scraper-service.
 
 Pure data collector. No LLM calls in the base collection.
 Writes to: reddit_posts, discovered_tickers
 
-Three search strategies:
-  1. General sweep: Top posts from each financial subreddit
-  2. Subreddit-scoped search: Search within EACH financial sub for a ticker
-  3. Multi-query search: Multiple query variants to catch different post styles
-
-No API key needed -- uses Reddit's public .json endpoint.
+No API key needed -- uses scraper-service.
 """
 
 import logging
-
-logger = logging.getLogger(__name__)
-
-
 import hashlib
 import re
 import datetime
 import asyncio
-from tenacity import retry, stop_after_attempt, wait_fixed
 from app.db.connection import get_db
-from app.services.request_utils import SmartClient
 from app.processors.ticker_extractor import (
     get_ticker_symbols,
     FALSE_TICKERS as SHARED_FALSE_TICKERS,
 )
 
+logger = logging.getLogger(__name__)
+
 # Reverse lookup: ticker -> company names (for searching by company name)
-# Uses the same map as news_collector to stay consistent
 _TICKER_TO_NAMES: dict[str, list[str]] = {}
 
 
@@ -63,7 +53,6 @@ SUBREDDITS = [
 ]
 
 # High-signal subs to prioritize in ticker-specific search
-# (these are more likely to have quality analysis posts)
 PRIORITY_SUBS = [
     "wallstreetbets",
     "stocks",
@@ -76,60 +65,11 @@ PRIORITY_SUBS = [
     "smallstreetbets",
 ]
 
-# Regex for $TICKER mentions
-TICKER_PATTERN = re.compile(r"\$([A-Z]{1,5})\b")
-# Also match bare uppercase tickers in financial context
-BARE_TICKER_PATTERN = re.compile(r"\b([A-Z]{2,5})\b")
-
 # Common false positives to filter out
 FALSE_TICKERS = SHARED_FALSE_TICKERS
 
-# Known real tickers that might look like common words
-KNOWN_TICKERS = {
-    "NVDA",
-    "AAPL",
-    "TSLA",
-    "MSFT",
-    "GOOG",
-    "GOOGL",
-    "AMZN",
-    "META",
-    "AMD",
-    "PLTR",
-    "SOFI",
-    "SMCI",
-    "ARM",
-    "AVGO",
-    "MRVL",
-    "INTC",
-    "BTC",
-    "ETH",
-    "SOL",
-    "XRP",
-    "DOGE",
-    "SPY",
-    "QQQ",
-    "IWM",
-    "DIA",
-    "VTI",
-    "JPM",
-    "BAC",
-    "GS",
-    "WFC",
-    "DIS",
-    "NFLX",
-    "COST",
-    "WMT",
-    "TGT",
-    "V",
-    "MA",
-    "PYPL",
-    "SQ",
-    "COIN",
-}
 
-
-def _is_quality_post(post: dict) -> bool:
+def _is_quality_post(post: dict, min_score: int = 3, min_comments: int = 2) -> bool:
     """Fast deterministic filter -- no LLM needed.
 
     Filters out memes, low-effort, deleted, and below-threshold posts.
@@ -137,7 +77,7 @@ def _is_quality_post(post: dict) -> bool:
     """
     score = post.get("score", 0)
     comments = post.get("num_comments", 0)
-    body = post.get("selftext", "")
+    body = post.get("body", post.get("selftext", ""))
     body_len = len(body)
 
     # Skip removed/deleted posts
@@ -149,9 +89,9 @@ def _is_quality_post(post: dict) -> bool:
         return False
 
     # Minimum engagement thresholds
-    if score < 3:
+    if score < min_score:
         return False
-    if comments < 2:
+    if comments < min_comments:
         return False
 
     # Title-only posts with no substance -- skip unless very high engagement
@@ -162,14 +102,10 @@ def _is_quality_post(post: dict) -> bool:
 
 
 def _is_relevant_to_ticker(post: dict, ticker: str) -> bool:
-    """Check if a post is actually about the ticker, not just incidentally mentioning it.
-
-    This is the key filter that prevents noise like r/science posts from getting through.
-    Uses the subreddit as a strong signal.
-    """
+    """Check if a post is actually about the ticker, not just incidentally mentioning it."""
     subreddit = post.get("subreddit", "").lower()
     title = post.get("title", "")
-    body = post.get("selftext", "")
+    body = post.get("body", post.get("selftext", ""))
     full_text = f"{title} {body}"
 
     # If it's from a non-financial sub, require very strong ticker presence
@@ -212,7 +148,6 @@ def _is_relevant_to_ticker(post: dict, ticker: str) -> bool:
     return mentions >= 1
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 async def collect_subreddit(
     subreddit: str,
     time_filter: str = "day",
@@ -220,59 +155,50 @@ async def collect_subreddit(
     ticker_filter: str | None = None,
 ) -> int:
     """
-    Fetch top posts from a subreddit and write to reddit_posts.
+    Fetch top posts from a subreddit via scraper-service and write to reddit_posts.
     Returns number of posts written.
     """
+    from app.services.scraper_client import scraper_client
+
     with get_db() as db:
-        url = f"https://www.reddit.com/r/{subreddit}/top.json"
-        params = {"t": time_filter, "limit": limit}
         count = 0
-
         try:
-            async with SmartClient(base_delay=1.0) as client:
-                r = await client.get(url, params=params, timeout=30.0)
+            items = await scraper_client.collect(
+                source="reddit",
+                req_data={
+                    "subreddits": [subreddit],
+                    "limit": limit,
+                    "time_filter": time_filter,
+                    "sort": "top",
+                }
+            )
 
-                if r.status_code == 429:
-                    logger.info(f"[reddit] r/{subreddit}: rate limited, skipping")
-                    return 0
+            for post in items:
+                title = post.get("title", "")
+                body = post.get("body", post.get("selftext", ""))
+                full_text = f"{title} {body}"
 
-                if r.status_code != 200:
-                    logger.info(f"[reddit] r/{subreddit}: HTTP {r.status_code}")
-                    return 0
+                # Extract ticker mentions (shared extractor)
+                tickers_found = set(get_ticker_symbols(full_text, title=title))
 
-                data = r.json()
-                posts = data.get("data", {}).get("children", [])
-
-                for post_wrapper in posts:
-                    post = post_wrapper.get("data", {})
-                    if not post:
+                # If filtering by ticker, skip posts without it
+                if ticker_filter and ticker_filter.upper() not in tickers_found:
+                    if ticker_filter.upper() not in full_text.upper():
                         continue
 
-                    title = post.get("title", "")
-                    body = post.get("selftext", "")
-                    full_text = f"{title} {body}"
+                # Assign primary ticker
+                primary_ticker = (
+                    ticker_filter.upper()
+                    if ticker_filter
+                    else (list(tickers_found)[0] if tickers_found else None)
+                )
 
-                    # Extract ticker mentions (shared extractor)
-                    tickers_found = set(get_ticker_symbols(full_text, title=title))
+                if not primary_ticker:
+                    continue
 
-                    # If filtering by ticker, skip posts without it
-                    if ticker_filter and ticker_filter.upper() not in tickers_found:
-                        if ticker_filter.upper() not in full_text.upper():
-                            continue
-
-                    # Assign primary ticker
-                    primary_ticker = (
-                        ticker_filter.upper()
-                        if ticker_filter
-                        else (list(tickers_found)[0] if tickers_found else None)
-                    )
-
-                    if not primary_ticker:
-                        continue
-
-                    count += _store_post(
-                        db, post, primary_ticker, subreddit, tickers_found
-                    )
+                count += _store_post(
+                    db, post, primary_ticker, subreddit, tickers_found
+                )
 
         except Exception as e:
             logger.info(f"[reddit] r/{subreddit} error: {e}")
@@ -280,7 +206,6 @@ async def collect_subreddit(
         return count
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 async def search_subreddit_for_ticker(
     subreddit: str,
     ticker: str,
@@ -289,70 +214,64 @@ async def search_subreddit_for_ticker(
     limit: int = 10,
     since: datetime.datetime | None = None,
 ) -> int:
-    """Search WITHIN a specific subreddit for a ticker.
+    """Search WITHIN a specific subreddit list for a ticker via scraper-service."""
+    from app.services.scraper_client import scraper_client
 
-    Scoped search prevents noise from non-financial subs.
-    Uses multiple query variants to catch different post styles.
-    Returns number of posts written.
-    """
     with get_db() as db:
         count = 0
         seen_ids = set()
 
         try:
-            async with SmartClient(base_delay=1.0) as client:
-                for query in queries:
-                    url = f"https://www.reddit.com/r/{subreddit}/search.json"
-                    params = {
-                        "q": query,
-                        "restrict_sr": "on",  # KEY: restrict to this subreddit only
-                        "sort": "relevance",
-                        "t": time_filter,
-                        "limit": limit,
-                        "type": "link",
-                    }
+            subreddits = [s.strip() for s in subreddit.split("+") if s.strip()]
 
-                    r = await client.get(url, params=params, timeout=30.0)
-                    if r.status_code != 200:
+            for query in queries:
+                items = await scraper_client.collect(
+                    source="reddit",
+                    req_data={
+                        "query": query,
+                        "subreddits": subreddits,
+                        "limit": limit,
+                        "time_filter": time_filter,
+                    }
+                )
+
+                for post in items:
+                    post_id = post.get("id", "")
+                    if post_id in seen_ids:
+                        continue
+                    seen_ids.add(post_id)
+
+                    created_val = post.get("created_at", post.get("created_utc"))
+                    if isinstance(created_val, (int, float)):
+                        created_utc = datetime.datetime.fromtimestamp(created_val, tz=datetime.UTC)
+                    elif isinstance(created_val, str):
+                        created_utc = datetime.datetime.fromisoformat(created_val)
+                        if created_utc.tzinfo is None:
+                            created_utc = created_utc.replace(tzinfo=datetime.UTC)
+                    else:
+                        created_utc = datetime.datetime.now(datetime.UTC)
+
+                    if since and created_utc <= since:
                         continue
 
-                    data = r.json()
-                    posts = data.get("data", {}).get("children", [])
+                    if not _is_quality_post(post):
+                        continue
 
-                    for post_wrapper in posts:
-                        post = post_wrapper.get("data", {})
-                        if not post:
-                            continue
+                    if not _is_relevant_to_ticker(post, ticker):
+                        continue
 
-                        post_id = post.get("id", "")
-                        if post_id in seen_ids:
-                            continue
-                        seen_ids.add(post_id)
+                    title = post.get("title", "")
+                    body = post.get("body", post.get("selftext", ""))
+                    full_text = f"{title} {body}"
+                    tickers_found = set(get_ticker_symbols(full_text, title=title))
+                    tickers_found.add(ticker.upper())
 
-                        created_utc = datetime.datetime.fromtimestamp(
-                            post.get("created_utc", 0), tz=datetime.UTC
-                        )
-                        if since and created_utc <= since:
-                            continue
+                    actual_sub = post.get("subreddit", subreddits[0] if subreddits else "")
+                    count += _store_post(
+                        db, post, ticker.upper(), actual_sub, tickers_found
+                    )
 
-                        if not _is_quality_post(post):
-                            continue
-
-                        if not _is_relevant_to_ticker(post, ticker):
-                            continue
-
-                        title = post.get("title", "")
-                        body = post.get("selftext", "")
-                        full_text = f"{title} {body}"
-                        tickers_found = set(get_ticker_symbols(full_text, title=title))
-                        tickers_found.add(ticker.upper())
-
-                        actual_sub = post.get("subreddit", subreddit)
-                        count += _store_post(
-                            db, post, ticker.upper(), actual_sub, tickers_found
-                        )
-
-                    await asyncio.sleep(1.0)  # Pace between queries
+                await asyncio.sleep(1.0)  # Pace between queries
 
         except Exception as e:
             logger.info(f"[reddit] r/{subreddit} search error: {e}")
@@ -361,15 +280,7 @@ async def search_subreddit_for_ticker(
 
 
 async def collect_for_ticker(ticker: str, since: datetime.datetime | None = None) -> int:
-    """Collect Reddit posts about a specific ticker using subreddit-scoped search.
-
-    Strategy:
-    1. Search within each priority financial subreddit (not global)
-    2. Use multiple query variants to catch different post styles
-    3. Apply relevance filter to reject noise
-
-    This prevents r/science, r/relationship_advice etc from polluting results.
-    """
+    """Collect Reddit posts about a specific ticker using subreddit-scoped search."""
     ticker_upper = ticker.upper()
 
     # Core query variants
@@ -413,18 +324,24 @@ def _store_post(
 ) -> int:
     """Store a Reddit post and its discovered tickers. Returns 1 on success, 0 on skip."""
     title = post.get("title", "")
-    body = post.get("selftext", "")
+    body = post.get("body", post.get("selftext", ""))
     post_id = post.get("id", hashlib.md5(title.encode()).hexdigest()[:12])
 
-    created_utc = datetime.datetime.fromtimestamp(
-        post.get("created_utc", 0), tz=datetime.UTC
-    )
+    created_val = post.get("created_at", post.get("created_utc"))
+    if isinstance(created_val, (int, float)):
+        created_utc = datetime.datetime.fromtimestamp(created_val, tz=datetime.UTC)
+    elif isinstance(created_val, str):
+        created_utc = datetime.datetime.fromisoformat(created_val)
+        if created_utc.tzinfo is None:
+            created_utc = created_utc.replace(tzinfo=datetime.UTC)
+    else:
+        created_utc = datetime.datetime.now(datetime.UTC)
 
     score = post.get("score", 0)
     upvote_ratio = post.get("upvote_ratio", 0.0)
     num_comments = post.get("num_comments", 0)
-    flair = post.get("link_flair_text", "")
-    awards = post.get("total_awards_received", 0)
+    flair = post.get("flair", post.get("link_flair_text", ""))
+    awards = post.get("awards", post.get("total_awards_received", 0))
 
     # Comment velocity (rough: comments / hours since posted)
     age_hours = max(
@@ -447,12 +364,12 @@ def _store_post(
                 primary_ticker,
                 subreddit,
                 title,
-                body,  # Full body -- no truncation for debugging
+                body,
                 score,
                 upvote_ratio,
                 num_comments,
                 flair,
-                None,  # sentiment_score -- computed by processor later
+                None,
                 awards,
                 round(comment_velocity, 2),
                 created_utc,
@@ -463,8 +380,6 @@ def _store_post(
         for t in tickers_found:
             if t in FALSE_TICKERS or len(t) < 2:
                 continue
-            # Normalize score: use upvote_ratio as confidence (0-1)
-            # rather than raw upvote count
             confidence = min(round(upvote_ratio, 2), 1.0) if upvote_ratio else 0.5
             db.execute(
                 """
@@ -494,7 +409,6 @@ async def collect_all(
         total += count
         if count > 0:
             logger.info(f"[reddit] r/{sub}: {count} posts")
-        # Pace between subreddits to avoid rate limiting
         await asyncio.sleep(2.0)
     logger.info(f"[reddit] Total: {total} posts across {len(SUBREDDITS)} subreddits")
     return total

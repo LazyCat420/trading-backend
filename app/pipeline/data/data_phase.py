@@ -415,52 +415,11 @@ async def run(
         )
         logger.info("[PIPELINE] [TRACK B] Per-ticker collection complete")
 
-    # ═══════════════════════════════════════════════════════════
-    # Start Continuous Summarization Background Task
-    # ═══════════════════════════════════════════════════════════
-    _collection_done = False
-    
-    async def _continuous_summarization():
-        logger.info("[PIPELINE] Started continuous background summarization...")
-        summ_stats = {"youtube": 0, "reddit": 0, "news": 0, "tokens": 0, "ms": 0}
-        from app.processors.summarizer import summarize_unsummarized
-        
-        # Scale chunk size to match adaptive concurrency limit
-        # (no point querying 30 articles if we can only process 8 at once)
-        try:
-            from app.services.adaptive_concurrency import concurrency_controller
-            chunk_size = concurrency_controller.current_limit
-        except Exception:
-            chunk_size = 5 if intensity == "micro" else 15
-        
-        first_run = True
-        while not _collection_done or first_run:
-            first_run = False
-            try:
-                stats = await summarize_unsummarized(emit=emit, max_items=chunk_size)
-                total_done = stats.get("youtube", 0) + stats.get("reddit", 0) + stats.get("news", 0)
-                
-                if total_done > 0:
-                    for k in summ_stats:
-                        summ_stats[k] += stats.get(k, 0)
-                else:
-                    # Nothing to summarize right now, yield control
-                    await asyncio.sleep(2)
-            except Exception as e:
-                logger.warning(f"[PIPELINE] [Continuous Summarizer] loop error: {e}")
-                await asyncio.sleep(2)
-                
-        # Do one final sweep after collection completes just in case
-        try:
-            stats = await summarize_unsummarized(emit=emit, max_items=50)
-            for k in summ_stats:
-                summ_stats[k] += stats.get(k, 0)
-        except Exception:
-            pass
-            
-        return summ_stats
-
-    summarizer_bg_task = asyncio.create_task(_continuous_summarization())
+    # NOTE: Per-ticker summarization + consensus is handled by
+    # run_ticker_processors() in data_perticker_collection.py (lines 23-45)
+    # BEFORE each ticker is pushed to the analysis queue.
+    # No global background loop needed — this was causing DGX Spark to sit
+    # idle for 30+ minutes waiting for redundant summarization to finish.
 
     # ═══════════════════════════════════════════════════════════
     # RUN BOTH TRACKS IN PARALLEL
@@ -500,9 +459,6 @@ async def run(
         _remaining = _effective_cap - len(_kept_positions)
         _kept_non_pos = [t for t in tickers if t not in _protected][:_remaining]
         tickers = _kept_positions + _kept_non_pos
-    
-    # Signal summarizer to finish up
-    _collection_done = True
     # ═══════════════════════════════════════════════════════════
     # Wait for background tasks before Deduplication
     # ═══════════════════════════════════════════════════════════
@@ -537,32 +493,11 @@ async def run(
         )
         logger.info(f"[PIPELINE]   [dedup] FAILED: {e}")
 
-    # ═══════════════════════════════════════════════════════════
-    # PASS 5.5: DATA SUMMARIZATION (Await Background Task)
-    # ═══════════════════════════════════════════════════════════
-    logger.info("[PIPELINE] \n--- Pass 5.5: Await Continuous Summarization ---")
-    await asyncio.sleep(0)  # Cancellation checkpoint
-    try:
-        summ_stats = await summarizer_bg_task
-        results["processors"]["summarization"] = summ_stats
-    except Exception as e:
-        logger.info(f"[PIPELINE]   [summarizer] FAILED: {e}")
-        emit("collecting", "summarize", f"Summarization failed — {e}", status="error")
-
-    # ═══════════════════════════════════════════════════════════
-    # PASS 5.6: CONSENSUS ENGINE (LLM-powered)
-    # Extracts consensus across articles and flags outliers.
-    # ═══════════════════════════════════════════════════════════
-    logger.info("[PIPELINE] \n--- Pass 5.6: Consensus Engine ---")
-    await asyncio.sleep(0)  # Cancellation checkpoint
-    try:
-        from app.processors.consensus_engine import run_consensus_engine
-
-        consensus_stats = await run_consensus_engine(emit=emit)
-        results["processors"]["consensus"] = consensus_stats
-    except Exception as e:
-        logger.info(f"[PIPELINE]   [consensus] FAILED: {e}")
-        emit("collecting", "consensus", f"Consensus failed — {e}", status="error")
+    # NOTE: Pass 5.5 (background summarization) and Pass 5.6 (consensus engine)
+    # have been removed. Both are already handled per-ticker by
+    # run_ticker_processors() in data_perticker_collection.py before each
+    # ticker is pushed to the analysis queue. Running them again globally here
+    # was purely redundant and caused the DGX Spark to sit idle for 30+ minutes.
 
     # ═══════════════════════════════════════════════════════════
     # PASS 6: PROCESSORS FINALIZE

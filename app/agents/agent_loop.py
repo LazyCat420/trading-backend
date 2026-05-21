@@ -341,24 +341,45 @@ async def run_agent_loop(
             import time
             start_time = time.monotonic()
             
-            tool_name = tc.get('function', {}).get('name')
-            tool_args = tc.get('function', {}).get('arguments', '')
+            func_data = tc.get('function')
+            if not func_data:
+                tc['function'] = {}
+                func_data = tc['function']
+
+            tool_name = func_data.get('name')
+            tool_args = func_data.get('arguments', '')
             
-            try:
-                tool_res = await asyncio.wait_for(
-                    registry.execute_tool_call(
-                        tc, agent_name=agent_name, ticker=ticker, cycle_id=cycle_id
-                    ),
-                    timeout=45.0
-                )
-            except asyncio.TimeoutError:
-                logger.error(f"[AgentLoop] Tool execution timed out after 45s for {tool_name}")
+            # Intercept invalid / None / empty tool names to shield Prism Gateway
+            is_invalid_tool = False
+            if not tool_name or tool_name == "None" or tool_name.strip() == "":
+                is_invalid_tool = True
+                func_data['name'] = "unknown_tool"
+                tool_name = "unknown_tool"
+
+            if is_invalid_tool:
                 tool_res = {
                     "role": "tool",
-                    "name": tool_name,
-                    "tool_call_id": tc.get("id", ""),
-                    "content": json.dumps({"error": f"Tool '{tool_name}' timed out after 45 seconds."})
+                    "name": "unknown_tool",
+                    "tool_call_id": tc.get("id", "") or "unknown_id",
+                    "content": json.dumps({"error": "Invalid tool name provided. Please choose a valid tool from the schemas."})
                 }
+            else:
+                try:
+                    tool_res = await asyncio.wait_for(
+                        registry.execute_tool_call(
+                            tc, agent_name=agent_name, ticker=ticker, cycle_id=cycle_id
+                        ),
+                        timeout=45.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(f"[AgentLoop] Tool execution timed out after 45s for {tool_name}")
+                    tool_res = {
+                        "role": "tool",
+                        "name": tool_name,
+                        "tool_call_id": tc.get("id", "") or "unknown_id",
+                        "content": json.dumps({"error": f"Tool '{tool_name}' timed out after 45 seconds."})
+                    }
+
             latency_ms = int((time.monotonic() - start_time) * 1000)
             
             messages.append(tool_res)
@@ -411,6 +432,14 @@ async def run_agent_loop(
                     }
             except Exception:
                 pass
+
+        # Check consecutive empty/error threshold to abort runaway agents
+        if scorecard.consecutive_empty >= 3:
+            logger.warning(
+                f"[AgentLoop] Agent '{agent_name}' reached consecutive empty/error threshold ({scorecard.consecutive_empty}). Aborting loop to protect Jetson model server."
+            )
+            stop_reason = "error_threshold"
+            break
 
         if requires_approval:
             logger.warning(

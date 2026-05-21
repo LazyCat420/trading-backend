@@ -3,48 +3,22 @@ News Collector -- Fetches financial news from RSS feeds + web sources.
 
 Pure data collector. No LLM calls. No processing.
 Writes to: news_articles
-Libraries: feedparser, httpx (via SmartClient)
-
-No API key needed -- uses public RSS feeds.
+No API key needed -- uses scraper-service.
 Dedup: hash(title + published_at) as id.
-
-Search strategy:
-  - General sweep: Collect ALL articles from RSS feeds
-  - Ticker tagging: Post-process articles to detect ticker mentions in title+summary
-  - This replaces the old pre-filter approach (which returned 0 results because
-    RSS summaries rarely mention exact ticker symbols like "NVDA")
-
-Anti-rate-limiting: exponential backoff, random jitter, pacing.
 """
 
 import logging
-
-logger = logging.getLogger(__name__)
-
-
 import hashlib
 import re
 import datetime
 import asyncio
 import time
-import feedparser
-import cloudscraper
 from app.db.connection import get_db
-from app.services.request_utils import SmartClient
 from app.processors.ticker_extractor import get_ticker_symbols
 
-# cloudscraper instance for Cloudflare-protected sites
-_cloudscraper = cloudscraper.create_scraper(
-    browser={"browser": "chrome", "platform": "windows", "desktop": True}
-)
+logger = logging.getLogger(__name__)
 
-# Domains known to block httpx with Cloudflare — use cloudscraper for these
-CLOUDFLARE_DOMAINS = {
-    "seekingalpha.com",
-    "investing.com",
-}
-
-# RSS feeds to monitor (zero rate limits, no API key needed)
+# RSS feeds to monitor
 RSS_FEEDS = {
     # ── Market News (tier 1 — highest volume) ──
     "MarketWatch Top": "https://feeds.marketwatch.com/marketwatch/topstories/",
@@ -75,118 +49,7 @@ RSS_FEEDS = {
     "Cointelegraph": "https://cointelegraph.com/rss",
 }
 
-
-def _extract_text_from_html(html: str, max_chars: int = 15000) -> str:
-    """Extract readable text from HTML using Trafilatura."""
-    import trafilatura
-    
-    # Extract main article text, dropping menus, footers, etc.
-    text = trafilatura.extract(
-        html, 
-        include_links=False, 
-        include_images=False, 
-        include_tables=False,
-        no_fallback=False
-    )
-    
-    if not text:
-        return ""
-        
-    # Strip remaining HTML tags just in case
-    text = re.sub(r"<[^>]+>", "", text)
-    # Normalize whitespace
-    text = re.sub(r"\s+", " ", text).strip()
-    
-    # Phase 2: Dynamic Noise Filtering
-    noise_patterns = [
-        r"Copy LinkSavePlay\(\d+min\)Comments",
-        r"via Getty Images",
-        r"Sign up",
-        r"Subscribe",
-        r"Cookie",
-        r"consent",
-        r"Advertisement",
-        r"Accessibility Menu",
-        r"\[Accessibility Menu\]",
-        r"Skip to main content",
-        r"Share",
-        r"Print",
-    ]
-    
-    for pattern in noise_patterns:
-        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-        
-    text = re.sub(r"\s+", " ", text).strip()
-
-    # Phase 3: Pre-Janitor Guardrails (Quality Gate)
-    failure_signatures = [
-        "please enable javascript",
-        "please enable js",
-        "please enable cookies",
-        "subscribe to continue reading",
-        "verify you are human",
-        "pardon our interruption",
-        "are you a robot",
-        "to access this content",
-    ]
-    
-    text_lower = text.lower()
-    for sig in failure_signatures:
-        if sig in text_lower:
-            return "" # Drop immediately, it's a paywall/bot-wall
-
-    return text[:max_chars].strip() if text else ""
-
-
-def _is_cloudflare_domain(url: str) -> bool:
-    """Check if URL belongs to a Cloudflare-protected domain."""
-    from urllib.parse import urlparse
-
-    try:
-        domain = urlparse(url).netloc.lower()
-        return any(cf in domain for cf in CLOUDFLARE_DOMAINS)
-    except Exception:
-        return False
-
-
-async def _scrape_article_body(
-    url: str, client: SmartClient, max_chars: int = 15000
-) -> str:
-    """Fetch article URL and extract visible text as summary.
-
-    Uses httpx only — this is called for EVERY RSS article (~100+) so it
-    must be fast. No browser overhead.
-    """
-    if _is_cloudflare_domain(url):
-        return await asyncio.to_thread(_scrape_with_cloudscraper, url)
-
-    try:
-        r = await client.get(url)
-        if r.status_code == 200:
-            text = _extract_text_from_html(r.text, max_chars)
-            if text and len(text) > 50:
-                return text
-    except Exception:
-        pass
-
-    return ""
-
-
-def _scrape_with_cloudscraper(url: str) -> str:
-    """Sync cloudscraper call for Cloudflare-protected sites."""
-    try:
-        time.sleep(2.0)  # Rate limit: don't hammer protected sites
-        r = _cloudscraper.get(url, timeout=15)
-        if r.status_code == 200:
-            return r.text
-        logger.info(f"[smart_client] {url}: cloudscraper HTTP {r.status_code}")
-        return ""
-    except Exception as e:
-        logger.info(f"[smart_client] {url}: cloudscraper error {e}")
-        return ""
-
-
-# Company name -> ticker mapping for detecting tickers from company names
+# Company name -> ticker mapping
 COMPANY_TICKERS = {
     # Tech mega-caps
     "nvidia": "NVDA",
@@ -272,225 +135,185 @@ COMPANY_TICKERS = {
     "tsmc": "TSM",
 }
 
-# Direct ticker symbols to match
-KNOWN_TICKERS = {
-    "NVDA",
-    "AAPL",
-    "TSLA",
-    "MSFT",
-    "GOOG",
-    "GOOGL",
-    "AMZN",
-    "META",
-    "AMD",
-    "PLTR",
-    "SOFI",
-    "SMCI",
-    "ARM",
-    "AVGO",
-    "MRVL",
-    "INTC",
-    "BTC",
-    "ETH",
-    "SOL",
-    "XRP",
-    "DOGE",
-    "SPY",
-    "QQQ",
-    "IWM",
-    "DIA",
-    "VTI",
-    "JPM",
-    "BAC",
-    "GS",
-    "WFC",
-    "MS",
-    "C",
-    "NFLX",
-    "DIS",
-    "COST",
-    "WMT",
-    "TGT",
-    "BA",
-    "LMT",
-    "RTX",
-    "COIN",
-    "HOOD",
-    # Added from battle test gaps
-    "XOM",
-    "CVX",
-    "COP",
-    "MMM",
-    "HON",
-    "CAT",
-    "GE",
-    "CRM",
-    "ADBE",
-    "ORCL",
-    "NOW",
-    "PANW",
-    "UNH",
-    "JNJ",
-    "PFE",
-    "LLY",
-    "ABBV",
-    "MU",
-    "QCOM",
-    "TXN",
-    "TSM",
-}
 
-TICKER_PATTERN = re.compile(r"\b([A-Z]{2,5})\b")
+async def _scrape_article_body_via_service(url: str, max_chars: int = 15000) -> str:
+    """Scrape article body using the http engine on scraper-service."""
+    from app.services.scraper_client import scraper_client
+
+    res = await scraper_client.scrape(url, engine="http", options={"max_chars": max_chars})
+    if res and res.get("success") and res.get("content"):
+        return res["content"]
+    return ""
+
+
+def _extract_text_from_html(html: str, max_chars: int = 15000) -> str:
+    """Extract readable text from HTML using BeautifulSoup with a regex fallback."""
+    if not html:
+        return ""
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+        for script in soup(["script", "style"]):
+            script.decompose()
+        text = soup.get_text()
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = " ".join(chunk for chunk in chunks if chunk)
+        return text[:max_chars]
+    except Exception:
+        # Simple regex fallback
+        text = re.sub(r"<script.*?>.*?</script>", "", html, flags=re.DOTALL)
+        text = re.sub(r"<style.*?>.*?</style>", "", text, flags=re.DOTALL)
+        text = re.sub(r"<[^>]+>", "", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:max_chars]
 
 
 def _detect_tickers_in_text(text: str) -> set[str]:
-    """Detect stock tickers mentioned in article text.
-
-    UPGRADED: Now uses the shared ticker_extractor module with
-    CompanyRegistry (S&P 500 + aliases) and confidence scoring.
-    Returns set of detected ticker symbols (>= 0.60 confidence).
-    """
+    """Detect stock tickers mentioned in article text."""
     return set(get_ticker_symbols(text))
 
 
-def _normalize_title(title: str) -> str:
-    """Normalize title for cross-source deduplication.
+def _is_article_relevant_to_ticker(ticker: str, text: str) -> bool:
+    """Check if an article actually discusses a ticker as a financial instrument.
 
-    Strips noise prefixes, punctuation, and whitespace so the same
-    article from Yahoo + Finnhub + RSS gets the same normalized key.
+    For short tickers (2-3 chars) that are also common English words (TV, HD, PC, etc.),
+    we require additional evidence that the article is actually about the STOCK,
+    not just using the letters as an abbreviation.
+
+    Returns True if the article passes the relevance check.
     """
+    # Long tickers (4+ chars) and $TICKER syntax are inherently less ambiguous
+    if len(ticker) >= 4:
+        return True
+
+    # If the article text contains the $TICKER pattern, it's explicitly financial
+    if re.search(rf"\${re.escape(ticker)}\b", text):
+        return True
+
+    # Check if the company name is mentioned (not just the ticker letters)
+    from app.processors.ticker_extractor import get_registry
+    registry = get_registry()
+    company = registry.lookup_symbol(ticker)
+    if company:
+        # Check for company name (e.g., "Grupo Televisa" for TV, "Home Depot" for HD)
+        name_lower = company.name.lower()
+        text_lower = text.lower()
+        if name_lower in text_lower:
+            return True
+        # Check aliases
+        for alias in company.aliases:
+            if len(alias) > 3 and alias.lower() in text_lower:
+                return True
+
+    # For 2-3 letter tickers without company name: require strong financial context
+    # near the ticker mention (at least 2 financial keywords within 150 chars)
+    financial_kw = {
+        "stock", "shares", "price", "earnings", "revenue", "profit",
+        "bullish", "bearish", "analyst", "upgrade", "downgrade", "rating",
+        "dividend", "ipo", "merger", "acquisition", "guidance", "forecast",
+        "quarterly", "eps", "valuation", "rally", "surge", "plunge",
+        "overweight", "underweight", "outperform", "underperform",
+        "market cap", "pe ratio", "share price", "ticker",
+    }
+    for m in re.finditer(rf"\b{re.escape(ticker)}\b", text):
+        start_idx = max(0, m.start() - 150)
+        end_idx = min(len(text), m.end() + 150)
+        window = text[start_idx:end_idx].lower()
+        hits = sum(1 for kw in financial_kw if kw in window)
+        if hits >= 2:
+            return True
+
+    return False
+
+
+def _normalize_title(title: str) -> str:
+    """Normalize title for cross-source deduplication."""
     t = title.lower().strip()
     t = re.sub(r"^(breaking|update|exclusive|report|analysis|opinion)[:\s-]+", "", t)
-    t = re.sub(r"[^\w\s]", "", t)  # strip punctuation
-    t = re.sub(r"\s+", " ", t)  # collapse whitespace
-    return t.strip()[:200]  # cap length for DB
+    t = re.sub(r"[^\w\s]", "", t)
+    t = re.sub(r"\s+", " ", t)
+    return t.strip()[:200]
 
 
 def _get_article_id(title: str, ticker: str | None) -> str:
-    """Generate a deterministic SHA256 hash ID for cross-source deduplication.
-
-    Replaces the expensive LIKE query by ensuring identical headlines
-    from different sources collide on the primary key (ON CONFLICT DO NOTHING).
-    """
+    """Generate a deterministic SHA256 hash ID for cross-source deduplication."""
     norm = _normalize_title(title)
     return hashlib.sha256(f"{norm}_{ticker or 'NONE'}".encode()).hexdigest()
 
 
 async def collect_feed(feed_name: str, feed_url: str) -> int:
     """
-    Fetch and parse a single RSS feed, write articles to news_articles.
-    Tags each article with detected tickers from title + summary.
+    Fetch and parse a single RSS feed via scraper-service, write articles to news_articles.
     Returns number of new articles written.
     """
-    count = 0
-    scrape_count = 0
+    from app.services.scraper_client import scraper_client
 
+    count = 0
     try:
         with get_db() as db:
-            async with SmartClient(base_delay=1.0, max_retries=3) as client:
-                r = await client.get(feed_url)
-                if r.status_code != 200:
-                    logger.warning(f"[news] {feed_name}: HTTP {r.status_code}")
-                    return 0
+            items = await scraper_client.collect(
+                source="news",
+                req_data={
+                    "feed_url": feed_url,
+                    "query": feed_name,
+                }
+            )
 
-                feed = feedparser.parse(r.text)
+            for article in items:
+                title = article.get("title", "").strip()
+                if not title:
+                    continue
 
-                if not feed.entries:
-                    logger.warning(f"[news] {feed_name}: 0 entries parsed from feed")
-                    return 0
+                url = article.get("url", "")
+                summary = article.get("summary", "").strip()
+                publisher = article.get("publisher", feed_name)
 
-                for entry in feed.entries:
-                    title = entry.get("title", "").strip()
-                    if not title:
-                        continue
+                pub_val = article.get("published_at")
+                if isinstance(pub_val, str):
+                    published_at = datetime.datetime.fromisoformat(pub_val)
+                    if published_at.tzinfo is None:
+                        published_at = published_at.replace(tzinfo=datetime.UTC)
+                else:
+                    published_at = datetime.datetime.now(datetime.UTC)
 
-                    # Parse published date
-                    published_at = None
-                    if hasattr(entry, "published_parsed") and entry.published_parsed:
-                        p = entry.published_parsed
-                        published_at = datetime.datetime(
-                            p.tm_year,
-                            p.tm_mon,
-                            p.tm_mday,
-                            p.tm_hour,
-                            p.tm_min,
-                            p.tm_sec,
-                            tzinfo=datetime.UTC,
+                # STRICT QUALITY GATE
+                if len(summary) < 150:
+                    continue
+
+                # Detect tickers in title + summary
+                full_text = f"{title} {summary}"
+                detected_tickers = _detect_tickers_in_text(full_text)
+
+                # Relevance gate: for short/ambiguous tickers, verify the article
+                # actually discusses the stock (not just uses the letters as English).
+                if detected_tickers:
+                    relevant_tickers = {
+                        t for t in detected_tickers
+                        if _is_article_relevant_to_ticker(t, full_text)
+                    }
+                    irrelevant = detected_tickers - relevant_tickers
+                    if irrelevant:
+                        logger.debug(
+                            "[news] Relevance gate filtered tickers %s from article: %s",
+                            irrelevant, title[:80],
                         )
-                    elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
-                        u = entry.updated_parsed
-                        published_at = datetime.datetime(
-                            u.tm_year,
-                            u.tm_mon,
-                            u.tm_mday,
-                            u.tm_hour,
-                            u.tm_min,
-                            u.tm_sec,
-                            tzinfo=datetime.UTC,
-                        )
-                    else:
-                        published_at = datetime.datetime.now(datetime.UTC)
+                    detected_tickers = relevant_tickers
 
-                    url = entry.get("link", "")
-                    summary = entry.get("summary", "").strip()
-                    publisher = feed_name
-
-                    # If RSS has no summary or it's short/cut-off, scrape the article body
-                    if url and (not summary or "..." in summary or len(summary) < 150):
-                        body = await _scrape_article_body(url, client)
-                        if body:
-                            summary = body
-                            scrape_count += 1
-                            
-                    # STRICT QUALITY GATE: If we still don't have a real article, drop it
-                    if len(summary) < 150:
-                        continue
-
-                    # Detect tickers in title + summary
-                    full_text = f"{title} {summary}"
-                    detected_tickers = _detect_tickers_in_text(full_text)
-
-                    # Build unique ID from title + date
-                    id_str = (
-                        f"{title}{published_at.isoformat() if published_at else ''}"
-                    )
-                    article_id = hashlib.md5(id_str.encode()).hexdigest()
-
-                    if detected_tickers:
-                        # Store one row per detected ticker for easy querying
-                        for ticker in detected_tickers:
-                            ticker_article_id = _get_article_id(title, ticker)
-                            db.execute(
-                                """
-                                INSERT INTO news_articles
-                                (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, 'rss', CURRENT_TIMESTAMP)
-                ON CONFLICT (id) DO NOTHING
-                            """,
-                                [
-                                    ticker_article_id,
-                                    ticker,
-                                    title[:500],
-                                    publisher,
-                                    url,
-                                    published_at,
-                                    summary,
-                                ],
-                            )
-                            count += 1
-                    else:
-                        # No specific ticker detected -- store as general market news
-                        article_id = _get_article_id(title, None)
+                if detected_tickers:
+                    # Store one row per detected ticker for easy querying
+                    for ticker in detected_tickers:
+                        ticker_article_id = _get_article_id(title, ticker)
                         db.execute(
                             """
                             INSERT INTO news_articles
                             (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, 'rss', CURRENT_TIMESTAMP)
-                ON CONFLICT (id) DO NOTHING
-                        """,
+                            ON CONFLICT (id) DO NOTHING
+                            """,
                             [
-                                article_id,
-                                None,
+                                ticker_article_id,
+                                ticker,
                                 title[:500],
                                 publisher,
                                 url,
@@ -499,27 +322,35 @@ async def collect_feed(feed_name: str, feed_url: str) -> int:
                             ],
                         )
                         count += 1
-
-            if scrape_count > 0:
-                logger.info(
-                    f"[news] {feed_name}: scraped {scrape_count} article bodies"
-                )
-
+                else:
+                    # No specific ticker detected -- store as general market news
+                    article_id = _get_article_id(title, None)
+                    db.execute(
+                        """
+                        INSERT INTO news_articles
+                        (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'rss', CURRENT_TIMESTAMP)
+                        ON CONFLICT (id) DO NOTHING
+                        """,
+                        [
+                            article_id,
+                            None,
+                            title[:500],
+                            publisher,
+                            url,
+                            published_at,
+                            summary,
+                        ],
+                    )
+                    count += 1
     except Exception as e:
-        logger.error(
-            f"[news] {feed_name} FAILED: {type(e).__name__}: {e}",
-            exc_info=True,
-        )
+        logger.error(f"[news] {feed_name} FAILED: {type(e).__name__}: {e}", exc_info=True)
 
     return count
 
 
 async def collect_all(limit_feeds: int | None = None) -> int:
-    """
-    Fetch all RSS feeds. Returns total articles written.
-    All articles are auto-tagged with detected tickers.
-    Paces requests between feeds to avoid rate limiting.
-    """
+    """Fetch all RSS feeds. Returns total articles written."""
     total = 0
     failed = 0
     feeds_to_check = list(RSS_FEEDS.items())
@@ -548,24 +379,13 @@ async def collect_all(limit_feeds: int | None = None) -> int:
 
 
 async def collect_for_ticker(ticker: str, since: datetime.datetime | None = None) -> int:
-    """Collect news articles mentioning a specific ticker.
-
-    Strategy (ticker-specific sources only):
-    1. Finnhub API — per-ticker, highest volume (~200 articles/ticker/week)
-    2. yfinance — per-ticker headlines
-
-    NOTE: RSS sweep (collect_all) is NOT called here — it scrapes 9 general
-    feeds (CNBC, Bloomberg, etc.) which waste time for individual analysis.
-    RSS sweep only runs during the full trading cycle.
-
-    Rate limiting: 3s between API layers to avoid hammering.
-    """
+    """Collect news articles mentioning a specific ticker."""
     total = 0
 
     # Layer 1: Finnhub (highest volume, most reliable)
     fh_count = await collect_finnhub_news(ticker, since=since)
     total += fh_count
-    await asyncio.sleep(3)  # Breathe between API providers
+    await asyncio.sleep(3)
 
     # Layer 2: yfinance headlines
     yf_count = await collect_yfinance_news(ticker, since=since)
@@ -580,18 +400,7 @@ async def collect_for_ticker(ticker: str, since: datetime.datetime | None = None
 async def collect_finnhub_news(
     ticker: str, days: int = 7, max_articles: int = 50, since: datetime.datetime | None = None
 ) -> int:
-    """Fetch per-ticker news from Finnhub API.
-
-    Finnhub returns 100-250 articles/ticker/week. We:
-    1. Sort newest first
-    2. Deduplicate via headline Jaccard similarity (>60% word overlap = skip)
-    3. Cap at `max_articles` unique articles
-
-    Finnhub provides summaries — no need to deep-read most articles.
-    Use `deep_read_top_articles()` to scrape full text for the top N.
-
-    Free tier: 60 calls/min. Rate limit: 1s delay after API call.
-    """
+    """Fetch per-ticker news from Finnhub API."""
     import os
 
     api_key = os.environ.get("FINNHUB_API_KEY", "")
@@ -619,15 +428,12 @@ async def collect_finnhub_news(
         if not news:
             return 0
 
-        # Sort newest first
         news.sort(key=lambda a: a.get("datetime", 0), reverse=True)
 
-        # Sniper Strategy: Drop notoriously bad publishers (Phase 3)
         with get_db() as db:
             trusted = db.execute("SELECT source_name, win_rate, total_items FROM source_trust WHERE source_type='publisher'").fetchall()
         bad_publishers = {row[0] for row in trusted if row[2] >= 5 and row[1] < 0.1}
 
-        # Deduplicate: skip articles with >60% headline word overlap
         seen_word_sets: list[set] = []
         unique_articles = []
         skipped = 0
@@ -642,26 +448,11 @@ async def collect_finnhub_news(
             if not headline:
                 continue
 
-            # Normalize headline to word set
             words = set(headline.lower().split())
             words -= {
-                "the",
-                "a",
-                "an",
-                "and",
-                "or",
-                "in",
-                "on",
-                "at",
-                "to",
-                "for",
-                "of",
-                "is",
-                "are",
-                "was",
+                "the", "a", "an", "and", "or", "in", "on", "at", "to", "for", "of", "is", "are", "was",
             }
 
-            # Check Jaccard similarity against seen headlines
             is_duplicate = False
             for seen in seen_word_sets:
                 if not words or not seen:
@@ -680,61 +471,55 @@ async def collect_finnhub_news(
                 if len(unique_articles) >= max_articles:
                     break
 
-        # Store unique articles
         with get_db() as db:
             count = 0
-            dedup_count = 0
-            async with SmartClient() as client:
-                for article in unique_articles:
-                    headline = article.get("headline", "").strip()
-                    summary = article.get("summary", "").strip()
-                    url = article.get("url", "")
-                    source = article.get("source", "finnhub")
-                    ts = article.get("datetime", 0)
-                    
-                    # Finnhub summaries are often cut off. Scrape the real text!
-                    if url and (len(summary) < 150 or "..." in summary):
-                        body = await _scrape_article_body(url, client)
-                        if body:
-                            summary = body
-                            
-                    # STRICT QUALITY GATE: If we don't have substantial text, drop it entirely.
-                    if len(summary) < 150:
-                        continue
-                        
-                    published_at = (
-                        datetime.datetime.fromtimestamp(ts, tz=datetime.UTC) if ts else None
-                    )
+            for article in unique_articles:
+                headline = article.get("headline", "").strip()
+                summary = article.get("summary", "").strip()
+                url = article.get("url", "")
+                source = article.get("source", "finnhub")
+                ts = article.get("datetime", 0)
 
-                    if since and published_at and published_at <= since:
-                        continue
+                if url and (len(summary) < 150 or "..." in summary):
+                    body = await _scrape_article_body_via_service(url)
+                    if body:
+                        summary = body
 
-                    article_id = _get_article_id(headline, ticker.upper())
+                if len(summary) < 150:
+                    continue
 
-                    db.execute(
-                        """
-                        INSERT INTO news_articles
-                        (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'finnhub', CURRENT_TIMESTAMP)
-                        ON CONFLICT (id) DO NOTHING
-                        """,
-                        [
-                            article_id,
-                            ticker.upper(),
-                            headline[:500],
-                            source,
-                            url,
-                            published_at,
-                            summary,
-                        ],
-                    )
-                    count += 1
+                published_at = (
+                    datetime.datetime.fromtimestamp(ts, tz=datetime.UTC) if ts else None
+                )
 
-            dedup_msg = f", {dedup_count} cross-source dupes" if dedup_count else ""
+                if since and published_at and published_at <= since:
+                    continue
+
+                article_id = _get_article_id(headline, ticker.upper())
+
+                db.execute(
+                    """
+                    INSERT INTO news_articles
+                    (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'finnhub', CURRENT_TIMESTAMP)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    [
+                        article_id,
+                        ticker.upper(),
+                        headline[:500],
+                        source,
+                        url,
+                        published_at,
+                        summary,
+                    ],
+                )
+                count += 1
+
             logger.info(
-                f"[news] Finnhub {ticker}: {count} unique articles (skipped {skipped} duplicates{dedup_msg})"
+                f"[news] Finnhub {ticker}: {count} unique articles (skipped {skipped} duplicates)"
             )
-            await asyncio.sleep(1)  # Rate limit: stay within 60 calls/min
+            await asyncio.sleep(1)
             return count
 
     except Exception as e:
@@ -743,11 +528,7 @@ async def collect_finnhub_news(
 
 
 async def collect_yfinance_news(ticker: str, since: datetime.datetime | None = None) -> int:
-    """Fetch per-ticker news from yfinance.
-
-    Returns ~8-15 recent headlines per ticker.
-    Free, no API key. Uses .news property (not method).
-    """
+    """Fetch per-ticker news from yfinance."""
     try:
         import yfinance as yf
     except ImportError:
@@ -756,7 +537,6 @@ async def collect_yfinance_news(ticker: str, since: datetime.datetime | None = N
 
     try:
         t = yf.Ticker(ticker)
-        # .news is a property, not a method — returns list of dicts
         news = await asyncio.to_thread(lambda: t.news)
 
         if not news:
@@ -764,90 +544,71 @@ async def collect_yfinance_news(ticker: str, since: datetime.datetime | None = N
 
         with get_db() as db:
             count = 0
-            dedup_count = 0
-            async with SmartClient() as client:
-                for article in news:
-                    # yfinance v2 format: nested under 'content'
-                    content = article.get("content", article)
-                    title = content.get("title", "").strip()
-                    if not title:
-                        continue
+            for article in news:
+                content = article.get("content", article)
+                title = content.get("title", "").strip()
+                if not title:
+                    continue
 
-                    # Extract URL from canonical or clickThroughUrl
-                    url = ""
-                    if "canonicalUrl" in content:
-                        url_obj = content["canonicalUrl"]
-                        url = (
-                            url_obj.get("url", "")
-                            if isinstance(url_obj, dict)
-                            else str(url_obj)
+                url = ""
+                if "canonicalUrl" in content:
+                    url_obj = content["canonicalUrl"]
+                    url = url_obj.get("url", "") if isinstance(url_obj, dict) else str(url_obj)
+                elif "clickThroughUrl" in content:
+                    url_obj = content["clickThroughUrl"]
+                    url = url_obj.get("url", "") if isinstance(url_obj, dict) else str(url_obj)
+                elif "link" in article:
+                    url = article["link"]
+
+                provider = content.get("provider", {})
+                publisher = (
+                    provider.get("displayName", "yfinance")
+                    if isinstance(provider, dict)
+                    else "yfinance"
+                )
+
+                pub_date = content.get("pubDate", "")
+                published_at = None
+                if pub_date:
+                    try:
+                        published_at = datetime.datetime.fromisoformat(
+                            pub_date.replace("Z", "+00:00")
                         )
-                    elif "clickThroughUrl" in content:
-                        url_obj = content["clickThroughUrl"]
-                        url = (
-                            url_obj.get("url", "")
-                            if isinstance(url_obj, dict)
-                            else str(url_obj)
-                        )
-                    elif "link" in article:
-                        url = article["link"]
+                    except Exception:
+                        pass
 
-                    # Publisher
-                    provider = content.get("provider", {})
-                    publisher = (
-                        provider.get("displayName", "yfinance")
-                        if isinstance(provider, dict)
-                        else "yfinance"
-                    )
+                summary = ""
+                if url:
+                    summary = await _scrape_article_body_via_service(url)
 
-                    # Published date
-                    pub_date = content.get("pubDate", "")
-                    published_at = None
-                    if pub_date:
-                        try:
-                            published_at = datetime.datetime.fromisoformat(
-                                pub_date.replace("Z", "+00:00")
-                            )
-                        except Exception:
-                            pass
-                        
-                    # yfinance returns NO summary natively in this call. Scrape it!
-                    summary = ""
-                    if url:
-                        summary = await _scrape_article_body(url, client)
-                        
-                    # STRICT QUALITY GATE: If we don't have substantial text, drop it entirely.
-                    if len(summary) < 150:
-                        continue
-                    
-                    if since and published_at and published_at <= since:
-                        continue
+                if len(summary) < 150:
+                    continue
 
-                    article_id = _get_article_id(title, ticker.upper())
+                if since and published_at and published_at <= since:
+                    continue
 
-                    db.execute(
-                        """
-                        INSERT INTO news_articles
-                        (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'yfinance', CURRENT_TIMESTAMP)
-                        ON CONFLICT (id) DO NOTHING
-                        """,
-                        [
-                            article_id,
-                            ticker.upper(),
-                            title[:500],
-                            publisher,
-                            url,
-                            published_at,
-                            summary,
-                        ],
-                    )
-                    count += 1
+                article_id = _get_article_id(title, ticker.upper())
 
-            dedup_msg = (
-                f" (skipped {dedup_count} cross-source dupes)" if dedup_count else ""
-            )
-            logger.info(f"[news] yfinance {ticker}: {count} articles{dedup_msg}")
+                db.execute(
+                    """
+                    INSERT INTO news_articles
+                    (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'yfinance', CURRENT_TIMESTAMP)
+                    ON CONFLICT (id) DO NOTHING
+                    """,
+                    [
+                        article_id,
+                        ticker.upper(),
+                        title[:500],
+                        publisher,
+                        url,
+                        published_at,
+                        summary,
+                    ],
+                )
+                count += 1
+
+            logger.info(f"[news] yfinance {ticker}: {count} articles")
             return count
 
     except Exception as e:
@@ -856,52 +617,29 @@ async def collect_yfinance_news(ticker: str, since: datetime.datetime | None = N
 
 
 _GARBAGE_STRINGS = [
-    "Accessibility Menu",
-    "Skip to main content",
-    "Skip to Content",
-    "Sign in / Join",
-    "Premium Investing Services",
-    "Stock Advisor",
-    "Rule Breakers",
-    "Join Stock Advisor",
-    "Subscribe Now",
-    "Motley Fool",
-    "Accept All Cookies",
-    "Cookie Settings",
-    "Privacy Policy",
-    "We and our partners",
-    "consent to the use",
-    "strictly necessary",
-    "Toggle navigation",
-    "Open Navigation",
-    "Close Navigation",
-    "Full Screen Menu",
-    "Site Navigation",
-    "Main Navigation",
+    "Accessibility Menu", "Skip to main content", "Skip to Content", "Sign in / Join",
+    "Premium Investing Services", "Stock Advisor", "Rule Breakers", "Join Stock Advisor",
+    "Subscribe Now", "Motley Fool", "Accept All Cookies", "Cookie Settings", "Privacy Policy",
+    "We and our partners", "consent to the use", "strictly necessary", "Toggle navigation",
+    "Open Navigation", "Close Navigation", "Full Screen Menu", "Site Navigation", "Main Navigation",
 ]
 
 
 def _clean_deep_read(text: str) -> str | None:
-    """Strip known garbage strings from deep-read content.
-
-    Returns cleaned text, or None if the article is mostly garbage.
-    """
+    """Strip known garbage strings from deep-read content."""
     if not text:
         return None
 
     original_len = len(text)
     cleaned = text
 
-    # Strip known garbage strings
     for g in _GARBAGE_STRINGS:
         cleaned = cleaned.replace(g, "")
 
-    # Strip lines that look like nav/footer (very short lines at start/end)
     lines = cleaned.split("\n")
     start_cut = 0
     for line in lines:
         stripped = line.strip()
-        # Skip short lines at the beginning (likely nav/header)
         if len(stripped) < 20 and start_cut < 10:
             start_cut += 1
         else:
@@ -909,14 +647,9 @@ def _clean_deep_read(text: str) -> str | None:
     lines = lines[start_cut:]
     cleaned = "\n".join(lines).strip()
 
-    # If >30% of original content was garbage, reject it
     if original_len > 0 and len(cleaned) < original_len * 0.5:
-        logger.info(
-            f"[news] deep-read: rejected — {original_len - len(cleaned)} chars were garbage ({100 - len(cleaned) * 100 // original_len}%)"
-        )
         return None
 
-    # Final check: must have meaningful content
     if len(cleaned) < 100:
         return None
 
@@ -924,68 +657,47 @@ def _clean_deep_read(text: str) -> str | None:
 
 
 async def deep_read_article(url: str, max_chars: int = 15000) -> str | None:
-    """Deep-read a news article URL for full article body.
-
-    Fallback chain:
-      0. Adaptive Scraper (vision LLM generated JS scraper via crawl4ai)
-      1. crawl4ai (stealth scrape → markdown)
-      2. vision_scraper (Playwright overlay removal → screenshot → Qwen OCR)
-
-    All results are cleaned through _clean_deep_read() to filter garbage.
-    Returns full article text or None.
-    """
+    """Deep-read a news article URL for full article body."""
     # Method 0: Adaptive Scraper
     try:
         from app.collectors.adaptive_scraper import run_adaptive
-        
+
         adaptive_text = await run_adaptive(url)
         if adaptive_text and len(adaptive_text) > 100:
             cleaned = _clean_deep_read(adaptive_text[:max_chars])
             if cleaned:
-                logger.info(
-                    f"[news] adaptive-read: {len(cleaned)} chars from {url[:50]}"
-                )
+                logger.info(f"[news] adaptive-read: {len(cleaned)} chars from {url[:50]}")
                 return cleaned
-        logger.info("[news] deep-read: adaptive scraper failed or returned placeholder, trying crawl4ai...")
-    except ImportError:
-        logger.info("[news] adaptive_scraper not installed")
+        logger.info("[news] deep-read: adaptive scraper failed, trying crawl4ai...")
     except Exception as e:
         logger.info(f"[news] adaptive-read error for {url[:50]}: {e}")
 
-    # Method 1: crawl4ai
+    # Method 1: crawl4ai via scraper-service
     try:
-        from app.collectors.crawl4ai_config import scrape_url
-
-        result = await scrape_url(url, max_chars=max_chars, rate_limit_delay=3.0)
-        if result["success"] and result["text"]:
-            text = result["text"]
+        from app.services.scraper_client import scraper_client
+        res = await scraper_client.scrape(url, engine="crawl4ai", options={"max_chars": max_chars})
+        if res and res.get("success") and res.get("content"):
+            text = res["content"]
             if len(text) > 100 and "oops" not in text.lower()[:50]:
                 cleaned = _clean_deep_read(text)
                 if cleaned:
-                    logger.info(
-                        f"[news] deep-read: {len(cleaned)} chars from {url[:50]}"
-                    )
+                    logger.info(f"[news] deep-read (crawl4ai): {len(cleaned)} chars from {url[:50]}")
                     return cleaned
             logger.info("[news] deep-read: crawl4ai got placeholder, trying vision...")
-    except ImportError:
-        logger.info("[news] crawl4ai not installed for deep-read")
     except Exception as e:
         logger.info(f"[news] deep-read crawl4ai error for {url[:50]}: {e}")
 
-    # Method 2: Vision pipeline (screenshot → Qwen OCR)
+    # Method 2: Vision pipeline via scraper-service
     try:
-        from app.collectors.vision_scraper import vision_deep_read
-
-        text = await vision_deep_read(url)
-        if text and len(text) > 100:
-            cleaned = _clean_deep_read(text[:max_chars])
-            if cleaned:
-                logger.info(
-                    f"[news] vision deep-read: {len(cleaned)} chars from {url[:50]}"
-                )
-                return cleaned
-    except ImportError:
-        pass  # vision_scraper or playwright not available
+        from app.services.scraper_client import scraper_client
+        res = await scraper_client.scrape(url, engine="vision", options={"max_chars": max_chars})
+        if res and res.get("success") and res.get("content"):
+            text = res["content"]
+            if text and len(text) > 100:
+                cleaned = _clean_deep_read(text[:max_chars])
+                if cleaned:
+                    logger.info(f"[news] vision deep-read: {len(cleaned)} chars from {url[:50]}")
+                    return cleaned
     except Exception as e:
         logger.info(f"[news] vision deep-read error for {url[:50]}: {e}")
 
@@ -995,16 +707,7 @@ async def deep_read_article(url: str, max_chars: int = 15000) -> str | None:
 async def deep_read_top_articles(
     ticker: str, limit: int = 3, max_chars: int = 15000
 ) -> list[dict]:
-    """Deep-read the top N most recent articles for a ticker.
-
-    Fetches full article body via crawl4ai (primary) or Playwright (fallback)
-    for the most recent articles that don't already have substantial summaries.
-
-    Rate limit: 5s between each article deep-read to avoid bans.
-
-    Returns list of {title, url, full_text} dicts.
-    Use this to feed detailed article content to the LLM for deep analysis.
-    """
+    """Deep-read the top N most recent articles for a ticker."""
     with get_db() as db:
         articles = db.execute(
             """
@@ -1014,7 +717,7 @@ async def deep_read_top_articles(
             LIMIT %s
         """,
             [ticker.upper(), limit * 2],
-        ).fetchall()  # Fetch extra in case some fail
+        ).fetchall()
 
         results = []
         for row in articles:
@@ -1023,24 +726,19 @@ async def deep_read_top_articles(
 
             article_id, title, url, summary = row
 
-            # Skip if we already have a good summary (>200 chars)
             if summary and len(summary) > 200:
                 results.append({"title": title, "url": url, "full_text": summary})
                 continue
 
-            # Deep-read
             full_text = await deep_read_article(url, max_chars)
             if full_text:
-                # Update the DB with the full text as summary
                 db.execute(
                     "UPDATE news_articles SET summary = %s WHERE id = %s",
                     [full_text, article_id],
                 )
                 results.append({"title": title, "url": url, "full_text": full_text})
 
-            await asyncio.sleep(5)  # Rate limit: go slow to avoid bans
+            await asyncio.sleep(5)
 
-        logger.info(
-            f"[news] Deep-read {ticker}: {len(results)} articles with full text"
-        )
+        logger.info(f"[news] Deep-read {ticker}: {len(results)} articles with full text")
         return results

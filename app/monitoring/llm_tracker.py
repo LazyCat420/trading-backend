@@ -107,11 +107,13 @@ class LLMTracker:
         success: bool = True,
         error: str = "",
         endpoint_name: str = "",
+        call_id: str | None = None,
+        timestamp: str | None = None,
     ) -> LLMCallRecord:
         """Record a completed LLM call."""
         record = LLMCallRecord(
-            call_id=str(uuid.uuid4()),
-            timestamp=datetime.datetime.now(datetime.UTC).isoformat(),
+            call_id=call_id or str(uuid.uuid4()),
+            timestamp=timestamp or datetime.datetime.now(datetime.UTC).isoformat(),
             agent_name=agent_name,
             ticker=ticker,
             cycle_id=cycle_id,
@@ -166,6 +168,23 @@ class LLMTracker:
                 q.put_nowait(record)
             except asyncio.QueueFull:
                 pass  # drop if listener is behind
+
+        # Forward to trading-client if possible
+        async def forward_record():
+            import httpx
+            payload = record.to_dict()
+            for host in ["trading-client", "localhost", "127.0.0.1"]:
+                url = f"http://{host}:8888/api/v1/monitor/record"
+                try:
+                    async with httpx.AsyncClient(timeout=1.0) as client:
+                        resp = await client.post(url, json=payload)
+                        if resp.status_code == 200:
+                            break
+                except Exception:
+                    pass
+
+        asyncio.create_task(forward_record())
+
         return record
 
     def get_calls(self, limit: int = 50, agent: str | None = None) -> list[dict]:

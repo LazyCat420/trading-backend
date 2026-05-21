@@ -704,3 +704,24 @@ class PipelineStateMixin:
 
                 cls._emit_timer = threading.Timer(0.1, flush)
                 cls._emit_timer.start()
+
+    @classmethod
+    def flush_events(cls):
+        """Synchronously flush any pending events to the database."""
+        with cls._emit_lock:
+            if cls._emit_timer:
+                cls._emit_timer.cancel()
+                cls._emit_timer = None
+            events_to_flush = list(cls._emit_events)
+            cls._emit_events.clear()
+
+        if not events_to_flush:
+            return
+
+        cid = cls._state.get("cycle_id") or "no-id"
+        try:
+            PipelineStateDB.save_state(dict(cls._state))
+            PipelineStateDB.append_events(cid, events_to_flush)
+        except Exception as e:
+            logger.error("[PipelineStateMixin] flush_events failed: %s", e)
+

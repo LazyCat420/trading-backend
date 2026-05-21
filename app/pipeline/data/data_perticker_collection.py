@@ -20,6 +20,31 @@ logger = logging.getLogger(__name__)
 SOURCE_TIMEOUT = 120.0
 
 
+async def run_ticker_processors(ticker: str, emit) -> None:
+    """Run per-ticker deduplication, summarization, and consensus."""
+    # ── Per-ticker deduplication ──
+    try:
+        from app.processors.deduplicator import deduplicate_news
+        # Run in thread pool to not block
+        await asyncio.to_thread(deduplicate_news, ticker)
+    except Exception as e:
+        logger.warning("[PIPELINE] Per-ticker deduplication failed for %s: %s", ticker, e)
+
+    # ── Per-ticker summarization ──
+    try:
+        from app.processors.summarizer import summarize_unsummarized
+        await summarize_unsummarized(emit=emit, max_items=50, ticker=ticker)
+    except Exception as e:
+        logger.warning("[PIPELINE] Per-ticker summarization failed for %s: %s", ticker, e)
+
+    # ── Per-ticker consensus ──
+    try:
+        from app.processors.consensus_engine import run_consensus_engine
+        await run_consensus_engine(emit=emit, ticker=ticker)
+    except Exception as e:
+        logger.warning("[PIPELINE] Per-ticker consensus failed for %s: %s", ticker, e)
+
+
 async def run_perticker_collection(
     tickers: list[str],
     _glance_set: set[str],
@@ -179,6 +204,7 @@ async def run_perticker_collection(
                     pass
                 if analysis_queue is not None:
                     await analysis_queue.put(ticker)
+                    logger.info("[PIPELINE] %s (Glance) queued for analysis immediately", ticker)
                 return ticker
             # ── END TRIAGE SKIP ──
 
@@ -780,11 +806,14 @@ async def run_perticker_collection(
             except Exception as e:
                 logger.info(f"[PIPELINE]   [tech] {ticker} FAILED: {e}")
 
+            # ── Run per-ticker processors (dedup, summarize, consensus) ──
+            await run_ticker_processors(ticker, emit)
+
             # ── Push to analysis queue if pipelining is active ──
             if analysis_queue is not None:
                 await analysis_queue.put(ticker)
                 logger.info(
-                    "[PIPELINE] %s collection and technicals done, queued for analysis",
+                    "[PIPELINE] %s collection, technicals, and data processors done, queued for analysis immediately",
                     ticker,
                 )
 

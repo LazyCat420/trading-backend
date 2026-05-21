@@ -203,6 +203,11 @@ async def run_phase4_analysis(
                         worker_id, ticker, _action, _conf, _ticker_elapsed_ms,
                         analyzed_count, len(ctx.tickers),
                     )
+                    try:
+                        from app.cycle.orchestration.cycle_auditor import auditor
+                        auditor.ticker_result(ctx.cycle_id, ticker, result, elapsed_s=_ticker_elapsed_ms / 1000.0)
+                    except Exception as ae:
+                        logger.error("Failed to log ticker_result to auditor: %s", ae)
 
             except asyncio.TimeoutError:
                 _ticker_elapsed_ms = int((time.monotonic() - _ticker_start) * 1000)
@@ -215,18 +220,22 @@ async def run_phase4_analysis(
                     status="error",
                     data={"worker_id": worker_id, "ticker": ticker, "elapsed_ms": _ticker_elapsed_ms},
                 )
+                fallback_result = {
+                    "ticker": ticker,
+                    "action": "HOLD",
+                    "confidence": 0,
+                    "error": err_str,
+                    "error_type": "timeout",
+                    "is_timeout_fallback": True,
+                }
                 async with count_lock:
                     errors.append(ticker)
-                    results.append(
-                        {
-                            "ticker": ticker,
-                            "action": "HOLD",
-                            "confidence": 0,
-                            "error": err_str,
-                            "error_type": "timeout",
-                            "is_timeout_fallback": True,
-                        }
-                    )
+                    results.append(fallback_result)
+                try:
+                    from app.cycle.orchestration.cycle_auditor import auditor
+                    auditor.ticker_result(ctx.cycle_id, ticker, fallback_result, elapsed_s=_ticker_elapsed_ms / 1000.0)
+                except Exception as ae:
+                    logger.error("Failed to log ticker_result timeout to auditor: %s", ae)
             except Exception as e:
                 _ticker_elapsed_ms = int((time.monotonic() - _ticker_start) * 1000)
                 err_str = str(e)
@@ -238,18 +247,22 @@ async def run_phase4_analysis(
                     status="error",
                     data={"worker_id": worker_id, "ticker": ticker, "error": err_str[:300], "elapsed_ms": _ticker_elapsed_ms},
                 )
+                fallback_result = {
+                    "ticker": ticker,
+                    "action": "HOLD",
+                    "confidence": 0,
+                    "error": err_str,
+                    "error_type": type(e).__name__,
+                    "is_timeout_fallback": True,
+                }
                 async with count_lock:
                     errors.append(ticker)
-                    results.append(
-                        {
-                            "ticker": ticker,
-                            "action": "HOLD",
-                            "confidence": 0,
-                            "error": err_str,
-                            "error_type": type(e).__name__,
-                            "is_timeout_fallback": True,
-                        }
-                    )
+                    results.append(fallback_result)
+                try:
+                    from app.cycle.orchestration.cycle_auditor import auditor
+                    auditor.ticker_result(ctx.cycle_id, ticker, fallback_result, elapsed_s=_ticker_elapsed_ms / 1000.0)
+                except Exception as ae:
+                    logger.error("Failed to log ticker_result crash to auditor: %s", ae)
             finally:
                 work_queue.task_done()
 
@@ -289,15 +302,15 @@ async def run_phase4_analysis(
 
     heartbeat_task = asyncio.create_task(_progress_heartbeat())
 
-    # We wait for the queue to be fully processed or a global safety timeout.
+    # We wait for the worker tasks to complete or a global safety timeout.
     # Since individual tickers are strictly timed out, the workers should never hit this global timeout.
     try:
         async with pipeline_profiler.phase("analysis_drain"):
             # Set to cycle timeout + 5 minutes grace buffer, rather than a hardcoded 1 hour
             cycle_timeout_seconds = (int(getattr(settings, "CYCLE_TIMEOUT_MINUTES", 120)) + 5) * 60.0
-            await asyncio.wait_for(work_queue.join(), timeout=cycle_timeout_seconds)
+            await asyncio.wait_for(asyncio.gather(*workers), timeout=cycle_timeout_seconds)
     except asyncio.TimeoutError:
-        logger.critical("[CYCLE] FATAL WORKER POOL TIMEOUT. Queue failed to drain within %ss.", cycle_timeout_seconds)
+        logger.critical("[CYCLE] FATAL WORKER POOL TIMEOUT. Workers failed to complete within %ss.", cycle_timeout_seconds)
         emit(
             "analyzing",
             "worker_timeout",

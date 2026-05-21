@@ -219,37 +219,8 @@ class OrchestratorCoreMixin:
                 analysis_task = asyncio.create_task(_analysis_bg())
                 logger.info("[CYCLE] Launched analysis workers in background (consuming from queue)")
 
-                # ── STREAMING: Pre-push watchlist tickers for immediate analysis ──
-                # Watchlist tickers have cached data from prior cycles (prices,
-                # fundamentals, recent news). Push them to the analysis queue NOW
-                # so workers start processing within seconds — don't wait for
-                # global collection (RSS=10min) to finish first.
-                # Dedup in phase4_analysis.py prevents double-processing when
-                # per-ticker collection pushes these same tickers later.
-                if analysis_queue is not None and ctx.tickers:
-                    _prepush_count = 0
-                    _prio_counts = {}
-                    for t in ctx.tickers:
-                        analysis_queue.put_nowait(t)  # Auto-classifies priority
-                        _prio = analysis_queue.classify(t)
-                        _prio_counts[_prio] = _prio_counts.get(_prio, 0) + 1
-                        _prepush_count += 1
-                    _prio_labels = {0: "portfolio", 1: "deep", 2: "watchlist", 3: "discovered", 4: "glance"}
-                    _prio_summary = ", ".join(
-                        f"{_prio_labels.get(p, f'p{p}')}={c}" for p, c in sorted(_prio_counts.items())
-                    )
-                    cls.emit(
-                        "analyzing",
-                        "watchlist_prepush",
-                        f"Pre-pushed {_prepush_count} tickers for immediate analysis "
-                        f"(priority: {_prio_summary})",
-                        status="ok",
-                        data={"tickers": list(ctx.tickers)[:20], "count": _prepush_count, "priorities": _prio_counts},
-                    )
-                    logger.info(
-                        "[CYCLE] Pre-pushed %d tickers to priority queue (%s)",
-                        _prepush_count, _prio_summary,
-                    )
+                # Tickers are now pushed to the analysis queue concurrently as they finish
+                # collection, deduplication, summarization, and consensus in phase2_collection.
 
             elif _skip_analyze:
                 cls.emit(
@@ -472,3 +443,37 @@ class OrchestratorCoreMixin:
             except Exception:
                 pass
             raise
+        finally:
+            cls._finalize_cycle_telemetry(ctx)
+
+    @classmethod
+    def _finalize_cycle_telemetry(cls, ctx: Any) -> None:
+        """Flush remaining events, end the pipeline profiler, and persist the benchmark report."""
+        try:
+            if hasattr(cls, "flush_events"):
+                cls.flush_events()
+        except Exception as e:
+            logger.warning("[CYCLE] Failed to flush events for telemetry: %s", e)
+
+        try:
+            from app.monitoring.pipeline_profiler import profiler as pipeline_profiler
+            pipeline_profiler.end_cycle()
+        except Exception as e:
+            logger.warning("[CYCLE] Failed to end pipeline profiler: %s", e)
+
+        try:
+            from app.pipeline.analysis.benchmark import persist_benchmark
+            bench_state = dict(cls._state)
+            
+            # Map requested/effective version keys
+            bench_state["requested_version"] = cls._state.get("requested_pipeline_version", "v2")
+            bench_state["effective_version"] = cls._state.get("effective_pipeline_version", "v2")
+            
+            # Query the final list of events from the DB so we have a complete log
+            state_db = PipelineStateDB.get_state(summary_only=False)
+            bench_state["events"] = state_db.get("events", [])
+            
+            persist_benchmark(bench_state)
+        except Exception as e:
+            logger.warning("[CYCLE] Failed to persist cycle benchmark: %s", e)
+

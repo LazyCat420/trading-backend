@@ -21,7 +21,7 @@ def _score_article(title: str, summary: str) -> int:
     score += len(re.findall(r"[$%]", text)) * 50
     return score
 
-def deduplicate_news() -> int:
+def deduplicate_news(ticker: str | None = None) -> tuple[int, list[str]]:
     """
     Remove duplicate news articles from the database.
     Uses TF-IDF semantic clustering and a QualityScorer.
@@ -29,33 +29,60 @@ def deduplicate_news() -> int:
     Returns a tuple: (number of duplicates removed, list of tickers with high redundancy).
     """
     with get_db() as db:
-        before = db.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0]
+        if ticker:
+            ticker = ticker.upper()
+            before = db.execute("SELECT COUNT(*) FROM news_articles WHERE ticker = %s", [ticker]).fetchone()[0]
+        else:
+            before = db.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0]
 
         # 1. Exact title dedup first (fastest, cheapest)
-        db.execute("""
-            DELETE FROM news_articles 
-            WHERE id NOT IN (
-                SELECT id FROM (
-                    SELECT id,
-                    ROW_NUMBER() OVER(PARTITION BY ticker, LOWER(TRIM(title)) ORDER BY published_at DESC) as rn
-                    FROM news_articles
-                ) t WHERE t.rn = 1
-            )
-        """)
+        if ticker:
+            db.execute("""
+                DELETE FROM news_articles 
+                WHERE ticker = %s AND id NOT IN (
+                    SELECT id FROM (
+                        SELECT id,
+                        ROW_NUMBER() OVER(PARTITION BY ticker, LOWER(TRIM(title)) ORDER BY published_at DESC) as rn
+                        FROM news_articles
+                        WHERE ticker = %s
+                    ) t WHERE t.rn = 1
+                )
+            """, [ticker, ticker])
+        else:
+            db.execute("""
+                DELETE FROM news_articles 
+                WHERE id NOT IN (
+                    SELECT id FROM (
+                        SELECT id,
+                        ROW_NUMBER() OVER(PARTITION BY ticker, LOWER(TRIM(title)) ORDER BY published_at DESC) as rn
+                        FROM news_articles
+                    ) t WHERE t.rn = 1
+                )
+            """)
 
         # 2. Semantic Clustering & Quality Assessment
         # We only want to cluster recent articles to avoid cross-year mismatches, but let's just group by ticker.
         # To avoid massive memory, let's fetch articles from the last 14 days.
         fourteen_days_ago = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=14)
         
-        rows = db.execute("""
-            SELECT id, ticker, title, summary, publisher 
-            FROM news_articles 
-            WHERE published_at >= %s
-        """, [fourteen_days_ago]).fetchall()
+        if ticker:
+            rows = db.execute("""
+                SELECT id, ticker, title, summary, publisher 
+                FROM news_articles 
+                WHERE published_at >= %s AND ticker = %s
+            """, [fourteen_days_ago, ticker]).fetchall()
+        else:
+            rows = db.execute("""
+                SELECT id, ticker, title, summary, publisher 
+                FROM news_articles 
+                WHERE published_at >= %s
+            """, [fourteen_days_ago]).fetchall()
 
         if not rows:
-            after = db.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0]
+            if ticker:
+                after = db.execute("SELECT COUNT(*) FROM news_articles WHERE ticker = %s", [ticker]).fetchone()[0]
+            else:
+                after = db.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0]
             return before - after, []
 
         ticker_groups = defaultdict(list)
@@ -73,7 +100,7 @@ def deduplicate_news() -> int:
         publisher_stats = defaultdict(lambda: {"total": 0, "wins": 0})
         high_redundancy_tickers = set()
 
-        for ticker, articles in ticker_groups.items():
+        for ticker_key, articles in ticker_groups.items():
             if len(articles) < 2:
                 for a in articles:
                     publisher_stats[a["publisher"]]["total"] += 1
@@ -112,7 +139,7 @@ def deduplicate_news() -> int:
 
                 if len(cluster_indices) > 1:
                     if len(cluster_indices) >= 5:
-                        high_redundancy_tickers.add(ticker)
+                        high_redundancy_tickers.add(ticker_key)
                         
                     # Pick winner
                     best_idx = max(cluster_indices, key=lambda idx: articles[idx]["score"])
@@ -142,16 +169,19 @@ def deduplicate_news() -> int:
                 VALUES ('publisher', %s, %s, %s, %s)
                 ON CONFLICT (source_type, source_name) 
                 DO UPDATE SET 
-                    total_items = source_trust.total_items + EXCLUDED.total_items,
-                    quality_wins = source_trust.quality_wins + EXCLUDED.quality_wins,
-                    win_rate = CASE 
-                        WHEN (source_trust.total_items + EXCLUDED.total_items) > 0 
-                        THEN (source_trust.quality_wins + EXCLUDED.quality_wins)::FLOAT / (source_trust.total_items + EXCLUDED.total_items)
-                        ELSE 0.0 END,
-                    last_updated = CURRENT_TIMESTAMP
+                total_items = source_trust.total_items + EXCLUDED.total_items,
+                quality_wins = source_trust.quality_wins + EXCLUDED.quality_wins,
+                win_rate = CASE 
+                    WHEN (source_trust.total_items + EXCLUDED.total_items) > 0 
+                    THEN (source_trust.quality_wins + EXCLUDED.quality_wins)::FLOAT / (source_trust.total_items + EXCLUDED.total_items)
+                    ELSE 0.0 END,
+                last_updated = CURRENT_TIMESTAMP
             """, [pub, stats["total"], stats["wins"], stats["wins"] / max(1, stats["total"])])
 
-        after = db.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0]
+        if ticker:
+            after = db.execute("SELECT COUNT(*) FROM news_articles WHERE ticker = %s", [ticker]).fetchone()[0]
+        else:
+            after = db.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0]
         removed = before - after
 
         if removed > 0:

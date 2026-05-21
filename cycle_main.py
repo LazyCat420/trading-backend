@@ -24,15 +24,19 @@ import json
 import uvicorn
 from fastapi import FastAPI
 
-# ── Ensure the shared codebase is importable ────────────────────
+# ── Ensure the local directory and shared codebase are importable ────────────────────
 # The Docker container mounts trading-client at /app/shared
 # In dev, PYTHONPATH should include the trading-client directory
+local_dir = os.path.dirname(os.path.abspath(__file__))
+if local_dir not in sys.path:
+    sys.path.insert(0, local_dir)
+
 SHARED_CODE = os.environ.get(
     "SHARED_CODEBASE_PATH",
-    os.path.join(os.path.dirname(__file__), "..", "trading-client"),
+    os.path.join(local_dir, "..", "trading-client"),
 )
 if os.path.isdir(SHARED_CODE) and SHARED_CODE not in sys.path:
-    sys.path.insert(0, SHARED_CODE)
+    sys.path.append(SHARED_CODE)
 
 logger = logging.getLogger("cycle_backend")
 
@@ -43,6 +47,7 @@ async def run_single_cycle(
     bot_id: str = "cycle-backend",
 ) -> dict:
     """Execute one full trading cycle and return the summary."""
+    from app.services.boot_service import BootService
     from app.cycle.core import PipelineContext
     from app.cycle.orchestration.state_manager import PipelineStateMixin
     from app.cycle.orchestration.orchestrator_core import OrchestratorCoreMixin
@@ -55,58 +60,69 @@ async def run_single_cycle(
     if not cycle_id:
         cycle_id = f"cycle-{int(time.time())}"
 
-    if not tickers:
-        from app.cycle.orchestration.lifecycle_controller import LifecycleControllerMixin
+    # Ensure system is fully booted before executing the cycle
+    await BootService.startup()
+
+    # Reset cycle control to ensure it's not paused when running single cycle via CLI
+    from app.cycle.orchestration.cycle_control import cycle_control
+    cycle_control.reset()
+
+    try:
+        if not tickers:
+            from app.cycle.orchestration.lifecycle_controller import LifecycleControllerMixin
+            try:
+                from app.pipeline.ticker_selector import TickerSelector
+                tickers = TickerSelector.select_tickers_for_cycle(requested_tickers=[], cap=50)
+            except Exception as e:
+                logger.warning("[cycle_backend] Ticker selection failed: %s", e)
+                tickers = ["AAPL"]
+
         try:
-            from app.pipeline.ticker_selector import TickerSelector
-            tickers = TickerSelector.select_tickers_for_cycle(requested_tickers=[], cap=50)
-        except Exception as e:
-            logger.warning("[cycle_backend] Ticker selection failed: %s", e)
-            tickers = ["AAPL"]
+            bot_id = get_active_bot_id()
+        except Exception:
+            pass
 
-    try:
-        bot_id = get_active_bot_id()
-    except Exception:
-        pass
+        ctx = PipelineContext(
+            tickers=tickers,
+            collect=True,
+            analyze=True,
+            trade=True,
+            cycle_id=cycle_id,
+        )
 
-    ctx = PipelineContext(
-        tickers=tickers,
-        collect=True,
-        analyze=True,
-        trade=True,
-        cycle_id=cycle_id,
-    )
+        # Initialize the pipeline state using the db state manager
+        CycleEngine.load_state()
 
-    # Initialize the pipeline state using the db state manager
-    CycleEngine.load_state()
-
-    logger.info(
-        "[cycle_backend] Starting cycle %s | tickers=%s",
-        cycle_id,
-        tickers,
-    )
-    t0 = time.monotonic()
-
-    try:
-        await CycleEngine._execute_cycle(ctx)
-        elapsed = time.monotonic() - t0
-        summary = CycleEngine._cycle_summary
-        summary["elapsed_s"] = round(elapsed, 1)
         logger.info(
-            "[cycle_backend] Cycle %s completed in %.1fs",
+            "[cycle_backend] Starting cycle %s | tickers=%s",
             cycle_id,
-            elapsed,
+            tickers,
         )
-        return summary
-    except Exception as e:
-        elapsed = time.monotonic() - t0
-        logger.error(
-            "[cycle_backend] Cycle %s failed after %.1fs: %s",
-            cycle_id,
-            elapsed,
-            e,
-        )
-        return {"cycle_id": cycle_id, "status": "error", "error": str(e)}
+        t0 = time.monotonic()
+
+        try:
+            await CycleEngine._execute_cycle(ctx)
+            elapsed = time.monotonic() - t0
+            summary = CycleEngine._cycle_summary
+            summary["elapsed_s"] = round(elapsed, 1)
+            logger.info(
+                "[cycle_backend] Cycle %s completed in %.1fs",
+                cycle_id,
+                elapsed,
+            )
+            return summary
+        except Exception as e:
+            elapsed = time.monotonic() - t0
+            logger.error(
+                "[cycle_backend] Cycle %s failed after %.1fs: %s",
+                cycle_id,
+                elapsed,
+                e,
+            )
+            return {"cycle_id": cycle_id, "status": "error", "error": str(e)}
+    finally:
+        # Cleanly shut down pools and background tasks to prevent exit hang
+        await BootService.shutdown()
 
 
 async def poll_system_commands(shutdown: asyncio.Event):
@@ -262,7 +278,7 @@ async def poll_system_commands(shutdown: asyncio.Event):
 
 async def run_worker(tickers: list[str] | None = None) -> None:
     """Run the backend worker (scheduler + poller) until shutdown."""
-    from app.services.cycle_scheduler import SchedulerService
+    from app.services.boot_service import BootService
     
     shutdown = asyncio.Event()
 
@@ -277,8 +293,8 @@ async def run_worker(tickers: list[str] | None = None) -> None:
         except NotImplementedError:
             signal.signal(sig, lambda s, f: _request_shutdown())
 
-    # Start APScheduler (which runs DB schedules + background jobs)
-    SchedulerService.start()
+    # Start boot sequence (including DB connection & Schema init, Reset Application State, and Scheduler Start)
+    await BootService.startup()
     
     # Start the system commands poller
     poller_task = asyncio.create_task(poll_system_commands(shutdown))
@@ -287,7 +303,7 @@ async def run_worker(tickers: list[str] | None = None) -> None:
     await shutdown.wait()
     
     # Cleanup
-    SchedulerService.stop()
+    await BootService.shutdown()
     await poller_task
 
 

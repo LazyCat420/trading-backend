@@ -9,7 +9,6 @@ import httpx
 
 from app.db.connection import get_db
 from app.config import settings
-from app.collectors.crawl4ai_config import scrape_url
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,6 @@ def extract_domain(url: str) -> str:
     """Pulls clean domain from any URL."""
     try:
         if not url.startswith("http"):
-            # Assume it's already a domain or a malformed url, just try parsing with http
             parsed = urlparse("http://" + url)
         else:
             parsed = urlparse(url)
@@ -199,7 +197,6 @@ async def generate_script(domain: str, screenshot_b64: str, previous_script: str
 
             script = data["choices"][0]["message"]["content"]
             
-            # Strip markdown blockticks if LLM didn't follow instruction 4
             script = re.sub(r'^```(?:javascript)?\n|```$', '', script.strip(), flags=re.MULTILINE)
             
             return script.strip()
@@ -209,10 +206,12 @@ async def generate_script(domain: str, screenshot_b64: str, previous_script: str
 
 async def _execute_script_and_evaluate(url: str, domain: str, script: str) -> str | None:
     """Helper to run the script via crawl4ai and report success/failure."""
-    result = await scrape_url(url, js_code=script)
-    if result["success"] and result["text"] and len(result["text"]) > 50:
+    from app.services.scraper_client import scraper_client
+
+    result = await scraper_client.scrape(url, engine="crawl4ai", options={"js_code": script})
+    if result and result.get("success") and result.get("content") and len(result["content"]) > 50:
         report_success(domain)
-        return result["text"]
+        return result["content"]
     else:
         report_failure(domain)
         return None
@@ -223,11 +222,9 @@ async def run_adaptive(url: str) -> str | None:
     if not domain:
         return None
         
-    # Check DB for active script
     script = get_script(domain)
     
     if script:
-        # Validate existing script just in case it was maliciously injected or altered
         if validate_script(script):
             logger.info(f"[adaptive] Found active script for {domain}, attempting scrape...")
             text = await _execute_script_and_evaluate(url, domain, script)
@@ -235,47 +232,43 @@ async def run_adaptive(url: str) -> str | None:
                 return text
             else:
                 logger.info(f"[adaptive] Saved script for {domain} failed. Will attempt to regenerate.")
-                # We do not immediately return None; instead we fall through to regeneration
         else:
             logger.warning(f"[adaptive] Existing script for {domain} failed validation. Will regenerate.")
             
-    # Take screenshot via crawl4ai
     logger.info(f"[adaptive] Taking screenshot for new scraper for {domain}...")
-    screenshot_result = await scrape_url(url, screenshot=True, fast=False)
-    screenshot_b64 = screenshot_result.get("screenshot")
+    from app.services.scraper_client import scraper_client
+    
+    screenshot_result = await scraper_client.scrape(url, engine="crawl4ai", options={"screenshot": True, "fast": False})
+    if not screenshot_result:
+        logger.error(f"[adaptive] Failed to capture screenshot for {domain}")
+        return None
+        
+    screenshot_b64 = screenshot_result.get("screenshot_b64")
     
     if not screenshot_b64:
         logger.error(f"[adaptive] Failed to capture screenshot for {domain}")
-        # The screenshot capture returned None (e.g. page blocked/404). 
-        # Raising an exception here ensures it surfaces properly if needed, but returning None is also safe.
         return None
         
-    # Retry loop: Up to 5 attempts to generate and run a successful script
     last_script = script
     for attempt in range(5):
         logger.info(f"[adaptive] Generating new scraper for {domain} (Attempt {attempt+1}/5)...")
-        # Send screenshot to vision LLM -> get script back (include previous_script if it exists for retry loop)
         new_script = await generate_script(domain, screenshot_b64, previous_script=last_script)
         
         if not new_script:
             logger.error(f"[adaptive] Vision LLM returned no script for {domain}")
             break
             
-        # Validate script against blocklist
         if not validate_script(new_script):
             logger.warning(f"[adaptive] Vision LLM generated an invalid script for {domain}. Retrying.")
             last_script = new_script
             continue
             
-        # Save script to DB
         save_script(domain, new_script)
         
-        # Run script, evaluate success
         text = await _execute_script_and_evaluate(url, domain, new_script)
         if text:
             return text
             
-        # Setup for next attempt
         last_script = new_script
         
     return None

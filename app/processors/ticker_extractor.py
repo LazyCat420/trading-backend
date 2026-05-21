@@ -320,6 +320,83 @@ FALSE_TICKERS = {
     "TBA",
     "WIP",
     "EOD",
+    # ── Media / Tech / Common abbreviations ──
+    # These are very common in general news articles and almost never
+    # refer to the stock. E.g., "TV" = television, not Grupo Televisa;
+    # "HD" = high definition, not Home Depot (which is matched by company name).
+    "TV",
+    "HD",
+    "PC",
+    "DVD",
+    "VR",
+    "AR",
+    "HR",
+    "PR",
+    "AD",
+    "ADS",
+    "APP",
+    "GPS",
+    "USB",
+    "LED",
+    "LCD",
+    "VPN",
+    "RSS",
+    "NFT",
+    "SUV",
+    "AC",
+    # ── Titles / Roles ──
+    "VP",
+    "EVP",
+    "SVP",
+    "PHD",
+    "DR",
+    "MD",
+    # ── Geography / Places ──
+    "NYC",
+    "LA",
+    "SF",
+    "DC",
+    "UAE",
+    # ── More common words that leak through ──
+    "LIFE",
+    "PLAN",
+    "FREE",
+    "HOME",
+    "CARE",
+    "SAVE",
+    "POST",
+    "RATE",
+    "LINE",
+    "FUEL",
+    "LAND",
+    "RIDE",
+    "TECH",
+    "GROW",
+    "ROCK",
+    "CASH",
+    "DEAL",
+    "WIRE",
+    "TALK",
+    "WORK",
+    "MOVE",
+    "GAIN",
+    "LOSS",
+    "VOTE",
+    "JOBS",
+    "PAYS",
+    "HITS",
+    "GETS",
+    "SAYS",
+    "GOES",
+    "SEES",
+    "USES",
+    "WINS",
+    "PICK",
+    "GAVE",
+    "RISE",
+    "FELL",
+    "FUND",
+    "GOLD",
     # Single letters that need context
     "I",
     "A",
@@ -424,6 +501,98 @@ FINANCIAL_CONTEXT = {
     "reporting",
 }
 
+# ─────────────────────────────────────────────
+# Anti-Patterns — Common English phrases that DISQUALIFY ticker matches.
+# If a 2-4 letter ticker candidate ONLY appears inside these patterns
+# (and never in financial framing), it gets a heavy confidence penalty.
+# This stops "TV", "HR", "PR", "AD" etc. from leaking through when
+# they're used as ordinary English abbreviations.
+# ─────────────────────────────────────────────
+
+# Map: ticker symbol → list of regex patterns where that word is used
+# as a common English abbreviation, NOT as a stock ticker.
+# Each pattern must match case-insensitively around the ticker word.
+COMMON_WORD_ANTI_PATTERNS: dict[str, list[str]] = {
+    "TV": [
+        r"(?i)\bon\s+TV\b",
+        r"(?i)\bTV\s+(?:show|series|host|channel|station|network|advert|commercial|programme|program|screen|set|appearance|personality|star|presenter|executive|studios|production|broadcast|news|drama|comedy|episode|season|viewer|audience|reality)",
+        r"(?i)\breality\s+TV\b",
+        r"(?i)\bcable\s+TV\b",
+        r"(?i)\blive\s+TV\b",
+        r"(?i)\bsatellite\s+TV\b",
+        r"(?i)\bsmart\s+TV\b",
+        r"(?i)\b(?:watch|watched|watching)\s+(?:on\s+)?TV\b",
+        r"(?i)\bTV\s+(?:ad|ads|advert|adverts|advertising|campaign)\b",
+        r"(?i)\bchance\s+to\s+be\s+on\s+TV\b",
+    ],
+    "HD": [
+        r"(?i)\bHD\s+(?:video|quality|resolution|display|screen|camera|content|streaming|format|recording)",
+        r"(?i)\b(?:full|ultra|1080p|720p|4K)\s+HD\b",
+        r"(?i)\bHD\s+(?:TV|monitor)\b",
+    ],
+    "PC": [
+        r"(?i)\bPC\s+(?:game|games|gaming|user|users|hardware|software|version|platform|desktop|laptop|computer|build|market|sales)\b",
+        r"(?i)\bgaming\s+PC\b",
+        r"(?i)\bdesktop\s+PC\b",
+    ],
+    "VR": [
+        r"(?i)\bVR\s+(?:headset|game|games|gaming|experience|content|device|world|technology|goggles)\b",
+        r"(?i)\bvirtual\s+reality\b",
+    ],
+    "AR": [
+        r"(?i)\bAR\s+(?:glasses|experience|app|apps|technology|feature|content|device|headset)\b",
+        r"(?i)\baugmented\s+reality\b",
+    ],
+    "HR": [
+        r"(?i)\bHR\s+(?:department|manager|team|director|policy|policies|software|platform|consultant|professional|issue|officer)\b",
+        r"(?i)\bhuman\s+resources?\b",
+    ],
+    "PR": [
+        r"(?i)\bPR\s+(?:firm|agency|team|campaign|strategy|manager|stunt|disaster|crisis|statement|representative|department)\b",
+        r"(?i)\bpublic\s+relations?\b",
+        r"(?i)\bpress\s+release\b",
+    ],
+    "AD": [
+        r"(?i)\b(?:TV|video|online|digital|print|display|banner|pop.?up|targeted|political)\s+ad\b",
+        r"(?i)\bad\s+(?:campaign|revenue|spend|spending|network|blocker|tech|targeting|budget|industry|market|placement)\b",
+    ],
+}
+
+
+def _check_anti_patterns(sym: str, full_text: str) -> float:
+    """Check if a ticker candidate appears only in common English anti-patterns.
+
+    Returns a confidence PENALTY (0.0 = no penalty, -0.40 = heavy penalty).
+    The penalty fires only when ALL occurrences of the symbol match anti-patterns
+    and NONE appear in financial contexts.
+    """
+    patterns = COMMON_WORD_ANTI_PATTERNS.get(sym)
+    if not patterns:
+        return 0.0
+
+    # Count total bare occurrences of the symbol
+    total_mentions = len(re.findall(rf"\b{re.escape(sym)}\b", full_text))
+    if total_mentions == 0:
+        return 0.0
+
+    # Count how many occurrences are inside anti-patterns
+    anti_pattern_count = 0
+    for pattern in patterns:
+        anti_pattern_count += len(re.findall(pattern, full_text))
+
+    # If most/all occurrences are in anti-patterns, this is likely NOT a stock
+    # We cap at total_mentions to avoid double-counting overlapping patterns
+    anti_ratio = min(anti_pattern_count, total_mentions) / total_mentions
+
+    if anti_ratio >= 0.8:
+        # Almost all uses are common English — heavy penalty
+        return -0.40
+    elif anti_ratio >= 0.5:
+        # Mixed usage — moderate penalty
+        return -0.25
+    return 0.0
+
+
 # Regex for very strong direct syntax (applied directly to the symbol string)
 DIRECT_SYNTAX_VERBS = r"(?i)\b(?:bought|sold|buy|sell|short|shorting|long|longing|holding|calls on|puts on|shares of)\s+"
 DIRECT_SYNTAX_PRICE = (
@@ -496,6 +665,8 @@ class CompanyRegistry:
         # Try loading from DB cache first
         count = self._load_from_db()
         if count >= 400:  # S&P 500 minus a few edge cases
+            self._add_manual_aliases()
+            self._add_nasdaq_extras()
             self._loaded = True
             logger.info(
                 "[ticker_extractor] Registry loaded from DB: %d companies", count
@@ -920,6 +1091,18 @@ def extract_tickers(
 
         boost = 0.0
 
+        # ── Anti-Pattern Check (Penalty for common English usage) ──
+        # Must run BEFORE positive boosts so that "on TV" in a culture
+        # article doesn't accidentally get boosted by coincidental
+        # financial words like "market" or "growth" elsewhere in the text.
+        anti_penalty = _check_anti_patterns(sym, full_text)
+        if anti_penalty < 0:
+            logger.debug(
+                "[ticker_extractor] %s: anti-pattern penalty %.2f",
+                sym,
+                anti_penalty,
+            )
+
         # Direct Syntax Check (Massive boost for explicit financial framing)
         # e.g., "bought ON", "ON +5%", "(ON)"
         direct_syntax_matches = [
@@ -968,7 +1151,14 @@ def extract_tickers(
         if title and sym in title.upper():
             boost += 0.10
 
-        tm.confidence = min(1.0, tm.confidence + boost)
+        # Apply anti-pattern penalty AFTER positive boosts.
+        # If direct financial syntax was found (e.g., "$TV +5%"),
+        # the anti-pattern penalty is suppressed — explicit financial
+        # framing overrides common English usage.
+        if has_direct_syntax:
+            anti_penalty = 0.0  # Direct syntax = definitely a ticker
+
+        tm.confidence = min(1.0, tm.confidence + boost + anti_penalty)
 
     # ── Filter: reject < 0.40 and excluded ──
     results = [tm for tm in candidates.values() if tm.confidence >= 0.40]

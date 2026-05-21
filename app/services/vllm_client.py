@@ -102,6 +102,7 @@ AGENT_ROLE_ROUTING = {
     "hermes_research": "collector",
     "summarizer": "collector",
     "data_janitor": "collector",
+    "data_curator": "collector",
     "retriever": "collector",
     "user_chat": "collector",
     "collector": "collector",
@@ -190,10 +191,13 @@ class VLLMEndpoint:
 
     def init_concurrency(self, reserved_high: int = 1):
         """Initialize queue and semaphores. Safe to call at import time."""
-        self.queue = asyncio.PriorityQueue()
-        self.slots = asyncio.Semaphore(self.max_concurrent)
+        if not hasattr(self, "queue") or self.queue is None:
+            self.queue = asyncio.PriorityQueue()
+        if not hasattr(self, "slots") or self.slots is None:
+            self.slots = asyncio.Semaphore(self.max_concurrent)
         pipe_max = max(1, self.max_concurrent - reserved_high)
-        self.pipeline_slots = asyncio.Semaphore(pipe_max)
+        if not hasattr(self, "pipeline_slots") or self.pipeline_slots is None:
+            self.pipeline_slots = asyncio.Semaphore(pipe_max)
 
     @property
     def load_score(self) -> float:
@@ -321,11 +325,21 @@ class VLLMClient:
         ]
         candidates = list(all_ready)
         
+        # Strictly filter by model first if requested
+        model_filtered = False
+        if requested_model:
+            model_candidates = [ep for ep in candidates if ep.model == requested_model]
+            if model_candidates:
+                candidates = model_candidates
+                model_filtered = True
+            else:
+                logger.warning("[VLLM] Requested model '%s' not found on any active endpoint. Falling back.", requested_model)
+        
         # Role-based routing: filter by required role if defined in taxonomy
         required_role = None
         if agent_name:
             for key, role in AGENT_ROLE_ROUTING.items():
-                if agent_name.startswith(key):
+                if agent_name.startswith(key) or f"_{key}" in agent_name:
                     required_role = role
                     break
             
@@ -343,7 +357,10 @@ class VLLMClient:
                 else:
                     # CROSS-ROLE FALLBACK: preferred tier has no ready endpoints.
                     # Route to ANY available endpoint with a model loaded.
-                    if all_ready:
+                    if model_filtered:
+                        # Do not fallback to all active models since we filtered by model
+                        pass
+                    elif all_ready:
                         fallback_names = ', '.join(ep.name for ep in all_ready)
                         logger.warning(
                             "[VLLM] 🔀 No %s-tier endpoints have models loaded. "
@@ -356,14 +373,6 @@ class VLLMClient:
                             "[VLLM] No active endpoint found for role tier '%s' and no fallbacks. ",
                             required_role,
                         )
-
-        # Strictly filter by model if requested
-        if requested_model:
-            model_candidates = [ep for ep in candidates if ep.model == requested_model]
-            if model_candidates:
-                candidates = model_candidates
-            else:
-                logger.warning("[VLLM] Requested model '%s' not found on any active endpoint. Falling back.", requested_model)
 
         if not candidates:
             # Fallback: any enabled endpoint with a model
@@ -516,7 +525,7 @@ class VLLMClient:
             except RuntimeError:
                 self._client = None
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=120.0)
+            self._client = httpx.AsyncClient(timeout=240.0)
         return self._client
 
     # ── Dispatchers ────────────────────────────────────────────────────
@@ -579,16 +588,12 @@ class VLLMClient:
             await asyncio.sleep(30.0)  # was 5s — reduced to avoid spamming endpoints
 
     async def _dispatch_loop(self, ep: VLLMEndpoint):
-        """Background task: drain queue in batches, execute each batch concurrently.
-
-        Batch dispatch replaces the old one-at-a-time semaphore-gated loop.
-        This prevents queue overload by capping in-flight requests per endpoint
-        to batch_size. Each batch completes fully before the next is started.
-
-        Circuit breaker: after BATCH_CIRCUIT_BREAKER_THRESHOLD consecutive
-        failed batches, the endpoint is paused for CIRCUIT_BREAKER_COOLDOWN seconds.
+        """Background task: continuously drain queue, executing tasks concurrently
+        using a semaphore to limit in-flight requests. This eliminates the head-of-line
+        blocking of the legacy batching design where a single slow request stalled
+        the entire batch dispatcher.
         """
-        batch_timeout = float(settings.BATCH_TIMEOUT)
+        batch_timeout = float(settings.VLLM_FUTURE_TIMEOUT)
         cb_threshold = settings.BATCH_CIRCUIT_BREAKER_THRESHOLD
 
         while True:
@@ -630,141 +635,89 @@ class VLLMClient:
                     await asyncio.sleep(min(remaining, 10.0))
                     continue
 
-                # ── Drain batch from queue ─────────────────────────────
-                # Block on the first item (so we don't spin-wait)
-                first_item = await ep.queue.get()
-
-                # Check stop again after waking from queue.get()
-                try:
-                    from app.pipeline.orchestration.cycle_control import cycle_control
-                    if cycle_control.is_stopped:
-                        if not first_item.future.done():
-                            first_item.future.cancel()
-                        ep.queue.task_done()
-                        continue
-                except ImportError:
-                    pass
-                batch: list[QueueItem] = [first_item]
-
-                # Non-blocking drain of up to (batch_size - 1) more items
-                while len(batch) < ep.batch_size:
-                    try:
-                        item = ep.queue.get_nowait()
-                        batch.append(item)
-                    except asyncio.QueueEmpty:
-                        break
-
-                # Drop cancelled items before dispatching
-                live_batch = []
-                for item in batch:
-                    if item.future.cancelled():
-                        logger.debug(
-                            "[QUEUE] %s dropped cancelled item from batch", ep.name
-                        )
-                        ep.queue.task_done()
-                    else:
-                        live_batch.append(item)
-
-                if not live_batch:
-                    continue
-
-                _queue_remaining = ep.queue.qsize()
-                _overload_threshold = ep.max_concurrent * MAX_QUEUE_DEPTH_MULTIPLIER
-                _overload_flag = " ⚠️ OVERLOADED" if _queue_remaining > _overload_threshold else ""
-                logger.info(
-                    "[BATCH] %s dispatching batch=%d active=%d/%d queued=%d/%d%s",
-                    ep.name,
-                    len(live_batch),
-                    ep.active_count,
-                    ep.max_concurrent,
-                    _queue_remaining,
-                    _overload_threshold,
-                    _overload_flag,
-                )
-
                 # ── Smart Queue memory protection ──────────────────────
                 while ep.cache_usage >= 0.90:
                     logger.warning(
-                        "[QUEUE] 🚨 %s KV cache at %.1f%% (>90%%). Smart Queue pausing batch...",
+                        "[QUEUE] 🚨 %s KV cache at %.1f%% (>90%%). Smart Queue pausing dispatch...",
                         ep.name,
                         ep.cache_usage * 100,
                     )
                     await asyncio.sleep(2.0)
 
-                # ── Execute batch concurrently with timeout ────────────
-                batch_tasks = [
-                    self._execute_item(item, ep, release_pipeline=item.priority > Priority.HIGH)
-                    for item in live_batch
-                ]
+                # Acquire the concurrency slot semaphore
+                await ep.slots.acquire()
 
+                # Get the highest-priority item from queue
                 try:
-                    await asyncio.wait_for(
-                        asyncio.gather(*batch_tasks, return_exceptions=True),
-                        timeout=batch_timeout,
-                    )
-                    # Mark all items as done in the queue
-                    for _ in live_batch:
-                        ep.queue.task_done()
+                    item = await ep.queue.get()
+                except Exception:
+                    ep.slots.release()
+                    raise
 
-                    # Count failures in this batch
-                    batch_failures = sum(
-                        1 for item in live_batch
-                        if item.future.done() and item.future.exception() is not None
-                    )
-                    batch_ok = len(live_batch) - batch_failures
-
-                    if batch_failures > 0:
-                        logger.warning(
-                            "[BATCH] %s batch done: %d ok, %d failed",
-                            ep.name, batch_ok, batch_failures,
-                        )
-
-                    # Circuit breaker logic: track consecutive full-batch failures
-                    if batch_ok == 0 and batch_failures > 0:
-                        ep.consecutive_batch_failures += 1
-                        logger.error(
-                            "[BATCH] %s FULL BATCH FAILURE (%d/%d consecutive)",
-                            ep.name,
-                            ep.consecutive_batch_failures,
-                            cb_threshold,
-                        )
-                        if ep.consecutive_batch_failures >= cb_threshold:
-                            ep.circuit_open_until = time.monotonic() + CIRCUIT_BREAKER_COOLDOWN
-                            logger.error(
-                                "[BATCH] 🔴 %s CIRCUIT BREAKER OPEN — disabling for %ds after %d consecutive failures",
-                                ep.name,
-                                CIRCUIT_BREAKER_COOLDOWN,
-                                ep.consecutive_batch_failures,
-                            )
-                            ep.consecutive_batch_failures = 0
-                    else:
-                        # At least some succeeded — reset counter
-                        ep.consecutive_batch_failures = 0
-
-                except asyncio.TimeoutError:
-                    logger.error(
-                        "[BATCH] ⏰ %s batch TIMEOUT after %ds (%d items) — cancelling remaining",
-                        ep.name,
-                        batch_timeout,
-                        len(live_batch),
-                    )
-                    # Cancel any futures that haven't completed yet
-                    for item in live_batch:
+                # Check stop again after waking from queue.get()
+                try:
+                    from app.pipeline.orchestration.cycle_control import cycle_control
+                    if cycle_control.is_stopped:
                         if not item.future.done():
                             item.future.cancel()
                         ep.queue.task_done()
+                        ep.slots.release()
+                        continue
+                except ImportError:
+                    pass
 
-                    # Penalize endpoint
-                    ep.timeout_penalty_until = time.monotonic() + TIMEOUT_PENALTY_SECONDS
-                    ep.consecutive_batch_failures += 1
-                    if ep.consecutive_batch_failures >= cb_threshold:
-                        ep.circuit_open_until = time.monotonic() + CIRCUIT_BREAKER_COOLDOWN
-                        logger.error(
-                            "[BATCH] 🔴 %s CIRCUIT BREAKER OPEN after batch timeout — disabling for %ds",
-                            ep.name,
-                            CIRCUIT_BREAKER_COOLDOWN,
+                if item.future.cancelled():
+                    ep.queue.task_done()
+                    ep.slots.release()
+                    continue
+
+                # Run execute_item in background, and release semaphore when finished
+                async def run_and_release(item=item):
+                    try:
+                        # execute individual item with BATCH_TIMEOUT
+                        await asyncio.wait_for(
+                            self._execute_item(item, ep, release_pipeline=item.priority > Priority.HIGH),
+                            timeout=batch_timeout
                         )
                         ep.consecutive_batch_failures = 0
+                    except asyncio.TimeoutError:
+                        logger.error(
+                            "[VLLM] ⏰ Request TIMEOUT for agent=%s ticker=%s",
+                            item.metadata.get("agent_name"),
+                            item.metadata.get("ticker"),
+                        )
+                        if not item.future.done():
+                            item.future.set_exception(
+                                asyncio.TimeoutError(
+                                    f"vLLM request timeout ({batch_timeout}s) for {item.metadata.get('agent_name')}"
+                                )
+                            )
+                        ep.timeout_penalty_until = time.monotonic() + TIMEOUT_PENALTY_SECONDS
+                        ep.consecutive_batch_failures += 1
+                        if ep.consecutive_batch_failures >= cb_threshold:
+                            ep.circuit_open_until = time.monotonic() + CIRCUIT_BREAKER_COOLDOWN
+                            logger.error(
+                                "[BATCH] 🔴 %s CIRCUIT BREAKER OPEN after request timeout — disabling for %ds",
+                                ep.name,
+                                CIRCUIT_BREAKER_COOLDOWN,
+                            )
+                            ep.consecutive_batch_failures = 0
+                    except Exception as err:
+                        logger.exception("[VLLM] Request failed for agent=%s ticker=%s: %s", item.metadata.get("agent_name"), item.metadata.get("ticker"), err)
+                        ep.consecutive_batch_failures += 1
+                        if ep.consecutive_batch_failures >= cb_threshold:
+                            ep.circuit_open_until = time.monotonic() + CIRCUIT_BREAKER_COOLDOWN
+                            logger.error(
+                                "[BATCH] 🔴 %s CIRCUIT BREAKER OPEN after error — disabling for %ds",
+                                ep.name,
+                                CIRCUIT_BREAKER_COOLDOWN,
+                            )
+                            ep.consecutive_batch_failures = 0
+                    finally:
+                        ep.queue.task_done()
+                        ep.slots.release()
+
+                asyncio.create_task(run_and_release())
 
             except asyncio.CancelledError:
                 break
@@ -875,33 +828,7 @@ class VLLMClient:
                 endpoint_name=ep.name,
             )
 
-            # Shadow-log to Prism only when direct vLLM was used
-            # When Prism handled the request, it already logged everything natively.
-            if not prism_routed and self.prism_client.enabled:
-                try:
-                    asyncio.create_task(
-                        self.prism_client.offline_log(
-                            messages=item.payload.get("messages", []),
-                            response_text=content,
-                            model_name=item.payload.get("model", self.model),
-                            agent_name=meta.get("agent_name", "pipeline"),
-                            ticker=meta.get("ticker", ""),
-                            system_prompt=meta.get("system_prompt", ""),
-                            cycle_id=meta.get("cycle_id", ""),
-                            # Telemetry for Prism MongoDB request logging
-                            input_tokens=prompt_tokens,
-                            output_tokens=completion_tokens,
-                            elapsed_ms=elapsed_ms,
-                            endpoint_name=ep.name,
-                        )
-                    )
-                except Exception as prism_err:
-                    logger.warning(
-                        "[PRISM] ⚠️ Shadow log task creation failed for %s on %s: %s",
-                        meta.get("agent_name", "unknown"),
-                        ep.name,
-                        prism_err,
-                    )
+
 
             # Record Graph Attention from <think> content
             think_text = meta.get("_think_content", "")
@@ -1088,7 +1015,7 @@ class VLLMClient:
                     url,
                     json=json_payload,
                     headers=headers,
-                    timeout=120.0,
+                    timeout=240.0,
                 )
                 r.raise_for_status()
                 return r
@@ -1530,6 +1457,16 @@ class VLLMClient:
                 f"vLLM future timeout ({settings.VLLM_FUTURE_TIMEOUT}s): "
                 f"{agent_name}/{ticker} on {target_ep.name}"
             )
+        except asyncio.CancelledError:
+            logger.warning(
+                "[VLLM] 🛑 Task cancelled while waiting for future | agent=%s ticker=%s endpoint=%s",
+                agent_name,
+                ticker,
+                target_ep.name,
+            )
+            if not future.done():
+                future.cancel()
+            raise
         return (
             result_dict["text"],
             result_dict["total_tokens"],
@@ -1667,6 +1604,16 @@ class VLLMClient:
                 f"vLLM future timeout ({settings.VLLM_FUTURE_TIMEOUT}s): "
                 f"{agent_name}/{ticker} on {target_ep.name} (chat_with_tools)"
             )
+        except asyncio.CancelledError:
+            logger.warning(
+                "[VLLM] 🛑 Task cancelled while waiting for future | agent=%s ticker=%s endpoint=%s (chat_with_tools)",
+                agent_name,
+                ticker,
+                target_ep.name,
+            )
+            if not future.done():
+                future.cancel()
+            raise
 
     def end_session(self, group_key: str):
         """Clear cached session for a completed cycle."""
@@ -1743,6 +1690,26 @@ class VLLMClient:
 
         Returns dict with per-endpoint model info.
         """
+        if not hasattr(self, "_discovery_lock") or self._discovery_lock is None:
+            self._discovery_lock = asyncio.Lock()
+
+        async with self._discovery_lock:
+            if self._roles_discovered:
+                roles = {}
+                roles["collector_model"] = None
+                roles["analyst_model"] = None
+                roles["analyst_models"] = []
+                for name, ep in self._endpoints.items():
+                    roles[f"{name}_model"] = ep.model
+                    roles[f"{name}_url"] = ep.url
+                    if ep.role == "collector" and ep.model:
+                        roles["collector_model"] = ep.model
+                    elif ep.role == "analyst" and ep.model:
+                        roles["analyst_models"].append(ep.model)
+                return roles
+            return await self._discover_roles_unlocked()
+
+    async def _discover_roles_unlocked(self) -> dict:
         client = await self._get_client()
         roles = {}
         successful_endpoints = 0
@@ -1793,6 +1760,17 @@ class VLLMClient:
                             ep.url,
                             ep.model,
                         )
+                        if ep.auto_disabled and not ep.enabled:
+                            ep.enabled = True
+                            ep.auto_disabled = False
+                            ep.consecutive_batch_failures = 0
+                            ep.circuit_open_until = 0.0
+                            ep.timeout_penalty_until = 0.0
+                            ep.init_concurrency(self.RESERVED_HIGH_SLOTS)
+                            logger.info(
+                                "[VLLM] ✅ Endpoint %s at %s back online — re-enabled via discovery",
+                                name, ep.url,
+                            )
                         ep.loading = False
                         successful_endpoints += 1
                     else:
@@ -1851,6 +1829,7 @@ class VLLMClient:
                 )
 
         self._roles_discovered = True
+        self._ensure_dispatcher()
 
         # ALWAYS set self.model from discovery — the ACTIVE_MODEL env var
         # is only a seed value and must NOT override what's actually loaded
@@ -2326,7 +2305,7 @@ class VLLMClient:
                 target_url,
                 json=payload,
                 headers=headers,
-                timeout=180.0,
+                timeout=240.0,
             ) as response:
                 response.raise_for_status()
                 buffer = ""

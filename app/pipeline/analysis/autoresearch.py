@@ -9,6 +9,7 @@ performance, recovery) and feeds it to an LLM reflection pass.
 import json
 import logging
 import uuid
+import asyncio
 from datetime import datetime, timezone
 
 from app.db.connection import get_db
@@ -293,7 +294,7 @@ async def run_autoresearch(cycle_id: str, cycle_summary: dict) -> dict:
         _update_ar_state(report_id, phase="done")
         return {"id": report_id, "overall_score": round(overall, 1), "status": "done"}
 
-    except BaseException as e:
+    except Exception as e:
         logger.error("[AUTORESEARCH] Failed: %s", e, exc_info=True)
         _update_ar_state(report_id, error=str(e), phase="error")
         try:
@@ -333,15 +334,309 @@ async def run_partial_autoresearch(cycle_id: str, tickers: list[str]) -> dict:
     return {"status": "partial_done", "data_quality": data_quality}
 
 
+def _grade(score: float) -> str:
+    """Convert 0-1 score to quality grade."""
+    if score >= 0.95:
+        return "excellent"
+    if score >= 0.80:
+        return "good"
+    if score >= 0.60:
+        return "fair"
+    if score >= 0.30:
+        return "poor"
+    return "critical"
+
+
+def _safe_iso(val) -> str | None:
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    return str(val)
+
+
+def _audit_price_history(db, ticker: str) -> dict:
+    """Audit price_history table for a ticker."""
+    try:
+        stats = db.execute(
+            """
+            SELECT COUNT(*), MIN(date), MAX(date),
+                   SUM(CASE WHEN close IS NULL THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN volume IS NULL OR volume = 0 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN open IS NULL OR high IS NULL OR low IS NULL THEN 1 ELSE 0 END)
+            FROM price_history WHERE ticker = %s
+        """,
+            [ticker],
+        ).fetchone()
+
+        rows, min_d, max_d, null_close, zero_vol, null_ohlc = stats
+        if rows == 0:
+            return {"rows": 0, "quality": "critical", "quality_score": 0}
+
+        # Check for date gaps (weekends excluded — only look for >3 day gaps)
+        # Cast to DATE explicitly so subtraction yields an INTERVAL for comparison
+        gaps = db.execute(
+            """
+            SELECT COUNT(*) FROM (
+                SELECT date, LEAD(date) OVER (ORDER BY date) as next_date
+                FROM price_history WHERE ticker = %s
+            ) sub WHERE next_date::date - date::date > 4
+        """,
+            [ticker],
+        ).fetchone()[0]
+
+        # Latest row sample
+        latest = db.execute(
+            """
+            SELECT date, open, high, low, close, volume
+            FROM price_history WHERE ticker = %s
+            ORDER BY date DESC LIMIT 1
+        """,
+            [ticker],
+        ).fetchone()
+
+        # Quality score
+        null_pct = (null_close + zero_vol + null_ohlc) / (rows * 3) if rows else 1
+        gap_penalty = min(gaps * 0.05, 0.3)
+        score = max(0, 1.0 - null_pct - gap_penalty)
+
+        return {
+            "rows": rows,
+            "date_range": [_safe_iso(min_d), _safe_iso(max_d)],
+            "quality": _grade(score),
+            "quality_score": round(score, 3),
+            "null_close": null_close,
+            "zero_volume_days": zero_vol,
+            "null_ohlc": null_ohlc,
+            "gaps_over_4_days": gaps,
+            "latest": {
+                "date": _safe_iso(latest[0]),
+                "close": round(latest[4], 2) if latest[4] else None,
+                "volume": latest[5],
+            }
+            if latest
+            else None,
+        }
+    except Exception as e:
+        logger.warning("audit price_history failed for %s: %s", ticker, e)
+        return {"rows": 0, "quality": "error", "error": str(e)}
+
+
+def _audit_technicals(db, ticker: str) -> dict:
+    """Audit technicals table for a ticker."""
+    INDICATORS = [
+        "rsi_14",
+        "macd",
+        "macd_signal",
+        "macd_hist",
+        "sma_20",
+        "sma_50",
+        "sma_200",
+        "ema_12",
+        "ema_26",
+        "bb_upper",
+        "bb_mid",
+        "bb_lower",
+        "atr_14",
+        "adx_14",
+        "stoch_k",
+        "stoch_d",
+        "obv",
+        "vwap",
+        "support",
+        "resistance",
+    ]
+
+    try:
+        stats = db.execute(
+            """
+            SELECT COUNT(*), MIN(date), MAX(date)
+            FROM technicals WHERE ticker = %s
+        """,
+            [ticker],
+        ).fetchone()
+        rows, min_d, max_d = stats
+
+        if rows == 0:
+            return {
+                "rows": 0,
+                "quality": "critical",
+                "quality_score": 0,
+                "indicators_computed": 0,
+            }
+
+        # Per-indicator health
+        indicator_health = {}
+        total_nulls = 0
+        indicators_ok = 0
+
+        for col in INDICATORS:
+            try:
+                ind = db.execute(
+                    f"""
+                    SELECT COUNT({col}),
+                           SUM(CASE WHEN {col} IS NULL THEN 1 ELSE 0 END),
+                           MIN({col}), MAX({col}),
+                           AVG({col})
+                    FROM technicals WHERE ticker = %s
+                """,
+                    [ticker],
+                ).fetchone()
+
+                non_null, nulls, min_v, max_v, avg_v = ind
+                null_pct = nulls / rows if rows else 0
+                total_nulls += nulls
+
+                # Get latest value
+                latest_val = db.execute(
+                    f"""
+                    SELECT {col} FROM technicals
+                    WHERE ticker = %s ORDER BY date DESC LIMIT 1
+                """,
+                    [ticker],
+                ).fetchone()
+
+                status = (
+                    "ok" if null_pct < 0.1 else "degraded" if null_pct < 0.5 else "poor"
+                )
+                if non_null > 0:
+                    indicators_ok += 1
+
+                indicator_health[col] = {
+                    "status": status,
+                    "latest": round(latest_val[0], 4)
+                    if latest_val and latest_val[0] is not None
+                    else None,
+                    "range": [
+                        round(min_v, 4) if min_v is not None else None,
+                        round(max_v, 4) if max_v is not None else None,
+                    ],
+                    "nulls": nulls,
+                    "null_pct": round(null_pct * 100, 1),
+                }
+            except Exception:
+                indicator_health[col] = {
+                    "status": "error",
+                    "latest": None,
+                    "nulls": rows,
+                }
+
+        total_cells = rows * len(INDICATORS) or 1
+        score = max(0, 1.0 - (total_nulls / total_cells))
+
+        return {
+            "rows": rows,
+            "date_range": [_safe_iso(min_d), _safe_iso(max_d)],
+            "quality": _grade(score),
+            "quality_score": round(score, 3),
+            "indicators_computed": indicators_ok,
+            "indicators_total": len(INDICATORS),
+            "indicators_with_nulls": sum(
+                1 for v in indicator_health.values() if v.get("nulls", 0) > 0
+            ),
+            "indicator_health": indicator_health,
+        }
+    except Exception as e:
+        logger.warning("audit technicals failed for %s: %s", ticker, e)
+        return {"rows": 0, "quality": "error", "error": str(e)}
+
+
+def _audit_fundamentals(db, ticker: str) -> dict:
+    """Audit fundamentals table for a ticker."""
+    try:
+        stats = db.execute(
+            """
+            SELECT COUNT(*), MIN(snapshot_date), MAX(snapshot_date)
+            FROM fundamentals WHERE ticker = %s
+        """,
+            [ticker],
+        ).fetchone()
+        rows, min_d, max_d = stats
+
+        if rows == 0:
+            return {"rows": 0, "quality": "critical", "quality_score": 0}
+
+        # Key fields check
+        key_fields = [
+            "market_cap",
+            "pe_ratio",
+            "revenue",
+            "profit_margin",
+            "debt_to_equity",
+        ]
+        latest = db.execute(
+            """
+            SELECT * FROM fundamentals
+            WHERE ticker = %s ORDER BY snapshot_date DESC LIMIT 1
+        """,
+            [ticker],
+        ).fetchone()
+        cols = [
+            d[0] for d in db.execute("SELECT * FROM fundamentals LIMIT 0").description
+        ]
+        data = dict(zip(cols, latest)) if latest else {}
+
+        non_null_key = sum(1 for f in key_fields if data.get(f) is not None)
+        score = non_null_key / len(key_fields) if key_fields else 0
+
+        key_values = {}
+        for f in key_fields:
+            v = data.get(f)
+            key_values[f] = round(v, 4) if isinstance(v, float) else v
+
+        return {
+            "rows": rows,
+            "date_range": [_safe_iso(min_d), _safe_iso(max_d)],
+            "quality": _grade(score),
+            "quality_score": round(score, 3),
+            "key_fields": key_values,
+            "key_fields_present": f"{non_null_key}/{len(key_fields)}",
+        }
+    except Exception as e:
+        logger.warning("audit fundamentals failed for %s: %s", ticker, e)
+        return {"rows": 0, "quality": "error", "error": str(e)}
+
+
+def _audit_news(db, ticker: str) -> dict:
+    """Audit news_articles for a ticker."""
+    try:
+        stats = db.execute(
+            """
+            SELECT COUNT(*), MIN(published_at), MAX(published_at),
+                   COUNT(DISTINCT source)
+            FROM news_articles WHERE ticker = %s
+        """,
+            [ticker],
+        ).fetchone()
+        rows, min_d, max_d, sources = stats
+
+        source_list = []
+        if rows > 0:
+            src = db.execute(
+                """
+                SELECT source, COUNT(*) FROM news_articles
+                WHERE ticker = %s GROUP BY source
+            """,
+                [ticker],
+            ).fetchall()
+            source_list = [{"source": r[0], "count": r[1]} for r in src]
+
+        score = min(1.0, rows / 5) if rows else 0
+        return {
+            "rows": rows,
+            "date_range": [_safe_iso(min_d), _safe_iso(max_d)],
+            "quality": _grade(score),
+            "quality_score": round(score, 3),
+            "source_count": sources,
+            "sources": source_list,
+        }
+    except Exception as e:
+        return {"rows": 0, "quality": "error", "error": str(e)}
+
+
 def _audit_data_quality(tickers: list[str]) -> dict:
     if not tickers:
         return {"avg_score": 0, "gaps": [], "per_ticker": {}}
-    from app.routers.data_audit import (
-        _audit_price_history,
-        _audit_technicals,
-        _audit_fundamentals,
-        _audit_news,
-    )
     from app.trading.watchlist import _snapshot_market_data, ban_ticker
 
     per_ticker, gaps, scores, purged_tickers = {}, [], [], []

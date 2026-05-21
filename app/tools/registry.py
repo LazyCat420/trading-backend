@@ -436,11 +436,24 @@ class ToolRegistry:
         # ── Execute ──
         t0 = time.monotonic()
         try:
-            func = self.tools[func_name]
-            if inspect.iscoroutinefunction(func):
-                result = await func(**kwargs)
+            import os
+            if os.environ.get("USE_LAZY_TOOL_SERVICE", "false").lower() == "true":
+                import httpx
+                port = os.environ.get("LAZY_TOOL_SERVICE_PORT", "5591")
+                url = f"http://localhost:{port}/execute/{func_name}"
+                logger.info("[ToolRegistry] Forwarding execution of '%s' to lazy-tool-service: %s", func_name, url)
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    resp = await client.post(url, json=kwargs)
+                    if resp.status_code != 200:
+                        raise RuntimeError(f"lazy-tool-service returned status code {resp.status_code}: {resp.text}")
+                    resp_json = resp.json()
+                    result = resp_json.get("content", "")
             else:
-                result = func(**kwargs)
+                func = self.tools[func_name]
+                if inspect.iscoroutinefunction(func):
+                    result = await func(**kwargs)
+                else:
+                    result = func(**kwargs)
 
             if not isinstance(result, str):
                 result = json.dumps(result)

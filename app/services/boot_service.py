@@ -102,9 +102,9 @@ class BootService:
 
     @classmethod
     def _reset_app_state(cls):
-        from app.routers.pipeline import reset_on_boot
+        from app.services.pipeline_service import PipelineService
 
-        reset_on_boot()
+        PipelineService.reset_on_boot()
 
         # Start the system PAUSED by default on boot.
         # This prevents all scheduled LLM tasks (morning briefing, flash briefing,

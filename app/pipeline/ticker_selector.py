@@ -211,48 +211,18 @@ class TickerSelector:
                 logger.warning("[SELECTOR] Failed to query discovered_tickers: %s", e)
                 candidates = []
 
-            # ── Fast Ticker Validation (Discovery Only) ──
+            # Fast Ticker Validation (Discovery Only) ──
             # Strip out numbers, dashes, and known macro acronyms that cause YFinance to fail
             import re
-
-            KNOWN_MACROS = {
-                "OECD",
-                "ROIC",
-                "BARDA",
-                "EBITDA",
-                "FOMC",
-                "CPI",
-                "PPI",
-                "OPEC",
-                "GDP",
-                "EPS",
-                "YTD",
-                "FED",
-                "CEO",
-                "CFO",
-                "CTO",
-                "IPO",
-                "SEC",
-                "LLM",
-                "AI",
-                "API",
-                "UI",
-                "UX",
-                "UX",
-                "URL",
-                "JR",
-                "VW",
-                "BOL",
-                "ORMAN",
-                "PV",
-            }
+            
+            from app.processors.ticker_extractor import FALSE_TICKERS
 
             def is_valid_ticker_format(t: str) -> bool:
                 if not t or len(t) > 5:
                     return False
                 if bool(re.search(r"[0-9\-]", t)):
                     return False
-                if t in KNOWN_MACROS:
+                if t in FALSE_TICKERS:
                     return False
                 return True
 

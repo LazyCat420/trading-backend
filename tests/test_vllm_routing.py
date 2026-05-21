@@ -241,21 +241,7 @@ class TestPhase3JetsonBypassRemoved:
             "Phase 3 regression: Jetson Prism bypass is still present!"
         )
 
-    def test_shadow_log_uses_warning(self):
-        """Shadow log failures should use logger.warning, not logger.debug."""
-        vllm_path = os.path.join(
-            os.path.dirname(__file__), "..", "app", "services", "vllm_client.py",
-        )
-        with open(vllm_path, "r") as f:
-            source = f.read()
-        assert "Shadow log task creation failed" in source
-        lines = source.split("\n")
-        for i, line in enumerate(lines):
-            if "Shadow log task creation failed" in line:
-                context = "\n".join(lines[max(0, i - 3):i + 1])
-                assert "logger.debug" not in context, (
-                    "Phase 3 regression: Shadow log errors are still at debug level!"
-                )
+
 
     def test_unified_routing_comment_exists(self):
         """Phase 3 comment about unified routing should be in the source."""

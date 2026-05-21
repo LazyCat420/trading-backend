@@ -24,12 +24,7 @@ pandas==3.0.1
 scikit-learn>=1.3.0
 
 # Reddit/YouTube/News Collectors
-feedparser==6.0.12
-cloudscraper>=1.2.71
-trafilatura>=1.6.0
 ddgs>=9.14.0
-youtube-transcript-api==1.2.4
-yt-dlp==2026.3.17
 markdownify>=0.13.0
 
 # RLM (Recursive Language Models — MIT CSAIL)

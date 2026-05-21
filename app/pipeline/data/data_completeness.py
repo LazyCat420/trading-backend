@@ -339,6 +339,55 @@ async def check_and_fill(ticker: str, emit=None, enqueue_only: bool = False) -> 
         f"{f' (filled {filled_count} gaps)' if filled_count else ' (all up to date)'}"
     )
 
+    needs_jit_processing = False
+    if filled_count > 0:
+        needs_jit_processing = True
+    else:
+        try:
+            with get_db() as db:
+                unsummarized_news = db.execute(
+                    "SELECT COUNT(*) FROM news_articles WHERE llm_summary IS NULL AND ticker = %s",
+                    [ticker]
+                ).fetchone()[0]
+                unsummarized_yt = db.execute(
+                    "SELECT COUNT(*) FROM youtube_transcripts WHERE summary IS NULL AND ticker = %s",
+                    [ticker]
+                ).fetchone()[0]
+                unsummarized_reddit = db.execute(
+                    "SELECT COUNT(*) FROM reddit_posts WHERE summary IS NULL AND quality_status IS NULL AND ticker = %s",
+                    [ticker]
+                ).fetchone()[0]
+                
+                if unsummarized_news > 0 or unsummarized_yt > 0 or unsummarized_reddit > 0:
+                    needs_jit_processing = True
+                    logger.info(
+                        "[DATA CHECK] %s JIT required: unsummarized news=%d, yt=%d, reddit=%d",
+                        ticker, unsummarized_news, unsummarized_yt, unsummarized_reddit
+                    )
+        except Exception as e:
+            logger.warning("[DATA CHECK] Failed checking for unsummarized data for %s: %s", ticker, e)
+
+    if needs_jit_processing:
+        # Run per-ticker deduplication, summarization, and consensus JIT
+        try:
+            from app.processors.deduplicator import deduplicate_news
+            import asyncio
+            await asyncio.to_thread(deduplicate_news, ticker)
+        except Exception as e:
+            logger.warning("[DATA CHECK] JIT deduplication failed for %s: %s", ticker, e)
+
+        try:
+            from app.processors.summarizer import summarize_unsummarized
+            await summarize_unsummarized(emit=emit, max_items=50, ticker=ticker)
+        except Exception as e:
+            logger.warning("[DATA CHECK] JIT summarization failed for %s: %s", ticker, e)
+
+        try:
+            from app.processors.consensus_engine import run_consensus_engine
+            await run_consensus_engine(emit=emit, ticker=ticker)
+        except Exception as e:
+            logger.warning("[DATA CHECK] JIT consensus failed for %s: %s", ticker, e)
+
     return report
 
 

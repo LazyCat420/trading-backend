@@ -11,10 +11,7 @@ from typing import Any
 
 import httpx
 from httpx import RequestError, HTTPStatusError
-
 from app.config import settings
-from app.services.prism_mongo import log_request_to_mongo
-
 logger = logging.getLogger(__name__)
 
 
@@ -30,7 +27,6 @@ class PrismClient:
         self.username = settings.PRISM_USERNAME
         self.enabled = settings.PRISM_ENABLED
         self.agent = settings.PRISM_AGENT
-        self.offline_sync_enabled = settings.OFFLINE_SYNC_ENABLED  # runtime toggle
         self._sessions: dict[str, str] = {}
         self._client: httpx.AsyncClient | None = None
         self._is_healthy = False
@@ -219,123 +215,6 @@ class PrismClient:
 
         return payload, target_url, headers
 
-    # ─── Offline / Shadow Logging ─────────────────────────────────────
-
-    async def offline_log(
-        self,
-        messages: list[dict],
-        response_text: str,
-        model_name: str,
-        agent_name: str = "user_chat",
-        ticker: str = "",
-        system_prompt: str = "",
-        cycle_id: str = "",
-        # Telemetry fields for MongoDB request logging
-        input_tokens: int = 0,
-        output_tokens: int = 0,
-        elapsed_ms: int = 0,
-        endpoint_name: str = "",
-    ):
-        """
-        Send an offline/shadow log to Prism's Conversation API to record interactions
-        that bypass the Prism Gateway proxy (e.g. Hermes, pipeline direct calls).
-
-        Also writes a request telemetry document to MongoDB so the Retina dashboard
-        analytics (stats, models, timeline, costs) reflect these calls.
-
-        When cycle_id is provided, all pipeline calls within the same trading cycle
-        are grouped under one Prism session for easier auditing.
-        """
-        if not self.enabled:
-            return
-        if not self.offline_sync_enabled:
-            logger.debug("[PRISM] Offline sync disabled — skipping log for %s", agent_name)
-            return
-
-        conversation_id = str(uuid.uuid4())
-        request_id = str(uuid.uuid4())
-
-        # Session grouping: use cycle_id so all calls in a cycle share one session
-        group_key = cycle_id or ""
-        session_id, is_new = (
-            self._get_or_create_session(group_key) if group_key else (None, False)
-        )
-
-        # Build the messages array by appending the assistant's response to the inputs
-        full_messages = messages.copy()
-        full_messages.append(
-            {
-                "role": "assistant",
-                "content": response_text,
-                "provider": "vllm",
-                "model": model_name,
-            }
-        )
-
-        title_parts = [f"Offline Sync: {agent_name}"]
-        if ticker:
-            title_parts.append(ticker)
-        if cycle_id:
-            title_parts.append(cycle_id[:12])
-        title = " · ".join(title_parts)
-
-        payload: dict[str, Any] = {
-            "messages": full_messages,
-            "conversationMeta": {
-                "title": title,
-                "systemPrompt": system_prompt[:15000] if system_prompt else "",
-            },
-        }
-
-        # Attach session info for cycle grouping in Prism
-        if is_new:
-            payload["createSession"] = True
-        elif session_id:
-            payload["sessionId"] = session_id
-
-        headers = {
-            "Content-Type": "application/json",
-            "x-project": self.project,
-            "x-username": self.username,
-        }
-
-        # 1. Write conversation message to Prism HTTP API (existing behaviour)
-        try:
-            client = await self._get_client()
-            await self._call_endpoint(
-                client=client,
-                url=f"{self.url}/conversations/{conversation_id}/messages",
-                json_payload=payload,
-                headers=headers,
-            )
-            logger.debug(
-                "[PRISM] Offline log saved: %s · %s", agent_name, ticker or "no-ticker"
-            )
-        except Exception as e:
-            logger.warning("[PRISM] Offline logging failed for %s: %s", agent_name, e)
-
-        # 2. Write request telemetry to MongoDB (for dashboard analytics)
-        total_time_sec = elapsed_ms / 1000.0 if elapsed_ms > 0 else 0.0
-        try:
-            await log_request_to_mongo(
-                request_id=request_id,
-                conversation_id=conversation_id,
-                model=model_name,
-                agent_name=agent_name,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_time_sec=total_time_sec,
-                messages=messages,
-                response_text=response_text,
-                project=self.project,
-                username=self.username,
-                endpoint_name=endpoint_name,
-                ticker=ticker,
-                cycle_id=cycle_id,
-            )
-        except Exception as e:
-            logger.warning("[PRISM] MongoDB telemetry write failed: %s", e)
-
     def get_stream_payload_and_url(
         self,
         model: str,
@@ -348,6 +227,7 @@ class PrismClient:
         enable_thinking: bool,
         tools: list[dict] | None = None,
         is_qwen_model: bool = False,
+        agentic_mode: bool = True,
     ) -> tuple[dict, str, dict]:
         """
         Returns (payload, url, headers) formatted for Prism /agent streaming.
@@ -372,8 +252,8 @@ class PrismClient:
             "project": self.project,
             "username": self.username,
             "agent": self.agent,
-            "functionCallingEnabled": True,
-            "agenticLoopEnabled": True,
+            "functionCallingEnabled": agentic_mode,
+            "agenticLoopEnabled": agentic_mode,
             "conversationMeta": {
                 "title": title,
                 "systemPrompt": system_prompt[:15000],
@@ -385,7 +265,7 @@ class PrismClient:
         }
         if is_qwen_model:
             payload["thinkingEnabled"] = enable_thinking
-        if tools:
+        if tools and agentic_mode:
             payload["tools"] = tools
 
         if is_new:

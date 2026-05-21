@@ -97,10 +97,10 @@ def query_recent_llm_logs() -> list[dict]:
             return [
                 {
                     "time": str(r[0]),
-                    "ticker": r[1],
-                    "agent": r[2],
-                    "endpoint": r[3],
-                    "tokens": r[4],
+                    "ticker": r[1] or "",
+                    "agent": r[2] or "",
+                    "endpoint": r[3] or "N/A",
+                    "tokens": r[4] or 0,
                 }
                 for r in rows
             ]
@@ -143,8 +143,8 @@ def query_recent_audit_events() -> list[dict]:
             return [
                 {
                     "time": str(r[0]),
-                    "ticker": r[1],
-                    "event": r[2],
+                    "ticker": r[1] or "",
+                    "event": r[2] or "",
                     "message": str(r[3])[:120] if r[3] else "",
                 }
                 for r in rows

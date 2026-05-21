@@ -120,7 +120,8 @@ Return ONLY a valid JSON object matching this schema:
   "action": "accept" or "discard",
   "reason": "Brief reason for your decision",
   "confidence": <integer 1-100>,
-  "summary": "2-3 concise bullet points focusing on news events, impacts, and market implications. Leave empty if discarded.",
+  "time_horizon": "short-term (e.g. daily swings/catalysts) OR long-term (e.g. YTD trends/structural shifts) OR both",
+  "summary": "2-3 concise bullet points focusing on news events, impacts, and market implications. Explicitly note if the catalyst is short-term noise vs long-term fundamentals. Leave empty if discarded.",
   "tickers": ["AAPL", "NVDA"]
 }
 Ensure the output is strictly valid JSON without any markdown formatting around it, or use standard ```json blocks."""
@@ -555,6 +556,7 @@ async def summarize_unsummarized(
     emit: Callable | None = None,
     max_items: int = 30,
     cycle_id: str = "",
+    ticker: str | None = None,
 ) -> dict:
     """Find items without summaries, batch-summarize via LLM.
 
@@ -576,75 +578,124 @@ async def summarize_unsummarized(
         ensure_summary_columns(db)
 
         # ── Find unsummarized YouTube transcripts ──
-        yt_rows = db.execute(
-            """
-            SELECT video_id, title, channel, raw_transcript
-            FROM youtube_transcripts
-            WHERE summary IS NULL
-              AND summarized_at IS NULL
-              AND raw_transcript IS NOT NULL
-              AND LENGTH(raw_transcript) > 50
-            ORDER BY published_at DESC
-            LIMIT %s
-        """,
-            [max_items],
-        ).fetchall()
+        if ticker:
+            ticker = ticker.upper()
+            yt_rows = db.execute(
+                """
+                SELECT video_id, title, channel, raw_transcript
+                FROM youtube_transcripts
+                WHERE summary IS NULL
+                  AND summarized_at IS NULL
+                  AND raw_transcript IS NOT NULL
+                  AND LENGTH(raw_transcript) > 50
+                  AND ticker = %s
+                ORDER BY published_at DESC
+                LIMIT %s
+            """,
+                [ticker, max_items],
+            ).fetchall()
+        else:
+            yt_rows = db.execute(
+                """
+                SELECT video_id, title, channel, raw_transcript
+                FROM youtube_transcripts
+                WHERE summary IS NULL
+                  AND summarized_at IS NULL
+                  AND raw_transcript IS NOT NULL
+                  AND LENGTH(raw_transcript) > 50
+                ORDER BY published_at DESC
+                LIMIT %s
+            """,
+                [max_items],
+            ).fetchall()
 
         # ── Find unsummarized Reddit posts ──
         # Low minimum (20 chars) because Python-side classification handles
         # garbage/thin/substantial routing. This lets us still discover and
         # properly discard posts rather than ignoring them forever.
-        reddit_rows = db.execute(
-            """
-            SELECT id, title, COALESCE(body, ''), subreddit
-            FROM reddit_posts
-            WHERE summary IS NULL
-              AND quality_status IS NULL
-              AND (LENGTH(title) + LENGTH(COALESCE(body, ''))) > 20
-            ORDER BY created_utc DESC
-            LIMIT %s
-        """,
-            [max_items],
-        ).fetchall()
+        if ticker:
+            reddit_rows = db.execute(
+                """
+                SELECT id, title, COALESCE(body, ''), subreddit
+                FROM reddit_posts
+                WHERE summary IS NULL
+                  AND quality_status IS NULL
+                  AND (LENGTH(title) + LENGTH(COALESCE(body, ''))) > 20
+                  AND ticker = %s
+                ORDER BY created_utc DESC
+                LIMIT %s
+            """,
+                [ticker, max_items],
+            ).fetchall()
+        else:
+            reddit_rows = db.execute(
+                """
+                SELECT id, title, COALESCE(body, ''), subreddit
+                FROM reddit_posts
+                WHERE summary IS NULL
+                  AND quality_status IS NULL
+                  AND (LENGTH(title) + LENGTH(COALESCE(body, ''))) > 20
+                ORDER BY created_utc DESC
+                LIMIT %s
+            """,
+                [max_items],
+            ).fetchall()
 
         # ── Find unsummarized news (with bad/missing summaries) ──
-        news_rows = db.execute(
-            """
-            SELECT id, title, COALESCE(summary, '')
-            FROM news_articles
-            WHERE llm_summary IS NULL
-              AND quality_status IS NULL
-              AND title IS NOT NULL
-              AND LENGTH(title) > 10
-            ORDER BY published_at DESC
-            LIMIT %s
-        """,
-            [max_items],
-        ).fetchall()
+        if ticker:
+            news_rows = db.execute(
+                """
+                SELECT id, title, COALESCE(summary, '')
+                FROM news_articles
+                WHERE llm_summary IS NULL
+                  AND quality_status IS NULL
+                  AND title IS NOT NULL
+                  AND LENGTH(title) > 10
+                  AND ticker = %s
+                ORDER BY published_at DESC
+                LIMIT %s
+            """,
+                [ticker, max_items],
+            ).fetchall()
+        else:
+            news_rows = db.execute(
+                """
+                SELECT id, title, COALESCE(summary, '')
+                FROM news_articles
+                WHERE llm_summary IS NULL
+                  AND quality_status IS NULL
+                  AND title IS NOT NULL
+                  AND LENGTH(title) > 10
+                ORDER BY published_at DESC
+                LIMIT %s
+            """,
+                [max_items],
+            ).fetchall()
 
         total = len(yt_rows) + len(reddit_rows) + len(news_rows)
         if total == 0:
-            logger.debug("[summarizer] All data already summarized")
+            logger.debug(f"[summarizer] All data already summarized{f' for ticker {ticker}' if ticker else ''}")
             emit(
                 "collecting",
                 "summarize",
-                "All scraped data already has summaries",
+                f"All scraped data already has summaries{f' for ticker {ticker}' if ticker else ''}",
                 status="ok",
                 data=stats,
             )
             return stats
 
         logger.debug(
-            "[summarizer] Found %d YouTube, %d Reddit, %d news to summarize",
+            "[summarizer] Found %d YouTube, %d Reddit, %d news to summarize%s",
             len(yt_rows),
             len(reddit_rows),
             len(news_rows),
+            f" for ticker {ticker}" if ticker else "",
         )
         emit(
             "collecting",
             "summarize",
             f"Summarizing {total} items ({len(yt_rows)} YT, "
-            f"{len(reddit_rows)} Reddit, {len(news_rows)} news)...",
+            f"{len(reddit_rows)} Reddit, {len(news_rows)} news){f' for ticker {ticker}' if ticker else ''}...",
             status="running",
         )
 
@@ -660,6 +711,10 @@ async def summarize_unsummarized(
 
         # ── Write YouTube summaries to DB ──
         for r in yt_results:
+            if isinstance(r, Exception):
+                logger.warning("[summarizer] YT batch item failed: %s", r)
+                stats["errors"] += 1
+                continue
             try:
                 db.execute(
                     """
@@ -691,6 +746,10 @@ async def summarize_unsummarized(
 
         # ── Write Reddit summaries to DB ──
         for r in reddit_results:
+            if isinstance(r, Exception):
+                logger.warning("[summarizer] Reddit batch item failed: %s", r)
+                stats["errors"] += 1
+                continue
             try:
                 sentiment_score = _SENTIMENT_SCORE_MAP.get(
                     r.get("sentiment", "neutral"), 0.5
@@ -726,6 +785,10 @@ async def summarize_unsummarized(
 
         # ── Write news summaries to DB ──
         for r in news_results:
+            if isinstance(r, Exception):
+                logger.warning("[summarizer] News batch item failed: %s", r)
+                stats["errors"] += 1
+                continue
             try:
                 db.execute(
                     """
