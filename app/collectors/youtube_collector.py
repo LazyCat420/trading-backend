@@ -457,7 +457,7 @@ async def collect_all(
     days_back: int = 30,
     max_queries: int | None = None,
 ) -> int:
-    """Collect transcripts via dynamic YouTube search from scraper-service."""
+    """Collect transcripts via direct channel scraping + dynamic search."""
     import random
     from app.services.scraper_client import scraper_client
 
@@ -465,39 +465,59 @@ async def collect_all(
 
     with get_db() as db:
         year = datetime.datetime.now().year
-
-        # Build search query pool
+        # Fetch active channels (both handle and display_name)
         channels = db.execute(
-            "SELECT display_name FROM youtube_channels WHERE is_active = TRUE"
+            "SELECT channel_handle, display_name FROM youtube_channels WHERE is_active = TRUE"
         ).fetchall()
-        channel_queries = [f'"{name}" stock analysis' for (name,) in channels if name]
-        general_queries = [q.format(year=year) for q in GENERAL_SEARCH_QUERIES]
 
-        all_queries = channel_queries + general_queries
-        random.shuffle(all_queries)
+    total = 0
 
-        if max_queries and len(all_queries) > max_queries:
-            all_queries = all_queries[:max_queries]
+    # 1. Direct channel collection for all active channels
+    logger.info(
+        f"[youtube] Starting direct channel scrape for {len(channels)} active channels (max_videos={max_videos}, days_back={days_back})"
+    )
+    for i, (handle, name) in enumerate(channels):
+        try:
+            stats = await collect_channel(handle, max_videos=max_videos, days_back=days_back)
+            stored_count = stats.get("stored", 0)
+            total += stored_count
+            logger.info(f"[youtube] Direct scrape '{handle}' ({name}): stored {stored_count} videos (stats={stats})")
+        except Exception as e:
+            logger.error(f"[youtube] Error scraping channel '{handle}': {e}")
+        
+        # Throttle between channel scrapes
+        if i < len(channels) - 1:
+            await asyncio.sleep(2.0)
 
-        logger.info(
-            f"[youtube] Search-based sweep: {len(all_queries)} queries (max_videos={max_videos}, days_back={days_back})"
-        )
+    # 2. Search-based sweep for discovery
+    channel_queries = [f'"{name}" stock analysis' for (_, name) in channels if name]
+    general_queries = [q.format(year=year) for q in GENERAL_SEARCH_QUERIES]
 
-        total = 0
-        seen_ids: set[str] = set()
+    all_queries = channel_queries + general_queries
+    random.shuffle(all_queries)
 
-        for i, query in enumerate(all_queries):
-            try:
-                items = await scraper_client.collect(
-                    source="youtube",
-                    req_data={
-                        "query": query,
-                        "limit": max_videos,
-                        "days_back": days_back,
-                    }
-                )
+    if max_queries and len(all_queries) > max_queries:
+        all_queries = all_queries[:max_queries]
 
-                if items:
+    logger.info(
+        f"[youtube] Search-based sweep: {len(all_queries)} queries (max_videos={max_videos}, days_back={days_back})"
+    )
+
+    seen_ids: set[str] = set()
+
+    for i, query in enumerate(all_queries):
+        try:
+            items = await scraper_client.collect(
+                source="youtube",
+                req_data={
+                    "query": query,
+                    "limit": max_videos,
+                    "days_back": days_back,
+                }
+            )
+
+            if items:
+                with get_db() as db:
                     for video in items:
                         vid = video.get("video_id", video.get("id"))
                         if not vid or vid in seen_ids:
@@ -508,13 +528,13 @@ async def collect_all(
                         stored = await _process_video(db, video, channel_name, days_back)
                         if stored == "stored":
                             total += 1
-            except Exception as e:
-                logger.info(f"[youtube] Error in sweep query '{query}': {e}")
+        except Exception as e:
+            logger.info(f"[youtube] Error in sweep query '{query}': {e}")
 
-            if i < len(all_queries) - 1:
-                await asyncio.sleep(2.0)
+        if i < len(all_queries) - 1:
+            await asyncio.sleep(2.0)
 
-        logger.info(
-            f"[youtube] Total: {total} transcripts from {len(all_queries)} search queries"
-        )
-        return total
+    logger.info(
+        f"[youtube] Total collected this run: {total} transcripts"
+    )
+    return total
