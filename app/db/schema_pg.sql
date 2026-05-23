@@ -2087,22 +2087,18 @@ CREATE INDEX IF NOT EXISTS idx_debate_history_cycle ON debate_history(cycle_id);
 -- the raw orchestrator diagnostic row.
 -- ══════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS cycle_summaries (
-    id              TEXT PRIMARY KEY,
-    cycle_id        TEXT NOT NULL UNIQUE,
-    total_tickers   INTEGER,
-    buy_count       INTEGER DEFAULT 0,
-    sell_count      INTEGER DEFAULT 0,
-    hold_count      INTEGER DEFAULT 0,
-    avg_confidence  DOUBLE PRECISION,
-    top_ticker      TEXT,
-    top_confidence  INTEGER,
-    lesson_summary  TEXT,
-    ticker          TEXT,                  -- per-ticker summaries (nullable for aggregate rows)
-    action          TEXT,                  -- BUY/SELL/HOLD decision for this ticker
-    cycle_date      TIMESTAMPTZ,          -- when this cycle ran
-    was_correct     BOOLEAN,              -- backfilled from decision_outcomes: TRUE=WIN, FALSE=LOSS, NULL=unresolved
-    outcome_pnl     DOUBLE PRECISION,     -- backfilled: realized pnl_pct from decision_outcomes
-    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    ticker             TEXT,
+    cycle_id           TEXT,
+    cycle_date         TIMESTAMP,
+    agent_name         TEXT,
+    action             TEXT,
+    confidence         INTEGER,
+    confidence_tier    TEXT,
+    rationale_summary  TEXT,
+    was_correct        BOOLEAN,
+    outcome_pnl        DOUBLE PRECISION,
+    created_at         TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (ticker, cycle_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_cycle_summaries_cycle ON cycle_summaries(cycle_id);

@@ -6,7 +6,7 @@ from app.tools.finance_tools import (
 )
 from app.tools.wiki_tools import write_memory_note, read_memory_note, search_wiki
 from app.tools.quant_tools import run_quant_equation
-from app.tools.web_tools import search_web, scrape_url, query_hermes
+from app.tools.web_tools import search_web, web_search, scrape_url, query_hermes
 
 from app.tools.db_tools import search_internal_database, update_youtube_channel_handle
 from app.tools.system_tools import run_local_command
@@ -97,6 +97,7 @@ __all__ = [
     "read_memory_note",
     "search_wiki",
     "search_web",
+    "web_search",
     "scrape_url",
     "query_hermes",
     "run_quant_equation",

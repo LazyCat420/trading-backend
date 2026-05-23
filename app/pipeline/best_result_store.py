@@ -17,6 +17,8 @@ def save_best_result(
     ticker: str, result_data: dict, confidence: int, is_correct: bool = None
 ) -> bool:
     try:
+        from app.utils.text_utils import sanitize_surrogates
+        result_data = sanitize_surrogates(result_data)
         new_score = _get_score(confidence, is_correct)
 
         with get_db() as db:

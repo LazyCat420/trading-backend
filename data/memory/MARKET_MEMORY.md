@@ -1,1 +1,5 @@
-[AAPL] [HIGH] RSI(14) > 70 + P/E 36.6 near 52w high = strong SELL signal (95% confidence)
+[CDNA] [MEDIUM] RSI(14) < 65 + Price > 20d SMA + Q1 Earnings Beat = Valid HOLD in Risk-On. High beta (2.49) and debt (7.81) require strict monitoring despite growth narrative. §
+[ARCB] [MEDIUM] RSI(14) 59.07 + Price > 20d SMA ($121.61) supports HOLD, but Current Ratio 0.93 + D/E 35.76 signals severe liquidity stress, overriding 'RISK_ON' macro tailwinds. §
+[SHLS] [MEDIUM] Price > SMA_50/200 + RSI(14) 62.81 confirms uptrend, but Stoch_K 78.74 near $10.50 resistance signals limited upside. Elevated P/E (49.55) warrants HOLD rather than add, balancing momentum against valuation risk. §
+[LRMR] [MEDIUM] RSI(14) < 35 + price < SMA_20 indicates oversold bounce potential in risk-on regimes, but zero revenue and >$166M net losses create high fundamental risk; hold only at breakeven with tight stops. §
+[FDS] [MEDIUM] RSI(14) ~52 + P/E 14.92 (below 1.5x sector avg) + ROE 28% = HOLD signal in RISK_ON regime. Low valuation risk supports position stability despite neutral momentum.

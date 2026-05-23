@@ -30,6 +30,7 @@ class VLLMDeepEvalWrapper(DeepEvalBaseLLM):
 
     async def a_generate(self, prompt: str) -> str:
         """Asynchronous generate for DeepEval."""
+        from app.utils.text_utils import strip_think_tags
         response, _, _ = await llm.chat(
             system="You are an expert impartial evaluator determining factual alignment.",
             user=prompt,
@@ -38,7 +39,7 @@ class VLLMDeepEvalWrapper(DeepEvalBaseLLM):
             priority=Priority.HIGH,  # Evaluators need high priority so they don't block
             agent_name="deepeval_judge",
         )
-        return response
+        return strip_think_tags(response)
 
     def get_model_name(self) -> str:
         return llm.model

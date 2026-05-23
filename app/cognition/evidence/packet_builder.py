@@ -310,6 +310,7 @@ async def build_evidence_packet(
             summary=d.content[:200] + "...",
             timestamp=d.timestamp,
             url=d.metadata.get("url"),
+            metadata=d.metadata,
         )
         for d in documents
         if d.source_type != "structured"

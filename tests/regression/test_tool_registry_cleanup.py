@@ -119,12 +119,12 @@ def test_search_trading_skills_not_in_risk_agent():
 
 
 def test_tool_count_after_cleanup():
-    """After removing 9 tools, total should be < 65."""
+    """After removing 9 tools (and adding web_search alias), total should be < 66."""
     from app.tools.registry import registry
 
     count = len(registry.tools)
-    assert count < 65, (
-        f"Registry has {count} tools — expected < 65 after cleanup"
+    assert count < 66, (
+        f"Registry has {count} tools — expected < 66 after cleanup"
     )
     # Should still have the core tools
     assert count > 50, (

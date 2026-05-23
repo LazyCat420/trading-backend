@@ -15,6 +15,14 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def normalize_prism_model(model_name: str) -> str:
+    """Normalize dynamic model IDs from vLLM to canonical Prism names.
+    E.g., 'Qwen/Qwen3.5-122B-A10B-FP8' -> 'qwen3.5-122b-a10b'
+    """
+    # Return model_name directly without modifications so that Prism matches the loaded vLLM model key.
+    return model_name
+
+
 class PrismClient:
     """
     Standalone client for routing LLM requests through Prism Gateway.
@@ -28,6 +36,7 @@ class PrismClient:
         self.enabled = settings.PRISM_ENABLED
         self.agent = settings.PRISM_AGENT
         self._sessions: dict[str, str] = {}
+        self._conversations: dict[str, str] = {}
         self._client: httpx.AsyncClient | None = None
         self._is_healthy = False
         self._last_health_check = 0.0
@@ -88,7 +97,8 @@ class PrismClient:
     def end_session(self, group_key: str):
         """Clear a tracked session."""
         removed = self._sessions.pop(group_key, None)
-        if removed:
+        removed_conv = self._conversations.pop(group_key, None)
+        if removed or removed_conv:
             logger.debug("[PRISM] Ended session for %s", group_key[:16])
 
     async def _call_endpoint(
@@ -134,6 +144,29 @@ class PrismClient:
             f"Failed to call endpoint {url} after {max_retries} attempts"
         )
 
+    def _format_tools(self, tools: list[dict] | None) -> list[dict] | None:
+        """Format standard OpenAI tool schemas into Prism's expected flat format."""
+        if not tools:
+            return None
+        formatted_tools = []
+        for t in tools:
+            if isinstance(t, dict) and t.get("type") == "function" and "function" in t:
+                func_data = t["function"]
+                formatted_tool = {
+                    "name": func_data.get("name"),
+                    "description": func_data.get("description", ""),
+                }
+                if "parameters" in func_data:
+                    formatted_tool["parameters"] = func_data["parameters"]
+                if "_isCustom" in t:
+                    formatted_tool["_isCustom"] = t["_isCustom"]
+                elif "_isCustom" in func_data:
+                    formatted_tool["_isCustom"] = func_data["_isCustom"]
+                formatted_tools.append(formatted_tool)
+            else:
+                formatted_tools.append(t)
+        return formatted_tools
+
     def get_chat_payload_and_url(
         self,
         model: str,
@@ -148,6 +181,7 @@ class PrismClient:
         tools: list[dict] | None = None,
         is_qwen_model: bool = False,
         agentic_mode: bool = True,
+        provider: str = "vllm",
     ) -> tuple[dict, str, dict]:
         """
         Returns (payload, url, headers) formatted for Prism /agent (non-streaming).
@@ -159,6 +193,7 @@ class PrismClient:
                 as a simple LLM proxy without spawning worker agents. Pipeline calls
                 should pass agentic_mode=False to prevent the coordinator doom loop.
         """
+        model = normalize_prism_model(model)
         title_parts = [agent_name]
         if ticker:
             title_parts.append(ticker)
@@ -166,14 +201,26 @@ class PrismClient:
             title_parts.append(cycle_id[:12])
         title = " · ".join(title_parts)
 
-        conversation_id = str(uuid.uuid4())
-        group_key = cycle_id or (
-            f"chat-{agent_name}" if agent_name == "user_chat" else ""
-        )
+        if cycle_id:
+            if agent_name == "user_chat":
+                group_key = cycle_id
+            else:
+                ticker_part = f"-{ticker}" if ticker else ""
+                group_key = f"{cycle_id}{ticker_part}-{agent_name}"
+        else:
+            group_key = f"chat-{agent_name}" if agent_name == "user_chat" else ""
         session_id, is_new = self._get_or_create_session(group_key)
 
+        # Reuse conversation ID for the same group key (e.g. cycle/ticker/agent)
+        if group_key:
+            if group_key not in self._conversations:
+                self._conversations[group_key] = str(uuid.uuid4())
+            conversation_id = self._conversations[group_key]
+        else:
+            conversation_id = str(uuid.uuid4())
+
         payload: dict[str, Any] = {
-            "provider": "vllm",
+            "provider": provider,
             "model": model,
             "messages": messages,
             "maxTokens": max_tokens,
@@ -182,8 +229,9 @@ class PrismClient:
             "project": self.project,
             "username": self.username,
             "agent": self.agent,
-            "functionCallingEnabled": agentic_mode,
+            "functionCallingEnabled": agentic_mode or bool(tools),
             "agenticLoopEnabled": agentic_mode,
+            "systemPrompt": system_prompt[:15000],
             "conversationMeta": {
                 "title": title,
                 "systemPrompt": system_prompt[:15000],
@@ -195,18 +243,19 @@ class PrismClient:
         }
         if is_qwen_model:
             payload["thinkingEnabled"] = enable_thinking
-        # Only include tools for interactive chat (agentic_mode=True).
-        # Pipeline calls must NOT forward tools to Prism — they are
-        # executed locally by the trading bot's agent_loop.py.
-        if tools and agentic_mode:
-            payload["tools"] = tools
+        # Forward tools if present.
+        if tools:
+            payload["tools"] = self._format_tools(tools)
 
         if is_new:
             payload["createSession"] = True
         elif session_id:
             payload["sessionId"] = session_id
 
-        target_url = f"{self.url}/agent?stream=false"
+        if agentic_mode:
+            target_url = f"{self.url}/agent?stream=false"
+        else:
+            target_url = f"{self.url}/chat?stream=false"
         headers = {
             "Content-Type": "application/json",
             "x-project": self.project,
@@ -233,14 +282,22 @@ class PrismClient:
         Returns (payload, url, headers) formatted for Prism /agent streaming.
         Routes through the configured agent persona (CUSTOM_MARKET_ALPHA).
         """
+        model = normalize_prism_model(model)
         title_parts = [agent_name]
         if ticker:
             title_parts.append(ticker)
         title = " · ".join(title_parts)
 
-        conversation_id = str(uuid.uuid4())
         group_key = f"chat-{agent_name}" if agent_name == "user_chat" else ""
         session_id, is_new = self._get_or_create_session(group_key)
+
+        # Reuse conversation ID for the same group key
+        if group_key:
+            if group_key not in self._conversations:
+                self._conversations[group_key] = str(uuid.uuid4())
+            conversation_id = self._conversations[group_key]
+        else:
+            conversation_id = str(uuid.uuid4())
 
         payload: dict[str, Any] = {
             "provider": "vllm",
@@ -252,8 +309,9 @@ class PrismClient:
             "project": self.project,
             "username": self.username,
             "agent": self.agent,
-            "functionCallingEnabled": agentic_mode,
+            "functionCallingEnabled": agentic_mode or bool(tools),
             "agenticLoopEnabled": agentic_mode,
+            "systemPrompt": system_prompt[:15000],
             "conversationMeta": {
                 "title": title,
                 "systemPrompt": system_prompt[:15000],
@@ -265,15 +323,18 @@ class PrismClient:
         }
         if is_qwen_model:
             payload["thinkingEnabled"] = enable_thinking
-        if tools and agentic_mode:
-            payload["tools"] = tools
+        if tools:
+            payload["tools"] = self._format_tools(tools)
 
         if is_new:
             payload["createSession"] = True
         elif session_id:
             payload["sessionId"] = session_id
 
-        target_url = f"{self.url}/agent"
+        if agentic_mode:
+            target_url = f"{self.url}/agent"
+        else:
+            target_url = f"{self.url}/chat"
         headers = {
             "Content-Type": "application/json",
             "x-project": self.project,

@@ -35,6 +35,9 @@ def get_position_context(ticker: str, bot_id: str = "") -> dict:
             "holding_days": int,
             "stop_loss_pct": float,
             "stop_price": float,
+            "original_thesis": str | None,
+            "original_thesis_date": str | None,
+            "original_thesis_conf": int | None,
         }
     """
     from app.db.connection import get_db
@@ -59,6 +62,35 @@ def get_position_context(ticker: str, bot_id: str = "") -> dict:
                 e,
             )
             return {"held": False}
+
+        # Query original buy thesis
+        original_thesis = None
+        original_thesis_date = None
+        original_thesis_conf = None
+        if row and row[0] and row[0] > 0:
+            try:
+                row_thesis = db.execute(
+                    """
+                    SELECT created_at, thesis_summary, confidence
+                    FROM analysis_results
+                    WHERE ticker = %s AND (thesis_verdict = 'BUY' OR (result_json::jsonb->>'action') = 'BUY')
+                    ORDER BY created_at DESC LIMIT 1
+                    """,
+                    [ticker],
+                ).fetchone()
+                if row_thesis:
+                    original_thesis_date, original_thesis, original_thesis_conf = row_thesis
+                    if original_thesis_date:
+                        if hasattr(original_thesis_date, "strftime"):
+                            original_thesis_date = original_thesis_date.strftime("%Y-%m-%d")
+                        else:
+                            original_thesis_date = str(original_thesis_date)[:10]
+            except Exception as e:
+                logger.debug(
+                    "[POSITION_CTX] Failed to query original thesis for %s: %s",
+                    ticker,
+                    e,
+                )
 
     if not row or not row[0] or row[0] <= 0:
         return {"held": False}
@@ -103,6 +135,9 @@ def get_position_context(ticker: str, bot_id: str = "") -> dict:
         "holding_days": holding_days,
         "stop_loss_pct": round(stop_pct * 100, 1),
         "stop_price": round(stop_price, 2),
+        "original_thesis": original_thesis,
+        "original_thesis_date": original_thesis_date,
+        "original_thesis_conf": original_thesis_conf,
     }
 
 
@@ -115,6 +150,14 @@ def format_position_context_for_prompt(ctx: dict) -> str:
         return ""
 
     pnl_emoji = "🟢" if ctx["unrealized_pnl_pct"] >= 0 else "🔴"
+    
+    thesis_text = "[No recorded BUY thesis found in database]"
+    if ctx.get("original_thesis"):
+        thesis_text = (
+            f"Recorded on {ctx['original_thesis_date']} at {ctx['original_thesis_conf']}% confidence:\n"
+            f"  \"\"\"\n  {ctx['original_thesis']}\n  \"\"\""
+        )
+
     return (
         f"# CURRENT POSITION STATUS\n"
         f"You are evaluating a ticker the bot ALREADY HOLDS.\n"
@@ -125,12 +168,13 @@ def format_position_context_for_prompt(ctx: dict) -> str:
         f"(${ctx['unrealized_pnl']:+,.2f})\n"
         f"- Holding Duration: {ctx['holding_days']} days\n"
         f"- Stop-Loss: {ctx['stop_loss_pct']}% "
-        f"(triggers at ${ctx['stop_price']})\n\n"
-        f"IMPORTANT: Because this is an EXISTING POSITION, you must "
-        f"evaluate whether to HOLD or SELL — not just whether to BUY.\n"
-        f"Consider: Is the original thesis still valid? Is capital "
-        f"better deployed elsewhere? Has the stop-loss level been "
-        f"approached?"
+        f"(triggers at ${ctx['stop_price']})\n"
+        f"- Original Buy Thesis: {thesis_text}\n\n"
+        f"IMPORTANT: Because this is an EXISTING POSITION, you can choose to BUY (add to position), HOLD (keep current sizing), or SELL (liquidate position).\n"
+        f"Consider:\n"
+        f"1. Is the original thesis still valid, or has it been invalidated by recent news/data?\n"
+        f"2. If you are suggesting to BUY more, why is it justified to increase risk exposure now? Compare opportunity cost.\n"
+        f"3. Has the price approached stop-loss or profit-taking targets?"
     )
 
 
@@ -458,3 +502,202 @@ async def propose_constitution_amendment_tool(
     except Exception as e:
         logger.exception("[PortfolioTools] propose_amendment failed")
         return json.dumps({"status": "error", "message": str(e)})
+
+
+def get_portfolio_risk_dashboard(ticker: str, bot_id: str = "") -> str:
+    """Build a quantitative risk and capacity dashboard for a target ticker.
+    
+    Includes cash balance, total portfolio value, active sector exposures,
+    Constitution sector limits, remaining sector capital capacity,
+    ticker concentration limits, and dynamic correlations (hedges & overlaps)
+    with currently held positions.
+    """
+    from app.db.connection import get_db
+    from app.trading.paper_trader import get_portfolio
+
+    if not bot_id:
+        bot_id = settings.BOT_ID
+
+    ticker = ticker.upper()
+
+    try:
+        portfolio = get_portfolio(bot_id)
+        cash = portfolio.get("cash", 0.0)
+        positions = portfolio.get("positions", [])
+        position_count = len(positions)
+    except Exception as e:
+        logger.warning("[PortfolioTools] Failed to load portfolio state: %s", e)
+        return ""
+
+    # Fetch thresholds from Constitution
+    sector_cap = 30.0
+    try:
+        from app.pipeline.trading_constitution import get_constitution_param
+        sector_cap = float(get_constitution_param("sector", "max_sector_pct", 30.0))
+    except Exception:
+        pass
+
+    # Enrich positions with current prices and calculate total portfolio value
+    total_value = cash
+    enriched_positions = []
+    sector_exposures = {}
+    existing_ticker_value = 0.0
+
+    with get_db() as db:
+        for pos in positions:
+            pos_ticker = pos["ticker"]
+            pos_qty = pos["qty"]
+            
+            # Fetch current price
+            ctx = get_position_context(pos_ticker, bot_id)
+            current_price = ctx.get("current_price") or pos.get("avg_entry_price", 0.0)
+            pos_value = pos_qty * current_price
+            total_value += pos_value
+
+            if pos_ticker == ticker:
+                existing_ticker_value = pos_value
+
+            # Fetch sector
+            try:
+                row = db.execute(
+                    "SELECT sector FROM ticker_metadata WHERE ticker = %s",
+                    [pos_ticker],
+                ).fetchone()
+                sector = row[0] if row else "Unknown"
+            except Exception:
+                sector = "Unknown"
+
+            enriched_positions.append({
+                "ticker": pos_ticker,
+                "value": pos_value,
+                "sector": sector,
+            })
+            
+            sector_exposures[sector] = sector_exposures.get(sector, 0.0) + pos_value
+
+    # Identify target ticker sector
+    target_sector = "Unknown"
+    with get_db() as db:
+        try:
+            row = db.execute(
+                "SELECT sector FROM ticker_metadata WHERE ticker = %s",
+                [ticker],
+            ).fetchone()
+            if row:
+                target_sector = row[0]
+        except Exception:
+            pass
+
+    # Calculate sector exposure and capacities
+    current_sector_value = sector_exposures.get(target_sector, 0.0)
+    current_sector_pct = (current_sector_value / total_value * 100.0) if total_value > 0 else 0.0
+
+    max_sector_value = total_value * (sector_cap / 100.0)
+    remaining_sector_capacity = max(0.0, max_sector_value - current_sector_value)
+
+    # Ticker concentration limit (max 25% of portfolio value per ticker)
+    max_concentration_pct = getattr(settings, "MAX_CONCENTRATION_PCT", 0.25)
+    max_concentration_limit = total_value * max_concentration_pct
+    max_allowed_for_ticker = max(0.0, max_concentration_limit - existing_ticker_value)
+
+    # Max allowed BUY amount is the constraint of cash, sector headroom, and concentration headroom
+    max_allowed_buy_amount = min(cash, remaining_sector_capacity, max_allowed_for_ticker)
+
+    # Correlations & Hedging
+    spy_corr = "N/A"
+    qqq_corr = "N/A"
+    high_overlaps = []
+    hedges = []
+
+    with get_db() as db:
+        def _local_corr(t_a, t_b):
+            try:
+                row = db.execute(
+                    """
+                    SELECT correlation FROM ticker_correlations
+                    WHERE (ticker_a = %s AND ticker_b = %s)
+                       OR (ticker_a = %s AND ticker_b = %s)
+                    ORDER BY computed_at DESC LIMIT 1
+                    """,
+                    [t_a, t_b, t_b, t_a],
+                ).fetchone()
+                return row[0] if row else None
+            except Exception:
+                return None
+
+        # Fetch SPY/QQQ correlations
+        s_c = _local_corr(ticker, "SPY")
+        if s_c is not None:
+            spy_corr = f"{s_c:+.2f}"
+        q_c = _local_corr(ticker, "QQQ")
+        if q_c is not None:
+            qqq_corr = f"{q_c:+.2f}"
+
+        # Fetch correlation with other held tickers
+        for ep in enriched_positions:
+            pos_ticker = ep["ticker"]
+            if pos_ticker == ticker:
+                continue
+            corr = _local_corr(ticker, pos_ticker)
+            if corr is not None:
+                if corr > 0.70:
+                    high_overlaps.append(f"{pos_ticker} ({corr:+.2f})")
+                elif corr < 0.0:
+                    hedges.append(f"{pos_ticker} ({corr:+.2f})")
+
+    # Format the block
+    lines = [
+        "# PORTFOLIO RISK & CAPACITY LIMITS",
+        "You must analyze this ticker within the context of the active portfolio and risk constraints.",
+        "",
+        "## Portfolio Allocation Status",
+        f"- Available Cash: ${cash:,.2f}",
+        f"- Total Portfolio Value: ${total_value:,.2f}",
+        f"- Active Positions: {position_count}",
+        "",
+        "## Trade Capital & Sizing Budget",
+        f"- Ticker Sector: {target_sector}",
+        f"- Current Sector Exposure: ${current_sector_value:,.2f} ({current_sector_pct:.1f}% of portfolio)",
+        f"- Max Allowed Sector Exposure: ${max_sector_value:,.2f} ({sector_cap:.1f}% limit)",
+        f"- Remaining Sector Capacity: ${remaining_sector_capacity:,.2f}",
+        f"- Max Concentration Limit for {ticker}: ${max_concentration_limit:,.2f} ({max_concentration_pct * 100.0:.1f}% limit)",
+    ]
+
+    if enriched_positions and any(ep["ticker"] == ticker for ep in enriched_positions):
+        lines.append(
+            f"- **MAXIMUM ALLOWED BUY AMOUNT FOR THIS TRADE**: ${max_allowed_buy_amount:,.2f}\n"
+            f"  *(Note: You ALREADY hold {ticker}. Evaluators must prioritize HOLD/SELL. If recommending BUY/add to position, the maximum allowed is ${max_allowed_buy_amount:,.2f}.)*"
+        )
+    else:
+        lines.append(
+            f"- **MAXIMUM ALLOWED BUY AMOUNT FOR THIS TRADE**: ${max_allowed_buy_amount:,.2f}\n"
+            f"  *(Any recommendation to BUY must stay within this budget. Exceeding it will be blocked by the risk engine.)*"
+        )
+
+    lines.extend([
+        "",
+        "## Portfolio Correlation & Hedging Analysis",
+        f"- Correlation with SPY: {spy_corr}",
+        f"- Correlation with QQQ: {qqq_corr}",
+    ])
+
+    if high_overlaps:
+        lines.append(f"- High Correlation Overlaps (Correlation > 0.70): {', '.join(high_overlaps)}")
+    else:
+        lines.append("- High Correlation Overlaps (Correlation > 0.70): None")
+
+    if hedges:
+        lines.append(f"- Negative Correlation Hedges (Correlation < 0.0): {', '.join(hedges)}")
+    else:
+        lines.append("- Negative Correlation Hedges (Correlation < 0.0): None")
+
+    lines.extend([
+        "",
+        "## Strategic Directives",
+        f"1. If recommending BUY, ensure your sizing rationale aligns with the ${max_allowed_buy_amount:,.2f} maximum cap.",
+        "2. If there are high correlation overlaps, justify why adding this ticker is worth the redundant portfolio risk.",
+        "3. If this ticker has negative correlation hedges, evaluate if it serves as a valuable hedge for our active exposure.",
+    ])
+
+    return "\n".join(lines)
+

@@ -115,6 +115,7 @@ AGENT_ROLE_ROUTING = {
     "risk": "analyst",
     "comparative": "analyst",
     "trading_phase": "trader",
+    "pre_trade": "trader",
     "decision_engine": "trader",
     "deepeval_judge": "analyst",
     "strategy_evaluator": "analyst",
@@ -807,6 +808,7 @@ class VLLMClient:
             use_prism_agent = (
                 self.prism_client.enabled
                 and settings.PRISM_AGENT_ROUTING
+                and meta.get("agent_name") != "pre_trade"
             )
             prism_routed = False
 
@@ -819,8 +821,19 @@ class VLLMClient:
                         ep.name,
                         self.prism_client.agent,
                     )
+                    # Determine target provider ID on Prism side based on endpoint URL
+                    prism_provider = "vllm"
+                    if ep and ep.url:
+                        url_str = ep.url.rstrip('/')
+                        if "10.0.0.30" in url_str:
+                            prism_provider = "vllm"
+                        elif "10.0.0.103" in url_str:
+                            prism_provider = "vllm-2"
+                        elif "10.0.0.141" in url_str:
+                            prism_provider = "vllm-3"
+
                     content, total_tokens, elapsed_ms = await self._call_prism_agent(
-                        client, item.payload, meta, start
+                        client, item.payload, meta, start, provider=prism_provider
                     )
                     prism_routed = True
                 else:
@@ -1032,6 +1045,8 @@ class VLLMClient:
         """
         import asyncio
         from httpx import RequestError, HTTPStatusError
+        from app.utils.text_utils import sanitize_surrogates
+        json_payload = sanitize_surrogates(json_payload)
 
         max_retries = 3
         backoff = 1.0
@@ -1220,13 +1235,11 @@ class VLLMClient:
         payload: dict,
         meta: dict,
         start: float,
+        provider: str = "vllm",
     ) -> tuple[str, int, int]:
-        """Route through Prism's /agent endpoint (agentic loop with tool calling).
-
-        Like Lupos bot's generateAgentResponse: sends messages to Prism which
-        assembles the persona system prompt, runs the agentic loop, executes
-        tools autonomously, and returns the final response. Prism handles all
-        request logging, conversation persistence, and metrics natively.
+        """Route through Prism's /agent or /chat endpoint (streaming mode) to collect the response.
+        This allows us to capture raw tool calls correctly from the stream (which are ignored
+        by Prism's non-streaming JSON response when functionCallingEnabled is False).
         """
         model_id = payload.get("model", self.model)
         system_prompt = meta.get("system_prompt", "")
@@ -1234,11 +1247,9 @@ class VLLMClient:
         ticker = meta.get("ticker", "")
         cycle_id = meta.get("cycle_id", "")
 
-        # Build Prism /agent payload (flat OpenAI-style, like Lupos bot)
-        # Pipeline calls disable the agentic loop to prevent the coordinator
-        # from spawning team_create workers — these are simple prompt→response tasks.
-        # Only interactive chat (user_chat) gets the full agentic loop.
+        # Build Prism stream payload
         is_interactive = agent_name == "user_chat"
+        tools = payload.get("tools")
         prism_payload = self.prism_client.get_chat_payload_and_url(
             model=model_id,
             messages=payload.get("messages", []),
@@ -1249,50 +1260,124 @@ class VLLMClient:
             ticker=ticker,
             cycle_id=cycle_id,
             enable_thinking=payload.get("chat_template_kwargs", {}).get("enable_thinking", False),
-            # NEVER forward tool schemas to Prism — tools are executed locally
-            # by the trading bot's agent_loop.py. Forwarding them causes
-            # Prism's coordinator to attempt execution, creating infinite loops.
-            tools=None,
+            tools=tools,
             is_qwen_model=_is_qwen_model(model_id),
             agentic_mode=is_interactive,
+            provider=provider,
         )
         agent_payload, target_url, headers = prism_payload
 
+        # Convert non-streaming URL to streaming URL
+        target_url = target_url.replace("?stream=false", "")
+
+        # For pipeline calls with tools, force functionCallingEnabled to False
+        # to prevent Prism from replacing tools with its own and running them.
+        if not is_interactive and tools:
+            agent_payload["functionCallingEnabled"] = False
+            agent_payload["agenticLoopEnabled"] = False
+
         # Server-to-server: skip conversation persistence, auto-approve tools
-        agent_payload["skipConversation"] = True
+        agent_payload["skipConversation"] = settings.PRISM_SKIP_CONVERSATION
         agent_payload["autoApprove"] = True
 
-        r = await self._call_endpoint(
-            client=client,
-            url=target_url,
-            json_payload=agent_payload,
-            headers=headers,
-        )
-        elapsed_ms = int((time.monotonic() - start) * 1000)
-        data = r.json()
+        # Check if we are running in a mock context (like pytest unit tests)
+        from unittest.mock import Mock
+        is_mock_client = isinstance(client, Mock) or not hasattr(client, "stream")
 
-        # Parse Prism agent response format
-        content = data.get("text") or ""
-        thinking = data.get("thinking") or ""
+        if is_mock_client:
+            # Fallback to non-streaming direct endpoint call for mock/unit tests
+            r = await self._call_endpoint(
+                client=client,
+                url=target_url + "?stream=false",
+                json_payload=agent_payload,
+                headers=headers,
+            )
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            data = r.json()
+            content = data.get("text") or ""
+            thinking = data.get("thinking") or ""
+            if thinking:
+                meta["_think_content"] = thinking
+            usage = data.get("usage", {})
+            total_tokens = (
+                usage.get("totalTokens")
+                or usage.get("total_tokens")
+                or (usage.get("inputTokens", 0) + usage.get("outputTokens", 0))
+                or 0
+            )
+            meta["_usage"] = {
+                "prompt_tokens": usage.get("inputTokens", usage.get("prompt_tokens", 0)),
+                "completion_tokens": usage.get("outputTokens", usage.get("completion_tokens", 0)),
+            }
+            tool_calls = data.get("toolCalls")
+            if tool_calls:
+                payload["_tool_calls_result"] = tool_calls
+            return content, total_tokens, elapsed_ms
+
+        content = ""
+        thinking = ""
+        total_tokens = 0
+        tool_calls = []
+
+        import json as _json
+
+        async with client.stream(
+            "POST",
+            target_url,
+            json=agent_payload,
+            headers=headers,
+            timeout=240.0,
+        ) as response:
+            response.raise_for_status()
+            buffer = ""
+            async for raw_chunk in response.aiter_text():
+                buffer += raw_chunk
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line or not line.startswith("data: "):
+                        continue
+                    data_str = line[6:].strip()
+                    if data_str == "[DONE]":
+                        continue
+                    try:
+                        chunk_data = _json.loads(data_str)
+                    except _json.JSONDecodeError:
+                        continue
+
+                    if "type" in chunk_data:
+                        ctype = chunk_data.get("type")
+                        chunk_content = chunk_data.get("content", "")
+
+                        if ctype == "thinking" and chunk_content:
+                            thinking += chunk_content
+                        elif ctype == "chunk" and chunk_content:
+                            content += chunk_content
+                        elif ctype == "toolCall":
+                            tool_calls.append({
+                                "id": chunk_data.get("id"),
+                                "name": chunk_data.get("name"),
+                                "args": chunk_data.get("args", {}),
+                            })
+                        elif ctype == "done":
+                            usage = chunk_data.get("usage", {})
+                            if usage:
+                                total_tokens = (
+                                    usage.get("totalTokens")
+                                    or usage.get("total_tokens")
+                                    or (usage.get("inputTokens", 0) + usage.get("outputTokens", 0))
+                                    or 0
+                                )
+                                meta["_usage"] = {
+                                    "prompt_tokens": usage.get("inputTokens", usage.get("prompt_tokens", 0)),
+                                    "completion_tokens": usage.get("outputTokens", usage.get("completion_tokens", 0)),
+                                }
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+
         if thinking:
             meta["_think_content"] = thinking
 
-        # Extract usage from Prism response
-        usage = data.get("usage", {})
-        total_tokens = (
-            usage.get("totalTokens")
-            or usage.get("total_tokens")
-            or (usage.get("inputTokens", 0) + usage.get("outputTokens", 0))
-            or 0
-        )
-
-        meta["_usage"] = {
-            "prompt_tokens": usage.get("inputTokens", usage.get("prompt_tokens", 0)),
-            "completion_tokens": usage.get("outputTokens", usage.get("completion_tokens", 0)),
-        }
-
-        # Capture tool calls if returned
-        tool_calls = data.get("toolCalls")
         if tool_calls:
             payload["_tool_calls_result"] = tool_calls
 

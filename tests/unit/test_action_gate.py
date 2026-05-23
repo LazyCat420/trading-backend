@@ -11,8 +11,8 @@ def test_gate_action_not_held():
     assert gate_action("UNKNOWN", held=False) == "SELL"
     
 def test_gate_action_held():
-    """When held, BUY should be remapped to HOLD."""
-    assert gate_action("BUY", held=True) == "HOLD"
+    """When held, BUY should be allowed."""
+    assert gate_action("BUY", held=True) == "BUY"
     assert gate_action("HOLD", held=True) == "HOLD"
     assert gate_action("SELL", held=True) == "SELL"
     assert gate_action("PASS", held=True) == "HOLD"  # Invalid action remaps to default
@@ -21,4 +21,4 @@ def test_gate_action_held():
 def test_get_allowed_actions_str():
     """Prompt string should exclude HOLD when not held."""
     assert get_allowed_actions_str(held=False) == "BUY|SELL"
-    assert get_allowed_actions_str(held=True) == "HOLD|SELL"
+    assert get_allowed_actions_str(held=True) == "BUY|HOLD|SELL"

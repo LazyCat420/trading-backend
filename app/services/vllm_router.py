@@ -32,6 +32,7 @@ class ChatRequest(BaseModel):
     history: Optional[List[Dict[str, Any]]] = None
     images: Optional[List[str]] = None
     tools: Optional[List[Dict[str, Any]]] = None
+    hermes_mode: bool = False
 
 
 class ChatStreamRequest(BaseModel):
@@ -48,6 +49,7 @@ class ChatStreamRequest(BaseModel):
     tools: Optional[List[Dict[str, Any]]] = None
     images: Optional[List[str]] = None
     bypass_prism: bool = False
+    hermes_mode: bool = False
 
 
 class ChatWithToolsRequest(BaseModel):
@@ -117,6 +119,25 @@ class TriggerCreate(BaseModel):
 @router.post("/api/v1/vllm/chat")
 async def vllm_chat(req: ChatRequest):
     try:
+        if req.hermes_mode:
+            from app.tools.web_tools import stream_hermes_chat
+            import time
+            start_time = time.monotonic()
+            response_text = ""
+            async for chunk in stream_hermes_chat(
+                system=req.system,
+                user=req.user,
+                history=req.history,
+                model_override=req.model_override,
+                endpoint_override=req.endpoint_override,
+                tools=req.tools,
+                images=req.images,
+            ):
+                if not chunk.startswith("__TOOL_CALL__") and not chunk.startswith("__THINK__"):
+                    response_text += chunk
+            elapsed_ms = int((time.monotonic() - start_time) * 1000)
+            return {"text": response_text, "total_tokens": 0, "elapsed_ms": elapsed_ms}
+
         response_text, total_tokens, elapsed_ms = await llm.chat(
             system=req.system,
             user=req.user,
@@ -144,22 +165,46 @@ async def vllm_chat(req: ChatRequest):
 async def vllm_chat_stream(req: ChatStreamRequest):
     async def event_generator():
         try:
-            async for chunk in llm.chat_stream(
-                system=req.system,
-                user=req.user,
-                temperature=req.temperature,
-                max_tokens=req.max_tokens,
-                enable_thinking=req.enable_thinking,
-                agent_name=req.agent_name,
-                ticker=req.ticker,
-                model_override=req.model_override,
-                endpoint_override=req.endpoint_override,
-                history=req.history,
-                tools=req.tools,
-                images=req.images,
-                bypass_prism=req.bypass_prism
-            ):
-                yield chunk + "\n"
+            if req.hermes_mode:
+                from app.tools.web_tools import stream_hermes_chat
+                import json as _json
+                import time
+                start_time = time.monotonic()
+                full_text = ""
+                async for chunk in stream_hermes_chat(
+                    system=req.system,
+                    user=req.user,
+                    history=req.history,
+                    model_override=req.model_override,
+                    endpoint_override=req.endpoint_override,
+                    tools=req.tools,
+                    images=req.images,
+                ):
+                    if not chunk.startswith("__TOOL_CALL__") and not chunk.startswith("__THINK__"):
+                        full_text += chunk
+                    yield chunk + "\n"
+                
+                # Yield final metadata
+                elapsed_ms = int((time.monotonic() - start_time) * 1000)
+                meta = {"total_tokens": 0, "elapsed_ms": elapsed_ms, "full_text": full_text}
+                yield f"__META__{_json.dumps(meta)}\n"
+            else:
+                async for chunk in llm.chat_stream(
+                    system=req.system,
+                    user=req.user,
+                    temperature=req.temperature,
+                    max_tokens=req.max_tokens,
+                    enable_thinking=req.enable_thinking,
+                    agent_name=req.agent_name,
+                    ticker=req.ticker,
+                    model_override=req.model_override,
+                    endpoint_override=req.endpoint_override,
+                    history=req.history,
+                    tools=req.tools,
+                    images=req.images,
+                    bypass_prism=req.bypass_prism
+                ):
+                    yield chunk + "\n"
         except Exception as e:
             logger.exception("Error in /vllm/chat_stream generator")
             yield f"ERROR: {str(e)}\n"

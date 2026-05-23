@@ -32,6 +32,7 @@ IMPORTANT RULES:
 - You may NOT introduce new data points not cited by either side.
 - If one side had more claims rejected, their case was weakened by
   poor data quality — factor this into your confidence.
+- Weigh evidence dynamically based on the source's metadata credibility presented under "## SOURCE METADATA & UNSTRUCTURED CONTEXT" (e.g. prioritize official news/SEC filings over individual Reddit posts/scores).
 - Your rationale MUST cite at least 3 specific verified values from above.
 - Claims tagged with [SURVIVED REBUTTAL] are from late turns and have successfully withstood attack by the opposing side. These are HIGHER SIGNAL and should be weighted more heavily than opening statements.
 {hold_rule}
@@ -42,7 +43,9 @@ Output exactly this JSON:
   "winning_side": "bull|bear|split",
   "key_deciding_factor": "the specific claim that tipped the balance",
   "rejected_claim_impact": "how rejected claims affected your confidence",
-  "rationale": "2-4 sentences citing specific verified values from above"
+  "rationale": "2-4 sentences citing specific verified values from above",
+  "original_thesis_status": "VALID|PARTIALLY_VALID|INVALIDATED|NOT_HELD",
+  "original_thesis_explanation": "explanation of whether the original buy thesis remains valid, partially valid, or has been invalidated by new evidence, and why (or empty string/NOT_HELD if not held)"
 }}"""
 
 
@@ -66,6 +69,11 @@ def _build_judge_system_prompt(held: bool) -> str:
 
 JUDGE_USER_TEMPLATE = """## Ticker: {ticker}
 
+{position_block}
+
+## SOURCE METADATA & UNSTRUCTURED CONTEXT:
+{source_metadata}
+
 ## BULL CASE (verified claims only):
 {bull_claims}
 
@@ -85,6 +93,21 @@ Claims that were REJECTED for lack of ground truth have been removed.
 You may NOT introduce new data points."""
 
 
+def format_source_ref_for_prompt(s) -> str:
+    """Format SourceDocRef or dict into a detailed string containing metadata if available."""
+    source_type = getattr(s, "source_type", None) or (s.get("source_type") if isinstance(s, dict) else "unknown")
+    summary = getattr(s, "summary", None) or (s.get("summary") if isinstance(s, dict) else "")
+    metadata = getattr(s, "metadata", None) or (s.get("metadata") if isinstance(s, dict) else None)
+    
+    meta_parts = [f"Source: {source_type}"]
+    if metadata and isinstance(metadata, dict):
+        for k, v in metadata.items():
+            if v is not None:
+                meta_parts.append(f"{k}: {v}")
+    meta_str = ", ".join(meta_parts)
+    return f"[{meta_str}] {summary}"
+
+
 async def judge_debate(
     ticker: str,
     verified_bull_claims: list[dict],
@@ -95,6 +118,8 @@ async def judge_debate(
     bot_id: str = "",
     persona_outcomes: dict | None = None,
     held: bool = False,
+    source_summaries: list = None,
+    position_context: dict | None = None,
 ) -> tuple[dict, int]:
     """Judge the adversarial debate and produce a weighted verdict.
 
@@ -165,8 +190,21 @@ async def judge_debate(
                 f"incorporate it into a confidence discount.\n"
             )
 
+    source_metadata = "None available."
+    if source_summaries:
+        source_metadata = "\n".join(
+            [format_source_ref_for_prompt(s) for s in source_summaries[:15]]
+        )
+
+    position_block = ""
+    if held and position_context:
+        from app.tools.portfolio_tools import format_position_context_for_prompt
+        position_block = format_position_context_for_prompt(position_context)
+
     user_prompt = JUDGE_USER_TEMPLATE.format(
         ticker=ticker,
+        position_block=position_block,
+        source_metadata=source_metadata,
         bull_claims=bull_text,
         bear_claims=bear_text,
         cross_exam_findings=cross_exam_findings or "No cross-examination issues found.",
@@ -215,6 +253,8 @@ async def judge_debate(
             "key_deciding_factor": f"Judge failed: {e}",
             "rejected_claim_impact": "Unable to assess",
             "rationale": f"Debate judge failed to produce verdict: {e}",
+            "original_thesis_status": "NOT_HELD" if not held else "VALID",
+            "original_thesis_explanation": f"Failed to run judge: {e}",
         }
 
     # Validate and gate action based on position state

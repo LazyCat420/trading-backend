@@ -60,6 +60,20 @@ class AdaptiveConcurrencyController:
         self._last_eval: float = 0.0
         # Track per-label active counts for observability
         self._label_active: dict[str, int] = {}
+        # Global concurrency tracking across all gathers
+        self._active_tasks_count = 0
+        self._cv = asyncio.Condition()
+
+    async def _acquire_slot(self):
+        async with self._cv:
+            while self._active_tasks_count >= self._maybe_update_limit():
+                await self._cv.wait()
+            self._active_tasks_count += 1
+
+    async def _release_slot(self):
+        async with self._cv:
+            self._active_tasks_count = max(0, self._active_tasks_count - 1)
+            self._cv.notify_all()
 
     # ── vLLM /metrics readers ────────────────────────────────────────
 
@@ -224,10 +238,7 @@ class AdaptiveConcurrencyController:
         if not tasks:
             return []
 
-        # Snapshot the limit at the start of this batch
         limit = self._maybe_update_limit()
-        sem = asyncio.Semaphore(limit)
-
         cache_pct = self._avg_cache_usage() * 100
         waiting = self._total_waiting()
         running = self._total_running()
@@ -246,23 +257,23 @@ class AdaptiveConcurrencyController:
         errors: list[Exception | None] = [None] * len(tasks)
 
         async def _run(idx: int, coro):
-            async with sem:
-                # Track active count per label
-                self._label_active[label] = self._label_active.get(label, 0) + 1
-                try:
-                    results[idx] = await coro
-                except Exception as e:
-                    if return_exceptions:
-                        results[idx] = e
-                    else:
-                        errors[idx] = e
-                finally:
-                    self._label_active[label] = max(
-                        0, self._label_active.get(label, 1) - 1
-                    )
-                    # Clean up zero-count labels
-                    if self._label_active.get(label, 0) == 0:
-                        self._label_active.pop(label, None)
+            await self._acquire_slot()
+            self._label_active[label] = self._label_active.get(label, 0) + 1
+            try:
+                results[idx] = await coro
+            except Exception as e:
+                if return_exceptions:
+                    results[idx] = e
+                else:
+                    errors[idx] = e
+            finally:
+                self._label_active[label] = max(
+                    0, self._label_active.get(label, 1) - 1
+                )
+                # Clean up zero-count labels
+                if self._label_active.get(label, 0) == 0:
+                    self._label_active.pop(label, None)
+                await self._release_slot()
 
         await asyncio.gather(
             *[_run(i, t) for i, t in enumerate(tasks)],

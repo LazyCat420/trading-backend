@@ -71,6 +71,8 @@ class DebateResult(BaseModel):
     total_tokens: int = 0
     persona_outcomes: dict = Field(default_factory=dict)
     minority_report: str = ""
+    original_thesis_status: str = "NOT_HELD"  # "VALID" | "PARTIALLY_VALID" | "INVALIDATED" | "NOT_HELD"
+    original_thesis_explanation: str = ""
 
     class Config:
         frozen = True

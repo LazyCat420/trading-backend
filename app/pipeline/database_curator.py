@@ -40,7 +40,7 @@ async def generate_summary(text: str, source_type: str, max_words: int = 100) ->
                 priority=Priority.LOW,
                 agent_name="data_curator",
             ),
-            timeout=45.0,
+            timeout=90.0,
         )
         return summary.strip()
     except Exception as e:
@@ -117,14 +117,8 @@ async def run_data_curation(emit: Callable | None = None) -> dict:
         if len(content) > 50:
             summary = await generate_summary(content, "news")
             if not summary:
-                logger.warning("[CURATOR] Summary generation failed or empty. Aborting curation run to prevent model server flooding.")
-                emit(
-                    "curator",
-                    "failed",
-                    "Curator aborted early due to summary generation failure.",
-                    status="error",
-                )
-                return metrics
+                logger.warning("[CURATOR] Summary generation failed or empty. Skipping this news article.")
+                continue
             with get_db() as db:
                 db.execute(
                     "UPDATE news_articles SET llm_summary = %s, summarized_at = CURRENT_TIMESTAMP WHERE id = %s",
@@ -144,14 +138,8 @@ async def run_data_curation(emit: Callable | None = None) -> dict:
         if len(content.strip()) > 30 and content != "LOW_EFFORT_SPAM_PURGED":
             summary = await generate_summary(content[:4000], "reddit")
             if not summary:
-                logger.warning("[CURATOR] Summary generation failed or empty. Aborting curation run to prevent model server flooding.")
-                emit(
-                    "curator",
-                    "failed",
-                    "Curator aborted early due to summary generation failure.",
-                    status="error",
-                )
-                return metrics
+                logger.warning("[CURATOR] Summary generation failed or empty. Skipping this Reddit post.")
+                continue
             with get_db() as db:
                 db.execute(
                     "UPDATE reddit_posts SET summary = %s, summarized_at = CURRENT_TIMESTAMP WHERE id = %s",
@@ -171,14 +159,8 @@ async def run_data_curation(emit: Callable | None = None) -> dict:
         if len(content.strip()) > 100:
             summary = await generate_summary(content[:6000], "youtube")
             if not summary:
-                logger.warning("[CURATOR] Summary generation failed or empty. Aborting curation run to prevent model server flooding.")
-                emit(
-                    "curator",
-                    "failed",
-                    "Curator aborted early due to summary generation failure.",
-                    status="error",
-                )
-                return metrics
+                logger.warning("[CURATOR] Summary generation failed or empty. Skipping this YouTube transcript.")
+                continue
             with get_db() as db:
                 db.execute(
                     "UPDATE youtube_transcripts SET summary = %s, summarized_at = CURRENT_TIMESTAMP WHERE video_id = %s",

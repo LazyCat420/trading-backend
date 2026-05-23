@@ -26,7 +26,7 @@ PRE_TRADE_SYSTEM_PROMPT = """You are the Pre-Trade Execution Agent. Your job is 
 calculations BEFORE a buy order is placed. You have access to calculator tools and must use them.
 
 ## MANDATORY TOOL SEQUENCE:
-1. Call `get_portfolio_state` to see current cash and position count.
+1. Call `get_portfolio_state` to see current cash, position count, and check if the ticker is already held (which indicates a position addition rather than a new entry).
 2. Call `get_market_data` for the ticker to get current price.
 3. Call `get_technical_indicators` to get ATR for stop-loss calculation.
 4. Call `calculate_portfolio_allocation` with portfolio value, position count, and max positions.
@@ -34,10 +34,18 @@ calculations BEFORE a buy order is placed. You have access to calculator tools a
 6. Call `calculate_position_size` with cash, risk percent, entry price, and stop-loss price.
 7. Call `calculate_risk_reward` with entry price, target price (use a reasonable estimate), and stop-loss.
 
+## POSITION SIZING RULES:
+- For NEW positions: Target size should scale between 2% and 15% of total portfolio value depending on risk/confidence.
+- For ADDITIONS to existing positions:
+  - You MUST check the current value/concentration of the holding from `get_portfolio_state`.
+  - Sizing for additions must scale between 2% and 15% of portfolio value.
+  - Under no circumstances blindly double down. Limit additions such that the final total concentration (existing value + new order value) does not exceed 20% of the total portfolio value.
+  - Bypass the position slot limit constraint (since adding to a held ticker does not occupy a new position slot).
+
 ## DECISION RULES:
 - If risk/reward ratio < 1.5: VETO the trade (too risky)
-- If position would exceed 15% of portfolio: VETO (over-concentration)
-- If remaining position slots <= 1: VETO (reserve last slot for emergencies)
+- If final total position concentration (existing value + new order value) would exceed 20% of total portfolio value: VETO (over-concentration)
+- If a NEW position (not currently held) and remaining position slots <= 1: VETO (reserve last slot for emergencies)
 - Otherwise: APPROVE with the calculated position size
 
 ## OUTPUT:
@@ -77,6 +85,7 @@ async def run_pre_trade(
     confidence: int,
     cycle_id: str,
     bot_id: str,
+    rationale: str = "",
 ) -> dict:
     """Run pre-trade risk calculations before executing a BUY.
 
@@ -85,6 +94,7 @@ async def run_pre_trade(
         confidence: Decision engine confidence score (0-100).
         cycle_id: Current cycle ID for audit trail.
         bot_id: Bot ID to trade with.
+        rationale: Rationale/thesis from the decision engine.
 
     Returns:
         Dict with decision (APPROVE/VETO), calculated position size,
@@ -105,6 +115,7 @@ async def run_pre_trade(
         user_prompt=(
             f"Run the full pre-trade risk calculation chain for {ticker}.\n"
             f"The decision engine assigned a confidence of {confidence}%.\n"
+            f"Sizing details / rationale from the decision engine: {rationale}\n"
             f"Calculate the appropriate position size, stop-loss, and risk/reward "
             f"ratio using your calculator tools. Then decide: APPROVE or VETO."
         ),
@@ -127,6 +138,7 @@ async def run_pre_trade(
             "veto_reason": "Pre-trade agent produced unparseable output",
             "shares": 0,
             "raw_response": response_text[:500],
+            "tokens_used": result.get("tokens_used", 0),
         }
 
     # Strict Pydantic Validation
@@ -140,6 +152,7 @@ async def run_pre_trade(
             "veto_reason": f"Agent output failed strict schema validation: {str(e)[:100]}",
             "shares": 0,
             "raw_response": response_text[:500],
+            "tokens_used": result.get("tokens_used", 0),
         }
 
     decision = parsed.get("decision", "VETO")

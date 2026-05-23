@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     V2_TICKER_CONCURRENCY: int = (
         3  # parallel tickers — sized for Jetson (3 tickers × ~44 calls ≈ 12 in-flight, fits 24 slots)
     )
-    VLLM_FUTURE_TIMEOUT: int = 180  # seconds before a hung LLM future is killed (aligned with batch timeout)
+    VLLM_FUTURE_TIMEOUT: int = 300  # seconds before a hung LLM future is killed (aligned with batch timeout)
     ANALYSIS_WORKER_TIMEOUT_SECONDS: int = (
         600  # 10-min hard cap per ticker — aligned with debate timeout
     )
@@ -196,6 +196,7 @@ class Settings(BaseSettings):
     PRISM_AGENT_ROUTING: bool = True  # Always route through Prism /agent as requested.
     PRISM_MONGO_URI: str = "mongodb://10.0.0.16:27017/?directConnection=true"
     PRISM_MONGO_DB: str = "prism"
+    PRISM_SKIP_CONVERSATION: bool = False
 
     # ── SEC 13F Tracking ──
     SEC_USER_AGENT: str = "vllm-trading-bot analysis@example.com"

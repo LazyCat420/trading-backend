@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import uuid
@@ -43,7 +44,7 @@ def compute_agent_metrics(db, cycle_id: str | None = None) -> Dict[str, Any]:
     """
     params = []
     if cycle_id:
-        query += " WHERE e.cycle_id = ?"
+        query += " WHERE e.cycle_id = %s"
         params.append(cycle_id)
 
     evals = db.execute(query, params).fetchall()
@@ -258,39 +259,43 @@ async def evaluate_pending_decisions(
     total = len(pending)
     if on_progress:
         on_progress(0, total, "")
-    for i, (decision_id,) in enumerate(pending):
-        elapsed = time.monotonic() - t0
-        if timeout_sec > 0 and elapsed > timeout_sec:
-            logger.warning(
-                "Backfill time budget (%.0fs) exhausted after %d/%d decisions",
-                timeout_sec,
-                success_count,
-                total,
-            )
-            break
-        try:
-            # Emit sub-step so the frontend shows what's happening
-            if on_progress:
-                on_progress(
-                    0,
-                    -2,
-                    f"Decision {i + 1}/{total}: Running DeepEval + ROUGE grounding...",
+
+    sem = asyncio.Semaphore(5)
+
+    async def evaluate_one(i, decision_id):
+        nonlocal success_count
+        async with sem:
+            elapsed = time.monotonic() - t0
+            if timeout_sec > 0 and elapsed > timeout_sec:
+                return
+            try:
+                # Emit sub-step so the frontend shows what's happening
+                if on_progress:
+                    on_progress(
+                        0,
+                        -2,
+                        f"Decision {i + 1}/{total}: Running DeepEval + ROUGE grounding...",
+                    )
+                if await evaluate_decision(decision_id):
+                    success_count += 1
+                    logger.info(
+                        "Backfill [%d/%d] decision %s OK (%.1fs elapsed)",
+                        i + 1,
+                        total,
+                        decision_id[:12],
+                        time.monotonic() - t0,
+                    )
+            except Exception as exc:
+                logger.error(
+                    "Failed to auto-evaluate %s before strategy audit: %s", decision_id, exc
                 )
-            if await evaluate_decision(decision_id):
-                success_count += 1
-                logger.info(
-                    "Backfill [%d/%d] decision %s OK (%.1fs elapsed)",
-                    i + 1,
-                    total,
-                    decision_id[:12],
-                    time.monotonic() - t0,
-                )
-        except Exception as exc:
-            logger.error(
-                "Failed to auto-evaluate %s before strategy audit: %s", decision_id, exc
-            )
-        if on_progress:
-            on_progress(i + 1, total, decision_id)
+            finally:
+                if on_progress:
+                    on_progress(i + 1, total, decision_id)
+
+    tasks = [evaluate_one(i, decision_id) for i, (decision_id,) in enumerate(pending)]
+    if tasks:
+        await asyncio.gather(*tasks)
     return success_count
 
 

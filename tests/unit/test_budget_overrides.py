@@ -15,7 +15,7 @@ import pytest
     ("risk", True, 5),          # Needs room for calculator tools
     ("verifier", True, 5),      # Extra turns for verification
     ("retriever", True, 5),     # Extra turns for data gathering
-    ("pre_trade", True, 6),     # Full calculator chain + buy
+    ("pre_trade", True, 12),    # Full calculator chain + buy
     ("meta_audit", True, 10),   # Deep audit cycle
     ("sentiment", True, 3),     # Not overridden, default
     ("unknown_agent_xyz", True, 3), # Unknown agent gets default

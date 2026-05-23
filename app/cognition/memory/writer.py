@@ -103,6 +103,8 @@ def write_episode(run_result: CognitionRunResult) -> str:
         Memory ID (existing if duplicate, new if created).
     """
     _ensure_schema()
+    from app.utils.text_utils import sanitize_surrogates
+    run_result = sanitize_surrogates(run_result)
 
     # Build content key for dedup
     content_key = (
@@ -197,6 +199,8 @@ def write_semantic(entity_id: str, fact: SemanticFact) -> str:
         Memory ID.
     """
     _ensure_schema()
+    from app.utils.text_utils import sanitize_surrogates
+    fact = sanitize_surrogates(fact)
 
     content_key = f"{fact.subject}:{fact.predicate}:{fact.object}"
     content_hash = MemoryEnvelope.compute_content_hash("semantic", content_key)
@@ -287,6 +291,8 @@ def write_reflection(reflection: ReflectionRecord) -> str:
         Reflection ID.
     """
     _ensure_schema()
+    from app.utils.text_utils import sanitize_surrogates
+    reflection = sanitize_surrogates(reflection)
 
     content_key = f"{reflection.episode_id}:{reflection.root_cause}"
     content_hash = MemoryEnvelope.compute_content_hash("reflective", content_key)
@@ -364,6 +370,8 @@ def write_procedural(rule: ProceduralRule) -> str:
         Rule memory ID.
     """
     _ensure_schema()
+    from app.utils.text_utils import sanitize_surrogates
+    rule = sanitize_surrogates(rule)
 
     content_key = f"{rule.category}:{rule.rule_text}"
     content_hash = MemoryEnvelope.compute_content_hash("procedural", content_key)

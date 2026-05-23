@@ -203,7 +203,7 @@ AGENT_BUDGET_OVERRIDES: dict[str, int] = {
     "risk": 5,
     "verifier": 5,
     "retriever": 5,
-    "pre_trade": 6,
+    "pre_trade": 12,
     "meta_audit": 10,
 }
 

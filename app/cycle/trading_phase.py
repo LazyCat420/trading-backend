@@ -194,6 +194,7 @@ async def execute_decisions(
                         confidence=confidence,
                         cycle_id=cycle_id,
                         bot_id=bot_id,
+                        rationale=d.get("rationale", ""),
                     ),
                     timeout=60.0,  # Hard timeout for pre-trade agent
                 )

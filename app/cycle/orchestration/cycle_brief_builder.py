@@ -59,7 +59,7 @@ def build_warm_start_brief(ticker: str) -> str:
             summary_row = db.execute(
                 "SELECT total_tickers, buy_count, sell_count, hold_count, "
                 "avg_confidence, top_ticker, lesson_summary "
-                "FROM cycle_summaries "
+                "FROM autoresearch_cycle_summaries "
                 "WHERE created_at > NOW() - INTERVAL '7 days' "
                 "ORDER BY created_at DESC LIMIT 1"
             ).fetchone()

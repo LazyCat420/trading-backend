@@ -89,6 +89,30 @@ async def search_web(query: str, num_results: int = 3) -> str:
 
 
 @registry.register(
+    name="web_search",
+    description="Perform a web search to find recent news or information. Returns top results.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "The search query."},
+            "num_results": {
+                "type": "integer",
+                "description": "Number of results to return (default: 3).",
+            },
+        },
+        "required": ["query"],
+    },
+    tier=0,
+    source="hermes",
+)
+async def web_search(query: str, num_results: int = 3) -> str:
+    """
+    Search the web using Hermes Gateway. Alias for search_web.
+    """
+    return await search_web(query, num_results)
+
+
+@registry.register(
     name="scrape_url",
     description="Scrape the main text content from a URL. Use this to read articles or SEC filings.",
     parameters={

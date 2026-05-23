@@ -204,7 +204,7 @@ def test_p1_news_collector_imports_cleanly():
 @patch("app.collectors.news_collector.collect_for_ticker")
 @patch("app.pipeline.data.data_completeness._is_stale")
 async def test_p2_check_and_fill_returns_valid_report(
-    mock_is_stale, mock_news_collect, mock_reddit_collect, mock_yt_collect, mock_db
+    mock_is_stale, mock_news_collect, mock_reddit_collect, mock_yt_collect, mock_db, patch_llm
 ):
     """check_and_fill must return a dict with ticker, available, filled, missing keys."""
     # Mock all the DB count queries to return non-zero values

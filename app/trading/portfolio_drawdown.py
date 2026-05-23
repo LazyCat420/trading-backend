@@ -21,13 +21,16 @@ def compute_portfolio_drawdown(db, initial_cash: float = 100_000.0) -> Optional[
         A negative float (e.g. -0.182 for -18.2%) or None if there
         are no closed trades.
     """
+    from app.config import settings
+
     rows = db.execute(
         """
-        SELECT total_pnl
-        FROM trades
-        WHERE status = 'CLOSED'
+        SELECT realized_pnl
+        FROM lot_closures
+        WHERE bot_id = %s
         ORDER BY closed_at ASC
-        """
+        """,
+        [settings.BOT_ID]
     ).fetchall()
 
     if not rows:

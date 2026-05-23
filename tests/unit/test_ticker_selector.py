@@ -109,7 +109,7 @@ def test_select_tickers_with_cooldown(mock_get_active_bot_id, mock_get_db):
     res = TickerSelector.select_tickers_for_cycle_v2(["NVDA", "AMZN"], cap=50)
     
     assert "AAPL" in res.position_tickers # Position included regardless of cooldown
-    assert "NVDA" not in res.non_position_tickers # Requested, skipped due to cooldown
+    assert "NVDA" in res.non_position_tickers # Requested, bypasses cooldown now
     assert "GOOG" not in res.non_position_tickers # Watchlist, skipped due to cooldown
     assert "AMZN" in res.non_position_tickers # Requested, not in cooldown
     assert "MSFT" in res.non_position_tickers # Watchlist, not in cooldown

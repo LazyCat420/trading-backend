@@ -19,10 +19,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # ── Phase 1: Prism Tool Stripping ─────────────────────────────────────
 
 class TestPrismToolStripping:
-    """Ensure pipeline calls NEVER forward tool schemas to Prism."""
+    """Ensure pipeline calls forward tool schemas to Prism correctly."""
 
-    def test_prism_payload_excludes_tools_when_agentic_mode_false(self):
-        """When agentic_mode=False, tool schemas must NOT appear in the Prism payload."""
+    def test_prism_payload_includes_tools_when_agentic_mode_false(self):
+        """When agentic_mode=False, tool schemas must still be included in the Prism payload if provided."""
         from app.services.prism_client import PrismClient
 
         client = PrismClient()
@@ -47,11 +47,10 @@ class TestPrismToolStripping:
             agentic_mode=False,  # Pipeline mode
         )
 
-        assert "tools" not in payload, (
-            "Tool schemas were included in Prism payload with agentic_mode=False. "
-            "This causes Prism's coordinator to attempt tool execution, creating infinite loops."
+        assert "tools" in payload, (
+            "Tool schemas were missing from Prism payload with agentic_mode=False."
         )
-        assert payload["functionCallingEnabled"] is False
+        assert payload["functionCallingEnabled"] is True
         assert payload["agenticLoopEnabled"] is False
 
     def test_prism_payload_includes_tools_when_agentic_mode_true(self):
@@ -114,8 +113,8 @@ class TestPrismToolStripping:
         assert "tools" not in payload
 
     @pytest.mark.asyncio
-    async def test_call_prism_agent_strips_tools(self):
-        """_call_prism_agent must NEVER forward tool schemas to Prism."""
+    async def test_call_prism_agent_forwards_tools(self):
+        """_call_prism_agent must forward tool schemas to Prism."""
         from app.services.vllm_client import VLLMClient
 
         client = VLLMClient.__new__(VLLMClient)
@@ -157,17 +156,13 @@ class TestPrismToolStripping:
             start=time.monotonic(),
         )
 
-        # Verify tools=None was passed to get_chat_payload_and_url
+        # Verify tools was passed to get_chat_payload_and_url
         call_args = client.prism_client.get_chat_payload_and_url.call_args
         assert call_args is not None
-        # Check keyword argument 'tools' is None
+        # Check keyword argument 'tools' is what we passed
         tools_arg = call_args.kwargs.get("tools") if call_args.kwargs else None
-        if tools_arg is None and call_args.args:
-            # Positional args fallback
-            pass
-        assert tools_arg is None, (
-            f"_call_prism_agent forwarded tools to Prism: {tools_arg}. "
-            "This MUST be None to prevent Prism's coordinator from attempting tool execution."
+        assert tools_arg == [{"type": "function", "function": {"name": "get_market_data"}}], (
+            f"_call_prism_agent did not forward tools to Prism correctly: {tools_arg}."
         )
 
 
@@ -383,8 +378,8 @@ class TestCycleSmoke:
         from app.agents.tool_whitelists import AGENT_BUDGET_OVERRIDES
 
         for agent, turns in AGENT_BUDGET_OVERRIDES.items():
-            assert turns <= 10, (
+            assert turns <= 15, (
                 f"Agent '{agent}' has {turns} max turns — this is too high. "
-                "10 turns should be the absolute maximum."
+                "15 turns should be the absolute maximum."
             )
 

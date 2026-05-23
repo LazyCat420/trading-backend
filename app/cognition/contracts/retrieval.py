@@ -32,6 +32,7 @@ class SourceDocRef(BaseModel):
     summary: str
     timestamp: datetime
     url: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class ContradictionRef(BaseModel):

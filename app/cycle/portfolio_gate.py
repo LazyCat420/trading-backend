@@ -138,8 +138,50 @@ def check_portfolio_gate(
     positions = _get_open_positions(bot_id)
     result["position_count"] = len(positions)
 
-    # Gate 1: Position count cap
-    if len(positions) >= pos_cap:
+    # Calculate current ticker concentration percentage of total portfolio value
+    from app.trading.paper_trader import get_portfolio, _get_current_price
+
+    try:
+        portfolio = get_portfolio(bot_id)
+        cash = portfolio.get("cash", 0.0)
+    except Exception as e:
+        logger.warning("[GATE] Failed to get portfolio for concentration check: %s", e)
+        cash = 0.0
+
+    total_position_value = 0.0
+    ticker_val = 0.0
+    for p in positions:
+        pos_ticker = p["ticker"]
+        qty = p["qty"]
+        price, _ = _get_current_price(pos_ticker)
+        if price is None:
+            price = p["entry_price"]
+        pos_val = qty * price
+        total_position_value += pos_val
+        if pos_ticker == ticker:
+            ticker_val = pos_val
+
+    total_portfolio_value = cash + total_position_value
+    concentration_pct = (ticker_val / total_portfolio_value * 100.0) if total_portfolio_value > 0 else 0.0
+
+    # If already held, enforce concentration limit (max 20% total concentration)
+    is_addition = any(p["ticker"] == ticker for p in positions)
+    if is_addition and concentration_pct >= 20.0:
+        result["blocked"] = True
+        result["reason"] = (
+            f"Concentration limit exceeded: {ticker} is already "
+            f"{concentration_pct:.1f}% of total portfolio value. "
+            f"Cannot add to position if concentration >= 20%."
+        )
+        logger.warning(
+            "[GATE] BLOCKED %s: concentration %.1f%% >= 20%%",
+            ticker,
+            concentration_pct,
+        )
+        return result
+
+    # Gate 1: Position count cap (bypass if it's an addition to existing position)
+    if not is_addition and len(positions) >= pos_cap:
         result["blocked"] = True
         result["reason"] = (
             f"Position limit reached "
@@ -201,7 +243,8 @@ def check_portfolio_gate(
     if existing:
         result["warnings"].append(
             f"Already holding {ticker} ({existing[0]['qty']:.2f} shares @ "
-            f"${existing[0]['entry_price']:.2f}). This will ADD to position."
+            f"${existing[0]['entry_price']:.2f}, representing {concentration_pct:.1f}% of portfolio). "
+            f"This will ADD to position."
         )
 
     if result["warnings"]:

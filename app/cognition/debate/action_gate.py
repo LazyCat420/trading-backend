@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 VALID_ACTIONS_NOT_HELD = frozenset({"BUY", "SELL"})
-VALID_ACTIONS_HELD = frozenset({"HOLD", "SELL"})
+VALID_ACTIONS_HELD = frozenset({"HOLD", "SELL", "BUY"})
 
 # Conservative defaults: don't take the risky action on failure
 _DEFAULT_NOT_HELD = "SELL"   # Don't enter uncertain positions
@@ -37,9 +37,6 @@ def gate_action(raw_action: str, held: bool) -> str:
     action = raw_action.strip().upper()
 
     if held:
-        if action == "BUY":
-            logger.info("[GATE] Remapped BUY → HOLD (already held)")
-            return "HOLD"
         if action in VALID_ACTIONS_HELD:
             return action
         logger.info("[GATE] Invalid action '%s' for held → HOLD", action)
@@ -65,5 +62,5 @@ def get_allowed_actions_str(held: bool) -> str:
         A pipe-separated string of valid actions for prompt injection.
     """
     if held:
-        return "HOLD|SELL"
+        return "BUY|HOLD|SELL"
     return "BUY|SELL"

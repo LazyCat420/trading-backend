@@ -142,10 +142,7 @@ class TickerSelector:
             # Add manually requested tickers (minus any that are already positions)
             for t in requested:
                 if t not in position_tickers and len(non_position) < non_position_slots:
-                    if t not in recent_analyzed:
-                        non_position.add(t)
-                    else:
-                        logger.info("[SELECTOR] Skipping requested ticker %s due to 24-hour cooldown", t)
+                    non_position.add(t)
 
             # Add active watchlist (minus positions), up to remaining slots
             # Triage handles the "is there new data?" question — selector just gathers candidates.

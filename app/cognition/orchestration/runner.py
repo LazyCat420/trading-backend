@@ -73,7 +73,7 @@ async def execute_v2_pipeline(
 
     await cycle_control.wait_if_paused()
     
-    # ── Fetch Position State Early ───────────────────────────────────
+    # ── Fetch Position State & Risk Dashboard Early ──────────────────
     position_context: dict = {}
     try:
         from app.tools.portfolio_tools import get_position_context
@@ -81,6 +81,13 @@ async def execute_v2_pipeline(
     except Exception as pos_err:
         logger.debug("[V2] Position context query failed early for %s: %s", ticker, pos_err)
     held = position_context.get("held", False)
+
+    portfolio_dashboard: str = ""
+    try:
+        from app.tools.portfolio_tools import get_portfolio_risk_dashboard
+        portfolio_dashboard = get_portfolio_risk_dashboard(ticker, bot_id)
+    except Exception as port_err:
+        logger.debug("[V2] Portfolio risk dashboard query failed early for %s: %s", ticker, port_err)
 
     log_manager.log_v2_cycle(cycle_id, "v2_start", {
         "ticker": ticker, "held": held,
@@ -520,6 +527,7 @@ async def execute_v2_pipeline(
                 bot_id=bot_id,
                 agent_insights=agent_insights,
                 position_context=position_context,
+                portfolio_dashboard=portfolio_dashboard,
             ),
             timeout=300.0,
         )
@@ -589,6 +597,11 @@ async def execute_v2_pipeline(
 
     extra_context_parts: list[str] = []
     budget_used = 0
+
+    # Inject portfolio risk & correlation dashboard as top priority context
+    if portfolio_dashboard:
+        extra_context_parts.append(portfolio_dashboard)
+        budget_used += len(portfolio_dashboard)
 
     # Inject position context as HIGH-PRIORITY context (before debate)
     if position_context.get("held"):
@@ -1039,6 +1052,8 @@ def _build_v1_compatible_result(
             "key_deciding_factor": debate_result.key_deciding_factor,
             "transcript": debate_result.transcript,
             "total_tokens": debate_result.total_tokens,
+            "original_thesis_status": getattr(debate_result, "original_thesis_status", "NOT_HELD"),
+            "original_thesis_explanation": getattr(debate_result, "original_thesis_explanation", ""),
         }
 
     return {
@@ -1047,14 +1062,21 @@ def _build_v1_compatible_result(
         "confidence": int(confidence),
         "rationale": rationale,
         "config_used": config_used,
-        "escalated": False,
+        "escalated": debate_result is not None,
         "agent_results": {},
         "c_result": {
             "action": action,
             "confidence": int(confidence),
             "rationale": rationale,
         },
-        "d_result": None,
+        "d_result": {
+            "action": debate_result.judge_action,
+            "confidence": debate_result.judge_confidence,
+            "original_thesis_status": getattr(debate_result, "original_thesis_status", "NOT_HELD"),
+            "original_thesis_explanation": getattr(debate_result, "original_thesis_explanation", ""),
+        }
+        if debate_result
+        else None,
         "human_review": False,
         "agent_tokens": 0,
         "rlm_tokens": total_tokens,

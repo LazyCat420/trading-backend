@@ -421,3 +421,42 @@ def parse_trading_decision(response: str) -> dict:
 
     return {}
 
+
+def sanitize_surrogates(val):
+    """Recursively strip unicode surrogates from string, dict, list, tuple, set,
+    dataclass, or pydantic BaseModel values.
+    Surrogates (0xD800 to 0xDFFF) are not allowed in standard UTF-8 encoding.
+    """
+    import dataclasses
+    if isinstance(val, str):
+        return "".join(c for c in val if not (0xD800 <= ord(c) <= 0xDFFF))
+    elif isinstance(val, dict):
+        return {k: sanitize_surrogates(v) for k, v in val.items()}
+    elif isinstance(val, list):
+        return [sanitize_surrogates(v) for v in val]
+    elif isinstance(val, tuple):
+        return tuple(sanitize_surrogates(v) for v in val)
+    elif isinstance(val, set):
+        return {sanitize_surrogates(v) for v in val}
+    elif dataclasses.is_dataclass(val):
+        kwargs = {}
+        for f in dataclasses.fields(val):
+            kwargs[f.name] = sanitize_surrogates(getattr(val, f.name))
+        return val.__class__(**kwargs)
+    elif hasattr(val, "__dict__") and (
+        hasattr(val, "__pydantic_validator__") 
+        or hasattr(val, "__fields__") 
+        or hasattr(val, "model_fields")
+    ):
+        kwargs = {}
+        for field_name in val.__dict__:
+            kwargs[field_name] = sanitize_surrogates(val.__dict__[field_name])
+        if hasattr(val, "model_construct"):
+            return val.model_construct(**kwargs)
+        elif hasattr(val, "construct"):
+            return val.construct(**kwargs)
+        else:
+            return val.__class__(**kwargs)
+    return val
+
+

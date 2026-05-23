@@ -1141,6 +1141,8 @@ def _log_decision(result: dict, cycle_id: str, bot_id: str) -> None:
     estimate, agent_results, c_result, d_result, total_time_s, total_tokens.
     """
     try:
+        from app.utils.text_utils import sanitize_surrogates
+        result = sanitize_surrogates(result)
         with get_db() as db:
             result_id = str(uuid.uuid4())
 
@@ -1190,6 +1192,8 @@ def _log_decision(result: dict, cycle_id: str, bot_id: str) -> None:
                 "d_result": {
                     "action": result.get("d_result", {}).get("action"),
                     "confidence": result.get("d_result", {}).get("confidence"),
+                    "original_thesis_status": result.get("d_result", {}).get("original_thesis_status", "NOT_HELD"),
+                    "original_thesis_explanation": result.get("d_result", {}).get("original_thesis_explanation", ""),
                 }
                 if result.get("d_result")
                 else None,

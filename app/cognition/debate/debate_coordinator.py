@@ -28,8 +28,24 @@ from app.cognition.contracts.debate import DebateResult
 from app.cognition.reflection_utils import generate_critique_prompt
 
 from app.cognition.debate.debate_judge import judge_debate
+from app.cognition.contracts.retrieval import SourceDocRef
 
 logger = logging.getLogger(__name__)
+
+
+def format_source_ref_for_prompt(s) -> str:
+    """Format SourceDocRef or dict into a detailed string containing metadata if available."""
+    source_type = getattr(s, "source_type", None) or (s.get("source_type") if isinstance(s, dict) else "unknown")
+    summary = getattr(s, "summary", None) or (s.get("summary") if isinstance(s, dict) else "")
+    metadata = getattr(s, "metadata", None) or (s.get("metadata") if isinstance(s, dict) else None)
+    
+    meta_parts = [f"Source: {source_type}"]
+    if metadata and isinstance(metadata, dict):
+        for k, v in metadata.items():
+            if v is not None:
+                meta_parts.append(f"{k}: {v}")
+    meta_str = ", ".join(meta_parts)
+    return f"[{meta_str}] {summary}"
 
 
 # ── Context Budget Cap for Debate Prompts ────────────────────────────
@@ -136,13 +152,13 @@ def build_system_prompt(
     held = position_context.get("held", False) if position_context else False
 
     if held and bias == "bull":
-        # Bull becomes HOLD advocate for existing positions
-        action_word = "HOLD"
+        # Bull becomes BUY (add to position) or HOLD advocate for existing positions
+        action_word = "BUY"
         framing = (
             "The bot ALREADY holds this position. Your job is to "
-            "argue that it should KEEP HOLDING based on the evidence. "
-            "Argue the original thesis is still intact, momentum "
-            "supports continued holding, and exiting now would be "
+            "argue that it should BUY (add to position) or HOLD (keep current size) based on the evidence. "
+            "Argue the original buy thesis is still intact/valid, momentum or news "
+            "supports adding/holding, and exiting now would be "
             "premature."
         )
     elif held and bias == "bear":
@@ -180,6 +196,7 @@ CRITICAL RULES:
 - Every claim MUST end with an inline citation: [source_table:value]
   Example: "RSI at 37.8 suggests oversold conditions [technical_data:RSI=37.8]"
 - Do NOT invent data. Only cite values that appear in the Structured Facts.
+- Weigh evidence dynamically based on the source's metadata credibility (e.g. prioritize official news/SEC filings over individual Reddit posts/scores).
 - If evidence is genuinely weak for a {action_word} case, acknowledge it — but still build the best {action_word} case you can.
 - Be specific with numbers, dates, and metrics.
 
@@ -233,6 +250,9 @@ def _build_evidence_header(packet: EvidencePacket) -> str:
 USER_TEMPLATE = """## Entity: {entity_id}
 
 {position_block}
+
+{portfolio_dashboard}
+
 ## Structured Facts:
 {structured_facts}
 
@@ -283,10 +303,14 @@ async def _run_biased_agent(
     override_user_prompt: str | None = None,
     position_block: str = "",
     debate_cache: dict[str, str] | None = None,
+    portfolio_dashboard: str = "",
 ) -> tuple[str, int, list[str]]:
     """Run a single biased analyst agent with tool usage capability."""
     if override_user_prompt:
-        user_prompt = override_user_prompt
+        if portfolio_dashboard:
+            user_prompt = f"{portfolio_dashboard}\n\n{override_user_prompt}"
+        else:
+            user_prompt = override_user_prompt
     else:
         claims_text = (
             "\n".join(
@@ -310,12 +334,13 @@ async def _run_biased_agent(
         unstructured_context = "None available."
         if packet.source_summaries:
             unstructured_context = "\n".join(
-                [f"[{s.source_type}] {s.summary}" for s in packet.source_summaries[:15]]
+                [format_source_ref_for_prompt(s) for s in packet.source_summaries[:15]]
             )
 
         user_prompt = USER_TEMPLATE.format(
             entity_id=entity_id,
             position_block=position_block,
+            portfolio_dashboard=portfolio_dashboard,
             structured_facts=_build_evidence_header(packet),
             unstructured_context=unstructured_context,
             claims_text=claims_text,
@@ -684,6 +709,7 @@ async def run_adversarial_debate(
     bot_id: str = "",
     agent_insights: dict[str, str] | None = None,
     position_context: dict | None = None,
+    portfolio_dashboard: str = "",
 ) -> DebateResult | None:
     """Run the full adversarial debate pipeline.
 
@@ -841,6 +867,7 @@ async def run_adversarial_debate(
                 agent_insights=agent_insights,
                 position_block=_pos_block,
                 debate_cache=_debate_cache,
+                portfolio_dashboard=portfolio_dashboard,
             )
             b_tok += tok1
 
@@ -859,6 +886,7 @@ async def run_adversarial_debate(
                     agent_insights=agent_insights,
                     override_user_prompt=bear_prompt,
                     debate_cache=_debate_cache,
+                    portfolio_dashboard=portfolio_dashboard,
                 )
                 br_tok += tok2
 
@@ -879,6 +907,7 @@ async def run_adversarial_debate(
                     agent_insights=agent_insights,
                     override_user_prompt=bull_prompt,
                     debate_cache=_debate_cache,
+                    portfolio_dashboard=portfolio_dashboard,
                 )
                 b_tok += tok3
 
@@ -899,6 +928,7 @@ async def run_adversarial_debate(
                     agent_insights=agent_insights,
                     override_user_prompt=bear_prompt_t4,
                     debate_cache=_debate_cache,
+                    portfolio_dashboard=portfolio_dashboard,
                 )
                 br_tok += tok4
 
@@ -923,6 +953,7 @@ async def run_adversarial_debate(
                     agent_insights=agent_insights,
                     override_user_prompt=bear_prompt,
                     debate_cache=_debate_cache,
+                    portfolio_dashboard=portfolio_dashboard,
                 )
                 br_tok += tok2
 
@@ -943,6 +974,7 @@ async def run_adversarial_debate(
                     agent_insights=agent_insights,
                     override_user_prompt=bull_prompt,
                     debate_cache=_debate_cache,
+                    portfolio_dashboard=portfolio_dashboard,
                 )
                 b_tok += tok3
 
@@ -963,6 +995,7 @@ async def run_adversarial_debate(
                     agent_insights=agent_insights,
                     override_user_prompt=bear_prompt,
                     debate_cache=_debate_cache,
+                    portfolio_dashboard=portfolio_dashboard,
                 )
                 br_tok += tok4
 
@@ -1102,7 +1135,7 @@ async def run_adversarial_debate(
         unstructured_context = "None available."
         if packet.source_summaries:
             unstructured_context = "\n".join(
-                [f"[{s.source_type}] {s.summary}" for s in packet.source_summaries[:15]]
+                [format_source_ref_for_prompt(s) for s in packet.source_summaries[:15]]
             )
 
         import json
@@ -1362,6 +1395,8 @@ async def run_adversarial_debate(
         bot_id=bot_id,
         persona_outcomes=persona_outcomes,
         held=held,
+        source_summaries=packet.source_summaries,
+        position_context=position_context,
     )
 
     total_tokens = bull_tokens + bear_tokens + cross_tokens + judge_tokens
@@ -1485,4 +1520,6 @@ async def run_adversarial_debate(
         transcript=transcript,
         total_tokens=total_tokens,
         persona_outcomes=persona_outcomes,
+        original_thesis_status=judge_result.get("original_thesis_status", "NOT_HELD"),
+        original_thesis_explanation=judge_result.get("original_thesis_explanation", ""),
     )
