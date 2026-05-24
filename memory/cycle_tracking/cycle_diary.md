@@ -87,3 +87,9 @@
 - **Action:** HOLD @ 65%
 - **Rationale:** FDS is held at breakeven with a neutral technical setup (RSI(14): 52.44 [technical_data]) and strong profitability (ROE: 28.08% [fundamental_data]). The macro regime is 'RISK_ON' with rising yields (1...
 
+## 2026-05-24 22:31:05 - AAPL
+- **Action:** SELL @ 0%
+- **Rationale:** Failed to parse thesis. Reason: LLM response is empty after stripping <think> tags (model failed to output JSON).. Raw: ...
+
+⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 4.6 ho...
+

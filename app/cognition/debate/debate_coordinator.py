@@ -1075,7 +1075,7 @@ async def run_adversarial_debate(
         persona_outcomes = {}
 
         for i, res in enumerate(persona_results):
-            if isinstance(res, Exception):
+            if isinstance(res, BaseException):
                 logger.error(
                     "[DEBATE] Persona %s failed: %s", list(PERSONAS.keys())[i], res
                 )

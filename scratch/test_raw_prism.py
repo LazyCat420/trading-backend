@@ -11,7 +11,7 @@ async def test_prism():
     }
     payload = {
         "provider": "vllm",
-        "model": "Qwen/Qwen3.5-122B-A10B-FP8",
+        "model": "cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit",
         "messages": [{"role": "user", "content": "Hello"}],
         "maxTokens": 100,
         "temperature": 0.3,
