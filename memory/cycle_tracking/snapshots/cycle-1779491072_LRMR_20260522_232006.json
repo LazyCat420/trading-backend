@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 65,
+  "rationale": "The macro regime is 'RISK_ON' with equities in a sustained uptrend, yet LRMR is technically oversold with an RSI(14) of 34.95 [technical_data] and trading below its SMA_20 of 3.92 [technical_data]. Fundamentally, the company shows no revenue (Revenue: 0.0 [fundamental_data]) and significant losses (Net Income: -$166,004,992.0 [fundamental_data]), which is a major weakness. However, since the position is at breakeven (Entry Price: $3.45, Current Price: $3.45 [position_status]) and has not exceede",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

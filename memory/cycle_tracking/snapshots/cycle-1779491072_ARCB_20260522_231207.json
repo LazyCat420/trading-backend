@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 65,
+  "rationale": "The position is held because the RSI(14) of 59.07 is below the 65 buy threshold and 70 sell threshold, satisfying technical entry rules, while the price ($124.57) remains above the 20-day SMA ($121.61). However, the thesis is weakened by the 'Mildly Bearish' sentiment and severe liquidity stress, evidenced by a current ratio of 0.93 and a debt-to-equity ratio of 35.76, alongside recent net losses (e.g., -$1,037,000 in Q1 2026). The macro regime is 'RISK_ON', supporting Industrials, but the high ",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

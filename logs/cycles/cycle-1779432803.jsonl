@@ -1,0 +1,7 @@
+{"cycle_id": "cycle-1779432803", "timestamp": "2026-05-22T06:54:30.699025+00:00", "step": "v2_start", "payload": {"ticker": "ADBE", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "cycle-1779432803", "timestamp": "2026-05-22T06:54:33.725436+00:00", "step": "v2_data_completeness", "payload": {"ticker": "ADBE", "filled": [], "elapsed_ms": 3026}}
+{"cycle_id": "cycle-1779432803", "timestamp": "2026-05-22T06:54:34.948380+00:00", "step": "v2_ontology", "payload": {"ticker": "ADBE", "node_count": 50, "elapsed_ms": 1220}}
+{"cycle_id": "cycle-1779432803", "timestamp": "2026-05-22T06:54:37.379011+00:00", "step": "v2_evidence_build", "payload": {"ticker": "ADBE", "claims": 64, "structured_facts": 60, "sources": 11, "missing_fields": [], "teaser_risk": 0.0, "diversity": 4, "elapsed_ms": 2417}}
+{"cycle_id": "cycle-1779432803", "timestamp": "2026-05-22T06:54:37.383314+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "ADBE", "status": "sufficient", "blockers": [], "warnings": []}}
+{"cycle_id": "cycle-1779432803", "timestamp": "2026-05-22T06:54:38.142415+00:00", "step": "v2_memory_read", "payload": {"ticker": "ADBE", "episodes": 5, "rules": 0}}
+{"cycle_id": "cycle-1779432803", "timestamp": "2026-05-22T06:54:47.464749+00:00", "step": "v2_meta_orchestration", "payload": {"ticker": "ADBE", "agent_count": 3, "agent_keys": ["macro_risk", "sentiment", "fundamentals"], "tokens": 9244, "elapsed_ms": 9312}}

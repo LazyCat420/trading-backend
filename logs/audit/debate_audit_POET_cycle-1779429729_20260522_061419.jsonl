@@ -1,0 +1,54 @@
+{
+  "ticker": "POET",
+  "cycle_id": "cycle-1779429729",
+  "timestamp": "2026-05-22T06:14:19.010736+00:00",
+  "debate_mode": "BUY-vs-SELL",
+  "verdict": {
+    "action": "SELL",
+    "confidence": 85,
+    "winner": "bear",
+    "rationale": "The hearing record shows zero verified claims for the Bull case and zero for the Bear case, creating a void of substantive argumentation. While technical indicators like price above SMA20/50 and positive MACD exist in the background data, the failure of analysts to present any verified evidence to support a BUY position leaves the investment thesis unsubstantiated. Without a single verified claim to support the $146 billion opportunity or the $50M EOI deal mentioned in unverified summaries, the risk of proceeding without evidence outweighs the technical setup.",
+    "key_factor": "Complete absence of verified bullish claims despite available market data",
+    "rejected_impact": "The total lack of surviving claims from both sides, combined with the explicit rejection of all arguments, indicates a fundamental data vacuum that prevents a BUY decision; the bear case is favored by default due to the inability to substantiate any growth thesis."
+  },
+  "integrity": "HIGH",
+  "retry_count": 0,
+  "tokens": {
+    "bull": 0,
+    "bear": 0,
+    "cross_exam": 5591,
+    "judge": 1246,
+    "total": 6837
+  },
+  "persona_outcomes": {
+    "Fundamental": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Technical": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Macro_Sentiment": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    }
+  },
+  "claims": {
+    "bull_total": 0,
+    "bear_total": 0,
+    "verified_bull": [],
+    "verified_bear": [],
+    "unverified": []
+  },
+  "cross_exam_summary": "[Fundamental] Both the Bull and Bear analysts submitted zero claims, resulting in a complete absence of evidence to verify or refute; the hearing is currently void of substantive argumentation despite the availability of structured market data. | [Technical] Both the Bull and Bear analysts submitted zero claims, resulting in a complete absence of evidence to verify or challenge; the structured data indicates a bullish technical setup (price above moving averages, positive MACD), but no arguments were presented to utilize these facts. | [Macro_Sentiment] Both the Bull and Bear analysts submitted zero claims, resulting in a complete absence of evidence to verify or challenge; the structured data indicates a bullish technical setup (price above SMA20/50, positive MACD), but no arguments were made to utilize these facts."
+}

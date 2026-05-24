@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 65,
+  "rationale": "The neutral arbiter's verdict mandates a SELL action at 65% confidence due to the complete absence of verified bullish claims and the overwhelming evidence of a severe 28% price decline to $240. While the stock appears fundamentally undervalued with a Forward P/E of 9.25 and an RSI of 47.19, the technical reality of trading 20% below the 200-day SMA ($306.31) and the lack of positive catalysts outweighs these value metrics. This thesis is invalidated if the price reclaims the 200-day SMA or if v",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 78,
+  "rationale": "The stock meets the BUY requirement as RSI(14) is 47.19, which is well below the 65 threshold, while the forward P/E of 9.25 suggests significant value relative to earnings growth. Although the price is below the 200-day SMA, the strong ROE of 0.58774 and revenue growth of 0.12 indicate the fundamentals remain intact despite the technical weakness. This thesis is invalidated if the RSI spikes above 70 or if the price breaks below the support level of 231.74 without a corresponding volume surge.\n",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

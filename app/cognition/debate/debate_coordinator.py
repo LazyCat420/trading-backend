@@ -374,13 +374,29 @@ async def _run_biased_agent(
     tool_history = []
 
     from app.utils.text_utils import parse_json_response
+    # Resolve persona whitelisted tools
+    whitelist_key = None
+    if "fundamental" in agent_name.lower():
+        whitelist_key = "fundamental"
+    elif "technical" in agent_name.lower():
+        whitelist_key = "technical"
+    elif "sentiment" in agent_name.lower() or "macro" in agent_name.lower():
+        whitelist_key = "sentiment"
+    
+    from app.agents.tool_whitelists import get_agent_tools
+    allowed_tools = None
+    if whitelist_key:
+        allowed_tools = get_agent_tools(whitelist_key)
+    
+    if allowed_tools is None:
+        allowed_tools = registry.schemas
 
     try:
         max_tool_turns = cognition_settings.DEBATE_MAX_TOOL_TURNS
         for turn_idx in range(max_tool_turns):  # Configurable tool-calling turns
             result = await llm.chat_with_tools(
                 messages=messages,
-                tools=registry.schemas,
+                tools=allowed_tools,
                 temperature=LLM_TEMPERATURES.get(agent_name, 0.4),
                 max_tokens=4096,
                 priority=Priority.NORMAL,

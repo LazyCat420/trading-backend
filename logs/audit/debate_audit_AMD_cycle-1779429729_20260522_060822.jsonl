@@ -1,0 +1,54 @@
+{
+  "ticker": "AMD",
+  "cycle_id": "cycle-1779429729",
+  "timestamp": "2026-05-22T06:08:22.213556+00:00",
+  "debate_mode": "BUY-vs-SELL",
+  "verdict": {
+    "action": "SELL",
+    "confidence": 65,
+    "winner": "bear",
+    "rationale": "With zero verified claims from the Bull case, there is no positive evidence to support a purchase, whereas the source metadata explicitly notes that AMD triggered 'overbought RSI signals' and experienced a '125% monthly surge' leading to institutional profit-taking. The Reuters report regarding AMD ramping up Taiwan capacity indicates supply-side constraints rather than immediate demand-driven growth, further supporting a cautious stance. The combination of technical overextension and the total lack of verified bullish arguments necessitates a Sell decision.",
+    "key_factor": "Technical overbought signals and lack of bullish counter-arguments",
+    "rejected_impact": "The complete absence of verified Bull claims leaves the investment thesis unsupported by positive evidence, while the Bear side's lack of verified claims is outweighed by the technical context of overbought conditions found in the source metadata."
+  },
+  "integrity": "HIGH",
+  "retry_count": 0,
+  "tokens": {
+    "bull": 0,
+    "bear": 0,
+    "cross_exam": 10232,
+    "judge": 2085,
+    "total": 12317
+  },
+  "persona_outcomes": {
+    "Fundamental": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Technical": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Macro_Sentiment": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    }
+  },
+  "claims": {
+    "bull_total": 0,
+    "bear_total": 0,
+    "verified_bull": [],
+    "verified_bear": [],
+    "unverified": []
+  },
+  "cross_exam_summary": "[Fundamental] Both the Bull and Bear analyst sections are completely empty, providing no claims to verify against the structured financial facts or unstructured news context. Consequently, there is no evidence to evaluate, and no contradictions exist between the parties. | [Technical] Both the Bull and Bear analyst sections are completely empty, providing no claims to verify or cross-examine against the structured facts or unstructured context. Consequently, there is no evidence quality to assess, and no contradictions exist between the parties. | [Macro_Sentiment] Both the Bull and Bear analyst sections are completely empty, providing no claims to verify or challenge against the structured facts or unstructured context. Consequently, no evidence quality can be assessed as neither side has presented an argument."
+}

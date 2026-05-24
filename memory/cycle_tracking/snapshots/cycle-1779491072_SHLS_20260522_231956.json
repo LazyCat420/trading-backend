@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 65,
+  "rationale": "SHLS is currently in a 'Risk-On' macro environment, supported by strong AI infrastructure themes, and is trading above its SMA_200 ($8.09) and SMA_50 ($7.55) with an RSI(14) of 62.81, indicating momentum without being overbought. However, the P/E of 49.55 is significantly elevated, and the price ($9.91) is approaching the $10.50 resistance level with Stoch_K at 78.74, suggesting limited immediate upside. The thesis remains valid for a HOLD as the trend is intact, but capital should not be added ",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

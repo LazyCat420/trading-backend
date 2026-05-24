@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 75,
+  "rationale": "The position is held because the technical setup remains valid for a 'Risk-On' environment, with RSI(14) at 58.60306351636084 satisfying the <65 buy requirement and price ($21.63) trading above the 20-day SMA ($21.11). Fundamentally, the thesis is supported by 'Revenue Growth 0.39' and recent 'Q1 Earnings Beat', which validates the growth narrative despite the company's negative profitability. However, the high beta (2.49) and debt-to-equity ratio (7.813) necessitate strict monitoring; the thesi",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

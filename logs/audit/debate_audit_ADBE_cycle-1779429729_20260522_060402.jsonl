@@ -1,0 +1,54 @@
+{
+  "ticker": "ADBE",
+  "cycle_id": "cycle-1779429729",
+  "timestamp": "2026-05-22T06:04:02.218934+00:00",
+  "debate_mode": "BUY-vs-SELL",
+  "verdict": {
+    "action": "SELL",
+    "confidence": 65,
+    "winner": "bear",
+    "rationale": "With zero verified claims from the Bull case and zero from the Bear case, the decision defaults to the unstructured context which explicitly states Adobe experienced a 'severe 28% decline to approximately $240' and a 'massive decline of 50-60% from its peak'. The absence of any verified positive data points to support a BUY recommendation, while the verified negative price trajectory in the source metadata (trading at $244.1 with a -3.66% change) provides the only concrete evidence available.",
+    "key_factor": "The complete absence of verified bullish claims combined with unstructured context indicating a severe price decline",
+    "rejected_impact": "Since both sides submitted zero verified claims, the decision relies entirely on the unstructured context which highlights negative price action; the lack of any surviving bull arguments suggests a failure to substantiate a buy thesis."
+  },
+  "integrity": "HIGH",
+  "retry_count": 0,
+  "tokens": {
+    "bull": 0,
+    "bear": 0,
+    "cross_exam": 9439,
+    "judge": 1815,
+    "total": 11254
+  },
+  "persona_outcomes": {
+    "Fundamental": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Technical": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Macro_Sentiment": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    }
+  },
+  "claims": {
+    "bull_total": 0,
+    "bear_total": 0,
+    "verified_bull": [],
+    "verified_bear": [],
+    "unverified": []
+  },
+  "cross_exam_summary": "[Fundamental] Both the Bull and Bear analysts submitted zero claims, resulting in a complete absence of evidence to verify or refute; consequently, no data points were checked against the structured facts provided. | [Technical] Both the Bull and Bear analyst sections are completely empty, providing no claims to verify against the structured facts or unstructured context. Consequently, no evidence quality can be assessed, and no contradictions exist between the parties. | [Macro_Sentiment] Both the Bull and Bear analyst sections are completely empty, resulting in zero claims to verify or challenge against the provided structured facts and unstructured context."
+}

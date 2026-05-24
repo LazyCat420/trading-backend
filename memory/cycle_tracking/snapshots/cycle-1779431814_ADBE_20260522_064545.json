@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 78,
+  "rationale": "The asset qualifies for a BUY action because RSI(14): 47.187922289927734 [technical_data] is comfortably below the 65 limit, and the Forward P/E: 9.251111 [fundamental_data] suggests significant undervaluation relative to growth (PEG: 0.72). However, the price is trading near the lower Bollinger Band ($234.80) and well below the 200-day SMA ($306.31), creating a 'bearish trap' risk as noted in the context. The thesis relies on mean reversion from oversold conditions; it is invalidated if RSI > 7",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 95,
+  "rationale": "The technical indicators present a clear overbought condition with RSI(14) at 76.40774881528756, which exceeds the 70 threshold, and the price at 304.989990234375 is within 0.2% of the 52-week high of 305.539. This combination, alongside a high P/E of 36.968483, suggests the stock is pricing in aggressive growth expectations that are vulnerable to macro tightening, as noted by the Macro Risk Agent. The thesis is invalidated if RSI drops below 65, indicating a return to neutral territory.\n\n\ud83d\udcc5 Dat",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

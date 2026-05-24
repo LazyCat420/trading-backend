@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 65,
+  "rationale": "FDS is held at breakeven with a neutral technical setup (RSI(14): 52.44 [technical_data]) and strong profitability (ROE: 28.08% [fundamental_data]). The macro regime is 'RISK_ON' with rising yields (10Y at 4.57%) supporting Financials, and the stock's P/E of 14.92 [fundamental_data] is well below the 1.5x sector average sell trigger. The position is safe from immediate stops (Stop-Loss: $202.05 [position_status]), and capital is not better deployed elsewhere given the lack of overbought conditio",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

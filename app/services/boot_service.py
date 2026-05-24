@@ -351,7 +351,7 @@ class BootService:
                     pass
 
             port = os.getenv("LAZY_TOOL_SERVICE_PORT", "5591")
-            mcp_url = f"http://{prism_host}:{port}/mcp"
+            mcp_url = f"http://{prism_host}:{port}/mcp/sse"
             logger.info(f"[MCP-Reg] Calculated MCP URL: {mcp_url}")
 
             configs = [
@@ -360,7 +360,7 @@ class BootService:
                     "username": "admin",
                     "name": "lazy-tool-service",
                     "displayName": "Lazy Tool Service",
-                    "transport": "streamable-http",
+                    "transport": "sse",
                     "url": mcp_url,
                     "enabled": True,
                 },
@@ -369,7 +369,7 @@ class BootService:
                     "username": "lazy-trader",
                     "name": "lazy-tool-service",
                     "displayName": "Lazy Tool Service",
-                    "transport": "streamable-http",
+                    "transport": "sse",
                     "url": mcp_url,
                     "enabled": True,
                 }

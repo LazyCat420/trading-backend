@@ -1,0 +1,54 @@
+{
+  "ticker": "ASTS",
+  "cycle_id": "cycle-1779429729",
+  "timestamp": "2026-05-22T06:10:35.454454+00:00",
+  "debate_mode": "BUY-vs-SELL",
+  "verdict": {
+    "action": "SELL",
+    "confidence": 85,
+    "winner": "bear",
+    "rationale": "With zero verified claims surviving from the Bull case, there is no evidence-backed support for buying the stock despite the sector-wide attention from the SpaceX IPO filing mentioned in Barrons.com. The source metadata highlights significant volatility and mixed sentiment, such as the WSJ noting 'immediate volatility' and YouTube transcripts referencing Q1 2026 financials that 'missed,' yet no verified positive metrics exist to counter these risks. In the absence of any [SURVIVED REBUTTAL] or verified growth metrics, the lack of fundamental proof for the '17x three year surge' cited by Simply Wall St. necessitates a sell decision to avoid unverified speculation.",
+    "key_factor": "Complete absence of verified bullish claims despite high market volatility and sector hype",
+    "rejected_impact": "The total lack of surviving claims from both sides indicates that all specific financial arguments failed verification; however, the absence of any positive verified data points in a high-volatility environment favors a defensive stance."
+  },
+  "integrity": "HIGH",
+  "retry_count": 0,
+  "tokens": {
+    "bull": 0,
+    "bear": 0,
+    "cross_exam": 10228,
+    "judge": 2176,
+    "total": 12404
+  },
+  "persona_outcomes": {
+    "Fundamental": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Technical": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    },
+    "Macro_Sentiment": {
+      "bull_claims_count": 0,
+      "bear_claims_count": 0,
+      "bull_survived": 0,
+      "bear_survived": 0,
+      "winner": "split"
+    }
+  },
+  "claims": {
+    "bull_total": 0,
+    "bear_total": 0,
+    "verified_bull": [],
+    "verified_bear": [],
+    "unverified": []
+  },
+  "cross_exam_summary": "[Fundamental] Both the Bull and Bear analysts failed to submit any claims for cross-examination, resulting in a complete absence of evidence to verify or refute against the provided structured financial facts. | [Technical] Both the Bull and Bear analyst sections are completely empty, providing no claims to verify or challenge against the structured financial data or unstructured news context. | [Macro_Sentiment] Both the Bull and Bear analyst sections are completely empty, providing no claims to verify against the structured financial data or unstructured news context. Consequently, there is no evidence to assess, and no contradictions exist between the two sides."
+}

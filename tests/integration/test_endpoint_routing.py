@@ -145,3 +145,39 @@ async def test_balanced_routing():
     # Since they have identical capacity and models, it should balance perfectly 5 and 5
     assert picked["jetson"] == 5
     assert picked["dgx_spark"] == 5
+
+
+@pytest.mark.asyncio
+async def test_parameter_size_routing():
+    """Verify routing based on parameter size hints in agent names."""
+    client, mock_http = _make_client()
+    
+    # Setup Jetson with a 35B model
+    client._endpoints["jetson"].enabled = True
+    client._endpoints["jetson"].model = "cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit"
+    client._endpoints["jetson"].max_concurrent = 5
+    client._endpoints["jetson"].init_concurrency()
+    
+    # Setup DGX Spark with a 122B model
+    client._endpoints["dgx_spark"].enabled = True
+    client._endpoints["dgx_spark"].model = "Qwen/Qwen3.5-122B-A10B-AWQ-4bit"
+    client._endpoints["dgx_spark"].max_concurrent = 5
+    client._endpoints["dgx_spark"].init_concurrency()
+    
+    # Disable DGX Spark 2
+    client._endpoints["dgx_spark_2"].enabled = False
+    
+    client._roles_discovered = True
+    
+    # 1. 'predict_quant_26B' contains '26B' -> closest model size is 35B (Jetson)
+    best_quant = client._pick_best_endpoint(agent_name="predict_quant_26B")
+    assert best_quant.name == "jetson"
+    
+    # 2. 'predict_cio_120B' contains '120B' -> closest model size is 122B (DGX)
+    best_cio = client._pick_best_endpoint(agent_name="predict_cio_120B")
+    assert best_cio.name == "dgx_spark"
+    
+    # 3. 'consensus_check_r1' should target largest model -> 122B (DGX)
+    best_consensus = client._pick_best_endpoint(agent_name="consensus_check_r1")
+    assert best_consensus.name == "dgx_spark"
+

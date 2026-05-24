@@ -167,6 +167,36 @@ class PrismClient:
                 formatted_tools.append(t)
         return formatted_tools
 
+    def _resolve_prism_agent_id(self, agent_name: str) -> str:
+        """Map local trading service agent names to custom agent IDs registered in Prism."""
+        if not agent_name:
+            return self.agent
+        
+        name_lower = agent_name.lower()
+        if "quant_research" in name_lower:
+            return "CUSTOM_QUANT_RESEARCH_AGENT"
+        elif "janitor" in name_lower or "maintenance" in name_lower:
+            return "CUSTOM_SYSTEM_JANITOR_AGENT"
+        elif "technical" in name_lower:
+            return "CUSTOM_TECHNICAL_ANALYSIS_AGENT"
+        elif "agent_architect" in name_lower or "architect" in name_lower:
+            return "CUSTOM_AGENT_ARCHITECT"
+        elif "budget" in name_lower:
+            return "CUSTOM_AGENT_BUDGET_MANAGER"
+        elif "debater" in name_lower:
+            return "CUSTOM_BULLISH_DEBATER"
+        
+        # All other standard specialist/analysis/execution agents
+        standard_analysis_agents = {
+            "sentiment", "fundamental", "risk", "fund_flow", "comparative",
+            "retriever", "verifier", "synthesizer", "pre_trade", "meta_audit",
+            "decision_engine", "trading_phase", "trading_cycle"
+        }
+        if any(x in name_lower for x in standard_analysis_agents):
+            return "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT"
+            
+        return self.agent
+
     def get_chat_payload_and_url(
         self,
         model: str,
@@ -228,7 +258,7 @@ class PrismClient:
             "conversationId": conversation_id,
             "project": self.project,
             "username": self.username,
-            "agent": self.agent,
+            "agent": self._resolve_prism_agent_id(agent_name),
             "functionCallingEnabled": agentic_mode or bool(tools),
             "agenticLoopEnabled": agentic_mode,
             "systemPrompt": system_prompt[:15000],
@@ -308,7 +338,7 @@ class PrismClient:
             "conversationId": conversation_id,
             "project": self.project,
             "username": self.username,
-            "agent": self.agent,
+            "agent": self._resolve_prism_agent_id(agent_name),
             "functionCallingEnabled": agentic_mode or bool(tools),
             "agenticLoopEnabled": agentic_mode,
             "systemPrompt": system_prompt[:15000],

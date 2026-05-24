@@ -147,16 +147,16 @@ async def _run_scraper_repairs():
                 logger.warning(f"[JANITOR] Failed to check attempt count: {e}")
 
             try:
-                # Run the agent with limited loops (3 is enough to determine fixability)
-                result = await run_tool_agent(
+                # Run via Prism agent harness first if enabled, falling back to local
+                from app.tools.prism_agent_harness import run_prism_agent
+                result = await run_prism_agent(
                     system_prompt=MAINTENANCE_SYSTEM_PROMPT,
                     user_prompt=f"Please fix the following scraper issue:\nTarget: {target_name}\nError Context: {motivation}\n\nExecute the necessary tool calls to repair the pipeline.",
                     ticker="SYSTEM",
-                    max_loops=3,
                     agent_name="maintenance_agent",
                     priority=Priority.NORMAL,
                     tools_override=registry.schemas,
-                    yield_on_limit=False,
+                    timeout_seconds=90,
                 )
 
                 final_text = result.get("final_text", "")

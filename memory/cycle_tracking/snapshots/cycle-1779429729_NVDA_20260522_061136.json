@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 65,
+  "rationale": "The decision to BUY is driven by the strict adherence to technical entry criteria, specifically an RSI of 61.90 which is below the 65 threshold, and a forward P/E of 19.19 that avoids the 1.5x sector multiple sell trigger. With zero verified bearish claims to contradict the position, the thesis defaults to a buy based on the absence of negative evidence and strong unverified sentiment regarding revenue beats. This position must be invalidated if the RSI rises above 70 or if the price fails to br",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

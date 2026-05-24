@@ -66,6 +66,71 @@ def _is_qwen_model(model_id: str) -> bool:
     return "qwen" in lower
 
 
+def _normalize_prism_tool_calls(prism_tool_calls: list) -> list:
+    """Normalize tool calls from Prism format to standard OpenAI format.
+
+    Prism format:
+      [{"id": "...", "name": "...", "args": {...}}]
+
+    OpenAI format:
+      [{"id": "...", "type": "function", "function": {"name": "...", "arguments": "..."}}]
+    """
+    import json
+    normalized = []
+    for tc in prism_tool_calls:
+        if not isinstance(tc, dict):
+            continue
+
+        if "function" in tc:
+            normalized.append(tc)
+            continue
+
+        func_name = tc.get("name")
+        tc_id = tc.get("id") or "call_unknown"
+
+        args_data = tc.get("args", {})
+        if isinstance(args_data, dict):
+            try:
+                args_str = json.dumps(args_data)
+            except Exception:
+                args_str = "{}"
+        elif isinstance(args_data, str):
+            args_str = args_data
+        else:
+            args_str = "{}"
+
+        normalized.append({
+            "id": tc_id,
+            "type": "function",
+            "function": {
+                "name": func_name,
+                "arguments": args_str
+            }
+        })
+    return normalized
+
+
+
+def _parse_parameter_size(model_id: str) -> float | None:
+    """Parse parameter size from model ID (e.g. Qwen3.6-35B -> 35.0, Qwen3.5-122B -> 122.0)"""
+    if not model_id:
+        return None
+    import re
+    # Match patterns like "35B", "122B", "7B", "6.7B"
+    # Ensure they are preceded by a start of string or space/dash/underscore and followed similarly
+    matches = re.findall(r"(?:^|[\s\-_])(\d+(?:\.\d+)?)[Bb](?:$|[\s\-_])", model_id)
+    if not matches:
+        matches = re.findall(r"(\d+(?:\.\d+)?)[Bb]", model_id)
+    if matches:
+        try:
+            return float(matches[0])
+        except ValueError:
+            pass
+    return None
+
+
+
+
 # ── Priority Levels ────────────────────────────────────────────────────
 class Priority(IntEnum):
     """Lower number = higher priority."""
@@ -344,6 +409,8 @@ class VLLMClient:
         regardless of role assignment. This prevents timeouts when one box
         is starting up.
         """
+        import re
+
         # Step 1: All endpoints with models loaded
         all_ready = [
             ep
@@ -362,30 +429,85 @@ class VLLMClient:
             else:
                 logger.warning("[VLLM] Requested model '%s' not found on any active endpoint. Falling back.", requested_model)
         
-        # Role-based routing: filter by required role if defined in taxonomy
-        required_role = None
+        # Populate model parameter sizes dynamically
+        for ep in all_ready:
+            if not hasattr(ep, "_parsed_param_size") or ep._parsed_param_size is None:
+                ep._parsed_param_size = _parse_parameter_size(ep.model)
+                # Assign default size based on role if parsing failed
+                if ep._parsed_param_size is None:
+                    if ep.role == "collector":
+                        ep._parsed_param_size = 35.0
+                    else:
+                        ep._parsed_param_size = 120.0
+
+        # Dynamic size-based routing based on agent name
+        requested_size = None
+        is_complex = False
         if agent_name:
+            # 1. Look for explicit model size in agent name (e.g. "26B", "35B", "120B")
+            size_match = re.search(r"(?i)(?:^|[\s\-_])(\d+(?:\.\d+)?)[Bb](?:$|[\s\-_])", agent_name)
+            if size_match:
+                try:
+                    requested_size = float(size_match.group(1))
+                except ValueError:
+                    pass
+            
+            # 2. Look for complex orchestration tasks (consensus check, executive decision)
+            name_lower = agent_name.lower()
+            if "consensus_check" in name_lower or "executive_decision" in name_lower:
+                is_complex = True
+
+        # Role-based routing: filter by required role/parameter class
+        required_role = None
+        role_filtered = False
+
+        if all_ready and (requested_size is not None or is_complex):
+            valid_eps = [ep for ep in all_ready if ep._parsed_param_size is not None]
+            if valid_eps:
+                if requested_size is not None:
+                    # Target the endpoint with model size closest to requested
+                    best_ep = min(valid_eps, key=lambda ep: abs(ep._parsed_param_size - requested_size))
+                    candidates = [ep for ep in all_ready if ep.model == best_ep.model]
+                    role_filtered = True
+                elif is_complex:
+                    # Target the largest model size
+                    max_size = max(ep._parsed_param_size for ep in valid_eps)
+                    candidates = [ep for ep in all_ready if ep._parsed_param_size == max_size]
+                    role_filtered = True
+
+        if not role_filtered and agent_name:
             for key, role in AGENT_ROLE_ROUTING.items():
                 if agent_name.startswith(key) or f"_{key}" in agent_name:
                     required_role = role
                     break
             
             if required_role:
-                # If analyst or trader, we can use any DGX (they both run 120B). 
-                # If collector, we use Jetson.
-                if required_role in ("analyst", "trader"):
-                    acceptable_roles = ("analyst", "trader")
-                else:
-                    acceptable_roles = ("collector",)
+                # Classify endpoints into "small" (< 50B) vs "large" (>= 50B) dynamically if possible
+                valid_eps = [ep for ep in candidates if ep._parsed_param_size is not None]
                 
-                role_candidates = [ep for ep in candidates if ep.role in acceptable_roles]
+                # Check if we have both small and large ready models to do partitioning
+                has_small = any(ep._parsed_param_size < 50.0 for ep in valid_eps)
+                has_large = any(ep._parsed_param_size >= 50.0 for ep in valid_eps)
+                
+                if has_small and has_large:
+                    if required_role in ("analyst", "trader"):
+                        role_candidates = [ep for ep in candidates if ep._parsed_param_size >= 50.0]
+                    else:
+                        role_candidates = [ep for ep in candidates if ep._parsed_param_size < 50.0]
+                else:
+                    # Fallback to config-assigned roles if we can't partition by size
+                    if required_role in ("analyst", "trader"):
+                        acceptable_roles = ("analyst", "trader")
+                    else:
+                        acceptable_roles = ("collector",)
+                    role_candidates = [ep for ep in candidates if ep.role in acceptable_roles]
+                
                 if role_candidates:
                     candidates = role_candidates
                 else:
                     # CROSS-ROLE FALLBACK: preferred tier has no ready endpoints.
                     # Route to ANY available endpoint with a model loaded.
                     if model_filtered:
-                        # Do not fallback to all active models since we filtered by model
                         pass
                     elif all_ready:
                         fallback_names = ', '.join(ep.name for ep in all_ready)
@@ -1311,7 +1433,7 @@ class VLLMClient:
             }
             tool_calls = data.get("toolCalls")
             if tool_calls:
-                payload["_tool_calls_result"] = tool_calls
+                payload["_tool_calls_result"] = _normalize_prism_tool_calls(tool_calls)
             return content, total_tokens, elapsed_ms
 
         content = ""
@@ -1379,7 +1501,7 @@ class VLLMClient:
             meta["_think_content"] = thinking
 
         if tool_calls:
-            payload["_tool_calls_result"] = tool_calls
+            payload["_tool_calls_result"] = _normalize_prism_tool_calls(tool_calls)
 
         return content, total_tokens, elapsed_ms
 

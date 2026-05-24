@@ -296,5 +296,58 @@ async def test_vllm_client_skip_conversation_from_settings(mock_vllm_client):
         assert sent_payload["skipConversation"] is False
 
 
+def test_prism_client_agent_mapping():
+    client = PrismClient()
+    client.agent = "CUSTOM_MARKET_ALPHA"
+    
+    # Test quant research mapping
+    p, _, _ = client.get_chat_payload_and_url(
+        model="test", messages=[], max_tokens=10, temperature=0.1, system_prompt="",
+        agent_name="quant_research", ticker="", cycle_id="", enable_thinking=False
+    )
+    assert p["agent"] == "CUSTOM_QUANT_RESEARCH_AGENT"
+    
+    # Test janitor/maintenance mapping
+    p, _, _ = client.get_chat_payload_and_url(
+        model="test", messages=[], max_tokens=10, temperature=0.1, system_prompt="",
+        agent_name="maintenance_agent", ticker="", cycle_id="", enable_thinking=False
+    )
+    assert p["agent"] == "CUSTOM_SYSTEM_JANITOR_AGENT"
+    
+    p, _, _ = client.get_chat_payload_and_url(
+        model="test", messages=[], max_tokens=10, temperature=0.1, system_prompt="",
+        agent_name="data_janitor", ticker="", cycle_id="", enable_thinking=False
+    )
+    assert p["agent"] == "CUSTOM_SYSTEM_JANITOR_AGENT"
+
+    # Test technical analysis mapping
+    p, _, _ = client.get_chat_payload_and_url(
+        model="test", messages=[], max_tokens=10, temperature=0.1, system_prompt="",
+        agent_name="technical", ticker="", cycle_id="", enable_thinking=False
+    )
+    assert p["agent"] == "CUSTOM_TECHNICAL_ANALYSIS_AGENT"
+
+    # Test standard analysis mapping (risk, fundamental, retriever, etc.)
+    p, _, _ = client.get_chat_payload_and_url(
+        model="test", messages=[], max_tokens=10, temperature=0.1, system_prompt="",
+        agent_name="risk", ticker="", cycle_id="", enable_thinking=False
+    )
+    assert p["agent"] == "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT"
+
+    p, _, _ = client.get_chat_payload_and_url(
+        model="test", messages=[], max_tokens=10, temperature=0.1, system_prompt="",
+        agent_name="fundamental", ticker="", cycle_id="", enable_thinking=False
+    )
+    assert p["agent"] == "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT"
+
+    # Test default fallback
+    p, _, _ = client.get_chat_payload_and_url(
+        model="test", messages=[], max_tokens=10, temperature=0.1, system_prompt="",
+        agent_name="unknown_random_agent", ticker="", cycle_id="", enable_thinking=False
+    )
+    assert p["agent"] == "CUSTOM_MARKET_ALPHA"
+
+
+
 
 
