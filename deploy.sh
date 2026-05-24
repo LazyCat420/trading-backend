@@ -25,8 +25,8 @@ PRE_BUILD() {
 }
 
 EXTRA_SSH_SYNC() {
-  info "Syncing master .env from vault-service..."
-  cat "${SCRIPT_DIR}/../vault-service/.env" | ssh "$DEPLOY_SSH_HOST" "cat > '${DEPLOY_COMPOSE_DIR}/.env'"
+  info "Syncing master .env from vault-service on remote host..."
+  ssh "$DEPLOY_SSH_HOST" "cp '${DEPLOY_COMPOSE_ROOT}/vault-service/env/.env' '${DEPLOY_COMPOSE_DIR}/.env'"
   ssh "$DEPLOY_SSH_HOST" "mkdir -p '${DEPLOY_COMPOSE_DIR}/logs' 2>/dev/null || sudo mkdir -p '${DEPLOY_COMPOSE_DIR}/logs'"
 }
 
