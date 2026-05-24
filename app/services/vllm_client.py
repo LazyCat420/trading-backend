@@ -413,6 +413,13 @@ class VLLMClient:
         """
         import re
 
+        # CRITICAL: Force Qwen 35B / cyankiwi models to route strictly to Jetson Orin AGX 64GB
+        if requested_model and ("cyankiwi" in requested_model.lower() or "qwen3.6-35b" in requested_model.lower()):
+            jetson_ep = self._endpoints.get("jetson")
+            if jetson_ep and jetson_ep.enabled:
+                logger.info("[VLLM] Forcing Jetson Orin AGX 64GB routing for cyankiwi model: %s", requested_model)
+                return jetson_ep
+
         # Step 1: All endpoints with models loaded
         all_ready = [
             ep
@@ -969,7 +976,8 @@ class VLLMClient:
                         if "10.0.0.30" in url_str:
                             prism_provider = "vllm"
                         elif "10.0.0.103" in url_str:
-                            prism_provider = "vllm-2"
+                            # MSI Spark is clustered to Gold Spark, default to Gold Spark (vllm-3)
+                            prism_provider = "vllm-3"
                         elif "10.0.0.141" in url_str:
                             prism_provider = "vllm-3"
 
@@ -2000,8 +2008,23 @@ class VLLMClient:
                     if models:
                         ep.model = models[0]["id"]
                         roles[f"{name}_model"] = models[0]["id"]
-                        for m in models:
-                            self._model_endpoint_cache[m["id"]] = name
+
+                        # Re-enable auto-disabled endpoint before caching/scaling
+                        if ep.auto_disabled and not ep.enabled:
+                            ep.enabled = True
+                            ep.auto_disabled = False
+                            ep.consecutive_batch_failures = 0
+                            ep.circuit_open_until = 0.0
+                            ep.timeout_penalty_until = 0.0
+                            ep.init_concurrency(self.RESERVED_HIGH_SLOTS)
+                            logger.info(
+                                "[VLLM] ✅ Endpoint %s at %s back online — re-enabled via discovery",
+                                name, ep.url,
+                            )
+
+                        if ep.enabled:
+                            for m in models:
+                                self._model_endpoint_cache[m["id"]] = name
 
                         # Capture max_model_len for context budget system
                         raw_ctx = models[0].get("max_model_len", 0)
@@ -2035,17 +2058,6 @@ class VLLMClient:
                             ep.url,
                             ep.model,
                         )
-                        if ep.auto_disabled and not ep.enabled:
-                            ep.enabled = True
-                            ep.auto_disabled = False
-                            ep.consecutive_batch_failures = 0
-                            ep.circuit_open_until = 0.0
-                            ep.timeout_penalty_until = 0.0
-                            ep.init_concurrency(self.RESERVED_HIGH_SLOTS)
-                            logger.info(
-                                "[VLLM] ✅ Endpoint %s at %s back online — re-enabled via discovery",
-                                name, ep.url,
-                            )
                         ep.loading = False
                         successful_endpoints += 1
                     else:
@@ -2832,13 +2844,19 @@ class VLLMClient:
         """Resolve the canonical Prism provider name ('vllm', 'vllm-2', 'vllm-3')
         based on which active endpoint hosts the given model.
         """
+        # CRITICAL: Qwen 35B / cyankiwi models must ALWAYS route to Jetson Orin AGX 64GB
+        model_lower = model.lower() if model else ""
+        if "cyankiwi" in model_lower or "qwen3.6-35b" in model_lower:
+            return "vllm"
+
         # Find endpoint hosting the model
         for ep in self._endpoints.values():
             if ep.enabled and ep.model == model:
                 if "10.0.0.30" in ep.url:
                     return "vllm"
                 elif "10.0.0.103" in ep.url:
-                    return "vllm-2"
+                    # MSI Spark is clustered to Gold Spark, default to Gold Spark (vllm-3)
+                    return "vllm-3"
                 elif "10.0.0.141" in ep.url:
                     return "vllm-3"
                     
@@ -2848,12 +2866,12 @@ class VLLMClient:
                 if "10.0.0.30" in ep.url:
                     return "vllm"
                 elif "10.0.0.103" in ep.url:
-                    return "vllm-2"
+                    # MSI Spark is clustered to Gold Spark, default to Gold Spark (vllm-3)
+                    return "vllm-3"
                 elif "10.0.0.141" in ep.url:
                     return "vllm-3"
 
         # Safe defaults based on model size or string match
-        model_lower = model.lower() if model else ""
         if "122b" in model_lower or "120b" in model_lower:
             # Gold Spark hosts the heavy models
             return "vllm-3"

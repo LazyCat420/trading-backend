@@ -104,11 +104,16 @@ Each endpoint runs its **own model** — model names are NOT interchangeable bet
 
 ### Hardware Endpoints
 
-| Endpoint | IP | Role | What it runs |
+| Endpoint | IP | Role | Status / Action |
 |----------|-----|------|-------------|
-| `jetson` | `10.0.0.30:8000` | `collector` | Lightweight tasks (summarization, curation, agents) |
-| `dgx_spark` | `10.0.0.141:8000` | `trader` | Heavy tasks (trading decisions, debate) |
-| `dgx_spark_2` | `10.0.0.103:8000` | `analyst` | Heavy tasks (deep analysis, RLM) |
+| `jetson` | `10.0.0.30:8000` | `collector` | Lightweight tasks (summarization, curation, agents). Run `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit` here. |
+| `dgx_spark` | `10.0.0.141:8000` | `trader` | Heavy tasks (trading decisions, debate). Gold Spark master node. |
+| `dgx_spark_2` | `10.0.0.103:8000` | `analyst` | **DISREGARDED BY DEFAULT** (`DISREGARD_MSI_SPARK = True`). Clustered to Gold Spark (`10.0.0.141`); direct calls to MSI Spark (`10.0.0.103`) fail. |
+
+### Special Routing Rules
+1. **Force Jetson for Qwen 35B**: Any request referencing `cyankiwi` or `qwen3.6-35b` (such as `cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit`) is hardcoded to ALWAYS route strictly to the Jetson Orin AGX 64GB (`10.0.0.30` / `vllm`).
+2. **Disregard MSI Spark & Default to Gold Spark**: The MSI Spark endpoint `dgx_spark_2` is disabled by default via config. Even if enabled or queried, requests mapping to `10.0.0.103` (MSI Spark) are transparently routed to `vllm-3` (Gold Spark) on `10.0.0.141` to avoid cluster failure.
+
 
 ### The Golden Rule: Endpoint-First Routing
 

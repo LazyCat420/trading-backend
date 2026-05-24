@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     JETSON_VLLM_URL: str = "http://10.0.0.30:8000"
     DGX_SPARK_VLLM_URL: str = "http://10.0.0.141:8000"
     DGX_SPARK_2_VLLM_URL: str = "http://10.0.0.103:8000"
-    DISREGARD_MSI_SPARK: bool = False
+    DISREGARD_MSI_SPARK: bool = True
     ACTIVE_MODEL: str = ""  # Auto-discovered from vLLM /v1/models at startup
 
     # ── Concurrency (tuned from saturation benchmarks — see tests/benchmarks/outputs/) ──

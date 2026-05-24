@@ -181,3 +181,34 @@ async def test_parameter_size_routing():
     best_consensus = client._pick_best_endpoint(agent_name="consensus_check_r1")
     assert best_consensus.name == "dgx_spark"
 
+
+@pytest.mark.asyncio
+async def test_qwen_35b_and_msi_spark_routing_rules():
+    """Verify that cyankiwi 35B models force Jetson routing, and MSI Spark resolves to Gold Spark."""
+    client, mock_http = _make_client()
+    
+    # Enable all endpoints
+    client._endpoints["jetson"].enabled = True
+    client._endpoints["jetson"].model = "cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit"
+    
+    client._endpoints["dgx_spark"].enabled = True
+    client._endpoints["dgx_spark"].model = "Qwen/Qwen3.5-122B-A10B-FP8"
+    
+    client._endpoints["dgx_spark_2"].enabled = True
+    client._endpoints["dgx_spark_2"].model = "cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit"
+    
+    client._roles_discovered = True
+
+    # 1. Verify resolving cyankiwi model provider always returns "vllm" (Jetson)
+    assert client.resolve_provider_for_model("cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit") == "vllm"
+    assert client.resolve_provider_for_model("Qwen3.6-35B") == "vllm"
+
+    # 2. Verify MSI Spark URL resolving maps to "vllm-3" (Gold Spark)
+    client._endpoints["dgx_spark_2"].model = "some-other-heavy-model"
+    assert client.resolve_provider_for_model("some-other-heavy-model") == "vllm-3"
+
+    # 3. Verify pick best endpoint forces Jetson for cyankiwi
+    best_ep = client._pick_best_endpoint(requested_model="cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit")
+    assert best_ep.name == "jetson"
+
+
