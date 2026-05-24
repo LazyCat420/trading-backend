@@ -35,10 +35,11 @@ class Settings(BaseSettings):
     JETSON_VLLM_URL: str = "http://10.0.0.30:8000"
     DGX_SPARK_VLLM_URL: str = "http://10.0.0.141:8000"
     DGX_SPARK_2_VLLM_URL: str = "http://10.0.0.103:8000"
+    DISREGARD_MSI_SPARK: bool = False
     ACTIVE_MODEL: str = ""  # Auto-discovered from vLLM /v1/models at startup
 
     # ── Concurrency (tuned from saturation benchmarks — see tests/benchmarks/outputs/) ──
-    JETSON_MAX_CONCURRENT: int = 24  # user verified max
+    JETSON_MAX_CONCURRENT: int = 4  # prevent GPU saturation and timeouts
     DGX_MAX_CONCURRENT: int = 8  # capped: >8 concurrent drops below 3 tok/s
     DGX_SPARK_2_MAX_CONCURRENT: int = 8  # capped: >8 concurrent drops below 3 tok/s
     RLM_MAX_CONCURRENT: int = (
@@ -48,7 +49,7 @@ class Settings(BaseSettings):
     # ── Batch Dispatch (prevents queue overload) ──
     # Items are drained from the queue in batches, not one-at-a-time.
     # Each batch completes before the next is dispatched.
-    JETSON_BATCH_SIZE: int = 24       # Jetson Orin AGX 64GB — 24 concurrent max
+    JETSON_BATCH_SIZE: int = 4       # Jetson Orin AGX 64GB — aligned with concurrent max
     DGX_BATCH_SIZE: int = 8            # DGX Spark — matched to max_concurrent
     DGX_SPARK_2_BATCH_SIZE: int = 8    # DGX Spark 2 — matched to max_concurrent
     BATCH_TIMEOUT: int = 60           # 60s per batch (Jetson inference is 5-20s; prevents queue backup)

@@ -121,6 +121,12 @@ async def _call_via_prism(
     client = await llm.prism_client._get_client()
 
     model = llm._resolve_model(fallback_agent_name)
+
+    # CRITICAL: Resolve the correct provider name based on the model's location.
+    # DO NOT remove or alter this. It prevents heavy models (like 122B Qwen)
+    # from defaulting to the Jetson endpoint, which causes execution failures.
+    provider = llm.resolve_provider_for_model(model)
+
     payload, url, headers = llm.prism_client.get_chat_payload_and_url(
         model=model,
         messages=[{"role": "user", "content": user_message}],
@@ -133,6 +139,7 @@ async def _call_via_prism(
         enable_thinking=False,
         tools=None,
         agentic_mode=True,
+        provider=provider,
     )
     payload["autoApprove"] = True
     payload["skipConversation"] = False

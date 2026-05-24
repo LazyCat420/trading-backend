@@ -347,6 +347,7 @@ class VLLMClient:
             self._endpoints["dgx_spark"] = ep
 
         if settings.DGX_SPARK_2_VLLM_URL:
+            is_enabled = not getattr(settings, "DISREGARD_MSI_SPARK", False)
             ep = VLLMEndpoint(
                 name="dgx_spark_2",
                 url=settings.DGX_SPARK_2_VLLM_URL,
@@ -354,6 +355,7 @@ class VLLMClient:
                 max_concurrent=settings.DGX_SPARK_2_MAX_CONCURRENT,
                 purpose="Deep analysis, RLM decisions, debate engine",
                 batch_size=settings.DGX_SPARK_2_BATCH_SIZE,
+                enabled=is_enabled,
             )
             ep.init_concurrency(self.RESERVED_HIGH_SLOTS)
             self._endpoints["dgx_spark_2"] = ep
@@ -427,7 +429,24 @@ class VLLMClient:
                 candidates = model_candidates
                 model_filtered = True
             else:
-                logger.warning("[VLLM] Requested model '%s' not found on any active endpoint. Falling back.", requested_model)
+                # CRITICAL WARNING: Do not fall back to other endpoints (like Jetson)
+                # when a specific heavy model is explicitly requested.
+                logger.warning(
+                    "[VLLM] Requested model '%s' not found on any active endpoint. "
+                    "Searching all configured endpoints.", requested_model
+                )
+                all_matching = [
+                    ep for ep in self._endpoints.values()
+                    if ep.model == requested_model
+                ]
+                if all_matching:
+                    candidates = all_matching
+                    model_filtered = True
+                else:
+                    raise RuntimeError(
+                        f"Requested model '{requested_model}' is not hosted on any endpoint. "
+                        f"Active endpoints: {[ep.name for ep in candidates]}"
+                    )
         
         # Populate model parameter sizes dynamically
         for ep in all_ready:
@@ -2804,6 +2823,75 @@ class VLLMClient:
         if cancelled_count:
             logger.info("[VLLM] Cancelled %d active background requests", cancelled_count)
         return cancelled_count
+
+    # ── CRITICAL: Provider and Model Resolution ──
+    # NEVER ALTER OR DELETE THESE FUNCTIONS! They govern the routing between Gold Spark and Jetson.
+    # Changing them will break the agent routing, causing 122B requests to be sent to Jetson and fail.
+
+    def resolve_provider_for_model(self, model: str) -> str:
+        """Resolve the canonical Prism provider name ('vllm', 'vllm-2', 'vllm-3')
+        based on which active endpoint hosts the given model.
+        """
+        # Find endpoint hosting the model
+        for ep in self._endpoints.values():
+            if ep.enabled and ep.model == model:
+                if "10.0.0.30" in ep.url:
+                    return "vllm"
+                elif "10.0.0.103" in ep.url:
+                    return "vllm-2"
+                elif "10.0.0.141" in ep.url:
+                    return "vllm-3"
+                    
+        # Fallback to dynamic URL lookup in all endpoints (enabled or not)
+        for ep in self._endpoints.values():
+            if ep.model == model:
+                if "10.0.0.30" in ep.url:
+                    return "vllm"
+                elif "10.0.0.103" in ep.url:
+                    return "vllm-2"
+                elif "10.0.0.141" in ep.url:
+                    return "vllm-3"
+
+        # Safe defaults based on model size or string match
+        model_lower = model.lower() if model else ""
+        if "122b" in model_lower or "120b" in model_lower:
+            # Gold Spark hosts the heavy models
+            return "vllm-3"
+        elif "35b" in model_lower:
+            # Jetson hosts the 35B models
+            return "vllm"
+            
+        return "vllm"
+
+    def _resolve_model(self, agent_name: str) -> str:
+        """Resolve the model ID for a given agent name based on role-based routing.
+        CRITICAL: Never change this routing logic! It keeps heavy reasoning tasks
+        on Gold Spark and lightweight tasks on Jetson.
+        """
+        # Determine the role for this agent name
+        required_role = None
+        for key, role in AGENT_ROLE_ROUTING.items():
+            if agent_name.startswith(key) or f"_{key}" in agent_name:
+                required_role = role
+                break
+
+        if required_role == "collector":
+            # Jetson model
+            for ep in self._endpoints.values():
+                if ep.role == "collector" and ep.enabled and ep.model:
+                    return ep.model
+            # Fallback to active model
+            return self.model or "cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit"
+        else:
+            # Analyst/Trader model (Gold Spark)
+            trader_model = self.get_trader_model()
+            if trader_model:
+                return trader_model
+            analyst_model, _ = self.get_analyst_model_balanced()
+            if analyst_model:
+                return analyst_model
+            # Fallback to default heavy model
+            return "Qwen/Qwen3.5-122B-A10B-FP8"
 
     async def close(self):
         """Shutdown the persistent HTTP client and dispatchers."""

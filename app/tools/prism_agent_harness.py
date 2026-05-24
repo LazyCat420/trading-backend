@@ -137,6 +137,11 @@ async def run_prism_agent(
     # Get the model from the active endpoint
     model = llm.model or settings.ACTIVE_MODEL or "auto"
 
+    # CRITICAL: Resolve the correct provider name based on the model's location.
+    # DO NOT remove or alter this. It prevents heavy models (like 122B Qwen)
+    # from defaulting to the Jetson endpoint, which causes execution failures.
+    provider = llm.resolve_provider_for_model(model)
+
     # Build Prism payload — agentic_mode=True so Prism runs the loop
     payload, url, headers = prism.get_chat_payload_and_url(
         model=model,
@@ -150,6 +155,7 @@ async def run_prism_agent(
         enable_thinking=False,
         tools=active_tools,
         agentic_mode=True,
+        provider=provider,
     )
 
     # Add metadata for tracking

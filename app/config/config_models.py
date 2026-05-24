@@ -10,7 +10,8 @@ LIMITS_FILE = os.path.join("data", "model_limits.json")
 DEFAULT_LIMITS = {
     "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4": 1,
     "google/gemma-4-26B-A4B-it": 128,
-    "Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16": 24,
+    "Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16": 4,
+    "cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit": 4,
 }
 
 

@@ -118,29 +118,10 @@ class ContextBudget:
 
 
 def _effective_from_raw(raw_tokens: int) -> int:
-    """Compute effective context for the **trading pipeline** from raw max_model_len.
-
-    This does NOT limit what vLLM serves. If vLLM is configured with
-    ``--max-model-len=65536`` for Hermes (64K chat), the server still serves
-    64K. This function only determines how much context the *trading pipeline*
-    self-limits to, keeping autonomous agents in their quality sweet spot.
-
-    Strategy (pipeline-only):
-      - ≤ 8K  raw  → use 80% (small models, already tight)
-      - 8K–32K     → use 60% (medium models)
-      - 32K–128K   → use 50% (e.g. 64K serving → 32K effective for pipeline)
-      - > 128K     → cap at 32K effective (diminishing returns for agents)
+    """Return the raw context length directly, without any hardcaps, as the agents
+    need the full context window (e.g. 64K) to execute tasks with tools.
     """
-    if raw_tokens <= 8192:
-        return int(raw_tokens * 0.80)
-    elif raw_tokens <= 32768:
-        return int(raw_tokens * 0.60)
-    elif raw_tokens <= 131072:
-        return int(raw_tokens * 0.50)
-    else:
-        # Very large context models — cap at 32K effective
-        # These models can technically use more, but quality drops.
-        return 32000
+    return raw_tokens
 
 
 def _compute_slice_budgets(effective: int) -> dict:
@@ -202,19 +183,19 @@ def register_model_context(model_id: str, raw_context_tokens: int) -> ContextBud
 
 
 # ── Default budget (used when model discovery hasn't run yet) ─────────
-# Conservative defaults matching the recalibrated percentages for a 32K model.
+# Default budget scaled to 100% of a 32K raw model.
 _DEFAULT_BUDGET = ContextBudget(
     model_id="default",
     raw_context_tokens=32768,
-    effective_context_tokens=16000,
-    system_prompt_budget=1600,   # 10%
-    data_context_budget=6400,    # 40%
-    tool_result_budget=3200,     # 20%
-    rag_budget=1280,             # 8%
-    memory_budget=800,           # 5%
-    history_budget=1920,         # 12%
-    war_context_budget=480,      # 3%
-    capsule_budget=320,          # 2%
+    effective_context_tokens=32768,
+    system_prompt_budget=3276,   # 10%
+    data_context_budget=13107,   # 40%
+    tool_result_budget=6553,     # 20%
+    rag_budget=2621,             # 8%
+    memory_budget=1638,           # 5%
+    history_budget=3932,         # 12%
+    war_context_budget=983,      # 3%
+    capsule_budget=655,          # 2%
 )
 
 
