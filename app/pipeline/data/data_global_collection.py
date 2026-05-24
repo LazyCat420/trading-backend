@@ -443,6 +443,50 @@ async def run_global_collection(
             )
             logger.error(f"[PIPELINE]   [YouTube] FAILED: {e}")
 
+    async def _global_commodities():
+        await cycle_control.wait_if_paused()
+        if not force_global and not should_collect("commodities"):
+            emit("collecting", "commodities", "Commodities: fresh, skipped", status="skipped")
+            logger.debug("[PIPELINE]   [Commodities] fresh, skipping")
+            _summary["collector_skipped"] += 1
+            return
+        t0 = time.monotonic()
+        try:
+            emit(
+                "collecting",
+                "commodities",
+                "Fetching commodity prices (Gold, Oil, Gas, Copper)...",
+                status="running",
+            )
+            from app.collectors.commodity_collector import collect_commodity_prices
+            # Fetch last 90 days of commodity prices
+            rows = await collect_commodity_prices(days=90)
+            ms = elapsed_ms(t0)
+            results["collectors"]["commodities"] = {"rows": rows}
+            record_collection("commodities", rows=rows)
+            _summary["collector_ok"] += 1
+            emit(
+                "collecting",
+                "commodities",
+                f"Commodity prices updated ({rows} price points)",
+                status="ok",
+                data={"rows_written": rows},
+                elapsed_ms=ms,
+            )
+            logger.debug(f"[PIPELINE]   [Commodities] {rows} price points ({ms}ms)")
+        except Exception as e:
+            ms = elapsed_ms(t0)
+            _summary["collector_error"] += 1
+            _summary["failed_collectors"].append("commodities")
+            emit(
+                "collecting",
+                "commodities",
+                f"Commodities failed — {e}",
+                status="error",
+                elapsed_ms=ms,
+            )
+            logger.error(f"[PIPELINE]   [Commodities] FAILED: {e}")
+
     # ── Fire all global collectors in parallel ──
     # NOTE: No return_exceptions=True — CancelledError propagates from gather()
     # automatically. No post-gather CancelledError check needed.
@@ -457,8 +501,10 @@ async def run_global_collection(
             _global_news_api_rotator(),
             _global_reddit(),
             _global_youtube(),
+            _global_commodities(),
         )
     pass1_ms = elapsed_ms(pass1_start)
     logger.info(
         f"[PIPELINE]   [Pass 1] All global collectors done in {pass1_ms}ms ({pass1_ms / 1000:.1f}s)"
     )
+

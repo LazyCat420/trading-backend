@@ -34,36 +34,29 @@ class TestContextBudget:
 
         budget = register_model_context("test-model-32k", 32768)
         assert budget.raw_context_tokens == 32768
-        assert budget.effective_context_tokens > 0
-        assert budget.effective_context_tokens < 32768
+        assert budget.effective_context_tokens == 32768
 
         # Should be retrievable
         fetched = get_context_budget("test-model-32k")
         assert fetched.model_id == "test-model-32k"
 
     def test_effective_from_raw_scaling(self):
-        """Effective context should scale down appropriately by model size."""
+        """Effective context should return raw context directly (no scaling or hardcaps)."""
         from app.config.context_budget import _effective_from_raw
 
-        # Small model: 80% utilization
-        assert _effective_from_raw(8192) == int(8192 * 0.80)
-
-        # Medium model: 60%
-        assert _effective_from_raw(32768) == int(32768 * 0.60)
-
-        # Large model: 50%
-        assert _effective_from_raw(131072) == int(131072 * 0.50)
-
-        # Very large model: capped at 32K
-        assert _effective_from_raw(262144) == 32000
-        assert _effective_from_raw(1048576) == 32000
+        # Asserts that raw tokens are returned directly
+        assert _effective_from_raw(8192) == 8192
+        assert _effective_from_raw(32768) == 32768
+        assert _effective_from_raw(131072) == 131072
+        assert _effective_from_raw(262144) == 262144
+        assert _effective_from_raw(1048576) == 1048576
 
     def test_compressor_threshold_is_75_percent(self):
         """Compressor threshold should be 75% of effective context."""
         from app.config.context_budget import register_model_context
 
         budget = register_model_context("test-threshold", 32768)
-        expected_effective = int(32768 * 0.60)  # Medium model → 60%
+        expected_effective = 32768
         expected_threshold = int(expected_effective * 0.75)
         assert budget.compressor_threshold == expected_threshold
 

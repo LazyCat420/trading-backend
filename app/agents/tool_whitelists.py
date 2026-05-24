@@ -155,6 +155,25 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "write_memory_note",
         "read_memory_note",
     ],
+    # ── Portfolio Sizing Agent ──
+    "portfolio_allocator": [
+        "calculate_portfolio_allocation",
+        "calculate_stop_loss",
+        "calculate_position_size",
+        "calculate_risk_reward",
+        "get_portfolio_state",
+        "get_market_data",
+        "get_technical_indicators",
+    ],
+    # ── Post-Mortem Auditor Agent ──
+    "post_mortem": [
+        "search_web",
+        "scrape_url",
+        "get_market_data",
+        "get_finnhub_news",
+        "write_memory_note",
+        "read_memory_note",
+    ],
 }
 
 
@@ -205,6 +224,8 @@ AGENT_BUDGET_OVERRIDES: dict[str, int] = {
     "retriever": 5,
     "pre_trade": 12,
     "meta_audit": 10,
+    "portfolio_allocator": 10,
+    "post_mortem": 10,
 }
 
 

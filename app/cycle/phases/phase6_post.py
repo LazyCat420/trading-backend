@@ -35,6 +35,57 @@ async def run_phase6_post(
     except Exception as mem_err:
         logger.warning("Failed to store cycle memory: %s", mem_err)
 
+    # 0.5. Post-Mortem Retrospective Audits for Closed Trades
+    if ctx.trade and trade_result is not None:
+        executed_sells = [
+            t for t in trade_result.get("executed", [])
+            if t.get("action") == "SELL"
+        ]
+        if executed_sells:
+            emit("purge", "post_mortem_start", f"Running Post-Mortem retrospects for {len(executed_sells)} closed positions...", status="running")
+            async def _run_single_post_mortem(t):
+                try:
+                    from app.agents.post_mortem_auditor_agent import run_post_mortem
+                    # get entry price from decision_outcomes
+                    entry_price = 0.0
+                    with get_db() as db:
+                        row = db.execute(
+                            "SELECT entry_price FROM decision_outcomes WHERE ticker = %s AND action = 'BUY' AND resolved_at IS NOT NULL ORDER BY resolved_at DESC LIMIT 1",
+                            [t["ticker"]]
+                        ).fetchone()
+                        if row:
+                            entry_price = row[0]
+                    
+                    if entry_price == 0.0:
+                        # Fallback: estimate from exit price and pnl_pct
+                        exit_p = t.get("price", 0)
+                        pct = t.get("pnl_pct", 0)
+                        entry_price = exit_p / (1 + pct / 100.0) if pct != -100 else exit_p
+                    
+                    await run_post_mortem(
+                        ticker=t["ticker"],
+                        entry_price=entry_price,
+                        exit_price=t.get("price", 0),
+                        pnl_pct=t.get("pnl_pct", 0),
+                        cycle_id=ctx.cycle_id,
+                        bot_id=bot_id,
+                    )
+                except Exception as pm_err:
+                    logger.warning("Post-mortem retrospective failed for %s: %s", t["ticker"], pm_err)
+
+            try:
+                # Limit total runtime to 90s max to prevent pipeline stalling
+                await asyncio.wait_for(
+                    asyncio.gather(*[_run_single_post_mortem(t) for t in executed_sells]),
+                    timeout=90.0
+                )
+                emit("purge", "post_mortem_done", f"Retrospective audits complete for {len(executed_sells)} closed positions", status="ok")
+            except asyncio.TimeoutError:
+                logger.warning("Post-mortem retrospective timed out.")
+                emit("purge", "post_mortem_timeout", "Post-Mortem retrospective audits timed out", status="warning")
+            except Exception as pm_g_err:
+                logger.warning("Post-mortem audits gather failed: %s", pm_g_err)
+
     # 1. Post-Trade Enrichment
     try:
         from app.cycle.trading_phase import estimate_trade
