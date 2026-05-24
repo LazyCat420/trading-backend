@@ -21,6 +21,39 @@ def get_hermes_session() -> aiohttp.ClientSession:
     return _hermes_session
 
 
+async def get_healthy_hermes_endpoints(endpoints: list[str], key: str, session: aiohttp.ClientSession) -> list[str]:
+    """Ping all endpoints in parallel and return the healthy ones."""
+    async def check_one(endpoint: str) -> str | None:
+        try:
+            ping_payload = {
+                "model": "hermes-agent",
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+                "stream": False,
+            }
+            ping_headers = {
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            }
+            ping_timeout = aiohttp.ClientTimeout(total=15.0)
+            async with session.post(
+                endpoint, json=ping_payload, headers=ping_headers, timeout=ping_timeout
+            ) as response:
+                if response.status == 200:
+                    logger.info(f"[WebTools] Responsive Hermes endpoint found: {endpoint}")
+                    return endpoint
+        except Exception as e:
+            logger.debug(f"[WebTools] Hermes endpoint {endpoint} failed ping check: {e}")
+        return None
+
+    results = await asyncio.gather(*(check_one(ep) for ep in endpoints))
+    healthy = [r for r in results if r is not None]
+    if healthy:
+        return healthy
+    logger.warning("[WebTools] No responsive Hermes endpoints found during ping. Falling back to all.")
+    return endpoints
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -209,7 +242,10 @@ async def query_hermes(prompt: str) -> str:
     last_error = None
     session = get_hermes_session()
 
-    for hermes_endpoint in hermes_endpoints:
+    # Discover responsive endpoints to avoid hanging on slow/offline nodes
+    endpoints_to_try = await get_healthy_hermes_endpoints(hermes_endpoints, hermes_key, session)
+
+    for hermes_endpoint in endpoints_to_try:
         try:
             payload = {
                 "model": "hermes-agent",
@@ -223,7 +259,7 @@ async def query_hermes(prompt: str) -> str:
             }
 
             try:
-                timeout = aiohttp.ClientTimeout(total=600)
+                timeout = aiohttp.ClientTimeout(total=60)
                 async with session.post(
                     hermes_endpoint, json=payload, headers=headers, timeout=timeout
                 ) as response:
@@ -394,6 +430,10 @@ async def stream_hermes_chat(
         "Content-Type": "application/json",
     }
     session = get_hermes_session()
+    # Filter for healthy endpoints if not overridden by user
+    if not endpoint_override:
+        hermes_endpoints = await get_healthy_hermes_endpoints(hermes_endpoints, hermes_key, session)
+        
     REQUIRES_CONFIRMATION = {"buy_stock", "sell_stock", "remove_from_watchlist"}
     
     turn_count = 0

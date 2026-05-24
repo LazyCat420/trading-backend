@@ -1271,6 +1271,12 @@ class VLLMClient:
         Raises an error if the model cannot be found, rather than
         silently defaulting to an endpoint.
         """
+        # CRITICAL: Force Qwen 35B / cyankiwi models to route strictly to Jetson Orin AGX 64GB
+        if model_id and ("cyankiwi" in model_id.lower() or "qwen3.6-35b" in model_id.lower()):
+            jetson_ep = self._endpoints.get("jetson")
+            if jetson_ep and jetson_ep.enabled:
+                logger.info("[VLLM] Forcing Jetson Orin AGX 64GB routing for model resolution: %s", model_id)
+                return jetson_ep.url
         # Check cache first — but only if endpoint is enabled
         if model_id and model_id in self._model_endpoint_cache:
             ep_name = self._model_endpoint_cache[model_id]
