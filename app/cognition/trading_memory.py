@@ -232,6 +232,7 @@ class TradingMemory:
             return {"skipped": True, "reason": "Too few entries to merge"}
         try:
             from app.services.vllm_client import llm, Priority
+            from app.services.prism_agent_caller import call_prism_agent
 
             joined = f" {ENTRY_DELIMITER}\n".join(entries)
             prompt = (
@@ -241,16 +242,18 @@ class TradingMemory:
                 f"Output consolidated entries separated by {ENTRY_DELIMITER}.\n\n"
                 f"Current entries:\n{joined}"
             )
-            response, tokens, _ = await llm.chat(
-                system=(
-                    "You consolidate trading notes. Merge related entries, "
-                    "preserve specific numbers/dates. Output entries separated "
-                    f"by {ENTRY_DELIMITER}. Max 120 chars per entry."
-                ),
-                user=prompt,
+            consolidation_sys = (
+                "You consolidate trading notes. Merge related entries, "
+                "preserve specific numbers/dates. Output entries separated "
+                f"by {ENTRY_DELIMITER}. Max 120 chars per entry."
+            )
+            response, tokens, _ = await call_prism_agent(
+                agent_id="CUSTOM_MEMORY_CONSOLIDATION_AGENT",
+                user_message=prompt,
+                fallback_system_prompt=consolidation_sys,
+                fallback_agent_name="memory_consolidator",
                 temperature=0.0,
                 max_tokens=500,
-                agent_name="memory_consolidator",
                 priority=Priority.LOW,
             )
             new_entries = [

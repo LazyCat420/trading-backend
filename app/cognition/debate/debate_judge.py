@@ -14,6 +14,7 @@ All LLM calls go through app.services.vllm_client (Rule 2).
 import logging
 
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.config.config_cognition import LLM_TEMPERATURES
 from app.utils.text_utils import parse_json_response
 
@@ -221,13 +222,14 @@ async def judge_debate(
 
     tokens_used = 0
     try:
-        response, tokens, ms = await llm.chat(
-            system=system_prompt,
-            user=user_prompt,
+        response, tokens, ms = await call_prism_agent(
+            agent_id="CUSTOM_DEBATE_JUDGE_AGENT",
+            user_message=user_prompt,
+            fallback_system_prompt=system_prompt,
+            fallback_agent_name="debate_judge",
             temperature=LLM_TEMPERATURES.get("debate_judge", 0.2),
             max_tokens=512,
             priority=Priority.NORMAL,
-            agent_name="debate_judge",
             ticker=ticker,
             cycle_id=cycle_id,
             bot_id=bot_id,

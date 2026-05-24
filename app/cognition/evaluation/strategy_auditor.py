@@ -455,13 +455,15 @@ async def evaluate_strategy(
                 if on_progress:
                     on_progress(0, -1, "scoring")
                 t_llm = time.monotonic()
-                eval_response, tokens, ms = await llm.chat(
-                    system=SYSTEM_PROMPT,
-                    user=user_prompt,
+                from app.services.prism_agent_caller import call_prism_agent
+                eval_response, tokens, ms = await call_prism_agent(
+                    agent_id="CUSTOM_STRATEGY_EVALUATOR_AGENT",
+                    user_message=user_prompt,
+                    fallback_system_prompt=SYSTEM_PROMPT,
+                    fallback_agent_name="strategy_evaluator",
                     temperature=0.1,
                     max_tokens=512,
                     priority=Priority.HIGH,
-                    agent_name="strategy_evaluator",
                 )
                 logger.info(
                     "LLM scoring call completed in %.1fs (%d tokens)",

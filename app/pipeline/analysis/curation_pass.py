@@ -16,6 +16,7 @@ from typing import Callable
 from app.config import settings
 from app.db.connection import get_db
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 
 logger = logging.getLogger(__name__)
 
@@ -249,14 +250,14 @@ async def curate_discoveries(
 
     for attempt in range(max_retries):
         try:
-            content, tokens, elapsed = await llm.chat(
-                system=system_prompt,
-                user=user_prompt,
+            content, tokens, elapsed = await call_prism_agent(
+                agent_id="CUSTOM_CURATION_PASS_AGENT",
+                user_message=user_prompt,
+                fallback_system_prompt=system_prompt,
+                fallback_agent_name="curation_pass",
                 temperature=0.3,
                 max_tokens=512,
                 priority=Priority.LOW,
-                agent_name="curation_pass",
-                ticker="",
                 cycle_id=cycle_id,
             )
 

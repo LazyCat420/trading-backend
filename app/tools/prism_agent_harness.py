@@ -175,9 +175,17 @@ async def run_prism_agent(
         elapsed_ms = int((time.monotonic() - start) * 1000)
         result_data = response.json()
 
+        # Prism /agent?stream=false wraps the result inside a "response" dictionary
+        response_data = result_data.get("response")
+        if isinstance(response_data, dict):
+            result_data = response_data
+
         # Extract the final assistant response from Prism's response
         final_text = _extract_final_text(result_data)
-        token_usage = result_data.get("usage", {}).get("total_tokens", 0)
+        token_usage = (
+            result_data.get("usage", {}).get("total_tokens", 0)
+            or result_data.get("usage", {}).get("totalTokens", 0)
+        )
         conversation_id = payload.get("conversationId", "")
 
         logger.info(
@@ -239,6 +247,10 @@ def _extract_final_text(prism_response: dict) -> str:
     Prism returns different shapes depending on streaming vs non-streaming.
     This handles both.
     """
+    # Unpack nested response if present
+    if "response" in prism_response and isinstance(prism_response["response"], dict):
+        prism_response = prism_response["response"]
+
     # Non-streaming: { "choices": [{ "message": { "content": "..." } }] }
     choices = prism_response.get("choices", [])
     if choices:
@@ -247,8 +259,10 @@ def _extract_final_text(prism_response: dict) -> str:
         if content:
             return content
 
-    # Direct content field
-    if "content" in prism_response:
+    # Direct content/text field
+    if "text" in prism_response and prism_response["text"]:
+        return prism_response["text"]
+    if "content" in prism_response and prism_response["content"]:
         return prism_response["content"]
 
     # Fallback: stringify the whole response
@@ -283,6 +297,7 @@ async def _fallback_to_local(
         bot_id=bot_id,
         priority=priority,
         tools_override=tools_override,
+        bypass_prism=True,
     )
 
     # Normalize to PrismAgentResult shape

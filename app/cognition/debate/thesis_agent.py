@@ -8,6 +8,7 @@ rather than reasoning from scratch.
 
 import logging
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.utils.text_utils import parse_json_response
 from app.config.config_cognition import LLM_TEMPERATURES
 from app.cognition.contracts.evidence import EvidencePacket
@@ -172,13 +173,14 @@ async def generate_thesis(
         )
 
     try:
-        response, tokens, ms = await llm.chat(
-            system=active_prompt,
-            user=user_prompt,
+        response, tokens, ms = await call_prism_agent(
+            agent_id="CUSTOM_THESIS_AGENT",
+            user_message=user_prompt,
+            fallback_system_prompt=active_prompt,
+            fallback_agent_name="thesis_agent",
             temperature=LLM_TEMPERATURES.get(active_temp_key, 0.5),
             max_tokens=768,
             priority=Priority.NORMAL,
-            agent_name="thesis_agent",
             ticker=entity_id,
             cycle_id=cycle_id,
             bot_id=bot_id,

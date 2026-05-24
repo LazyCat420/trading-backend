@@ -22,6 +22,7 @@ from datetime import datetime, timezone, timedelta
 from app.config import settings
 from app.db.connection import get_db
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 
 logger = logging.getLogger(__name__)
 
@@ -376,14 +377,15 @@ async def summarize_stale_records(limit: int = 50) -> int:
                             f"Summarize this data for {ticker}:\n\n{raw_content[:4000]}"
                         )
 
-                        # LLM call via vllm_client using Jetson (collector model)
-                        summary, _, _ = await llm.chat(
-                            system=system_prompt,
-                            user=user_prompt,
+                        # LLM call via Prism /agent (falls back to vllm_client locally)
+                        summary, _, _ = await call_prism_agent(
+                            agent_id="CUSTOM_LIFECYCLE_SUMMARIZER_AGENT",
+                            user_message=user_prompt,
+                            fallback_system_prompt=system_prompt,
+                            fallback_agent_name="lifecycle_summarizer",
                             temperature=0.2,
                             max_tokens=256,
                             priority=Priority.LOW,
-                            agent_name="lifecycle_summarizer",
                             ticker=ticker,
                         )
 

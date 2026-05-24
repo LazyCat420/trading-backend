@@ -20,6 +20,7 @@ import uuid
 
 from typing import Dict, Any
 from app.services.vllm_client import llm
+from app.services.prism_agent_caller import call_prism_agent
 from app.tools.executor import run_tool_agent
 from app.tools.registry import registry
 from app.utils.text_utils import parse_json_response
@@ -208,10 +209,11 @@ async def gather_data_parallel(
 Is this data sufficient? Respond ONLY in JSON:
 {{"data_verified": true/false, "feedback": "What is missing?"}}"""
 
-        eval_res, _, _ = await llm.chat(
-            system=SPARK1_MANAGER_PROMPT,
-            user=verify_prompt,
-            agent_name="data_verifier_120B",
+        eval_res, _, _ = await call_prism_agent(
+            agent_id="CUSTOM_DATA_VERIFIER_AGENT",
+            user_message=verify_prompt,
+            fallback_system_prompt=SPARK1_MANAGER_PROMPT,
+            fallback_agent_name="data_verifier_120B",
             ticker=ticker,
             temperature=0.2,
         )
@@ -495,10 +497,11 @@ Respond ONLY in JSON:
     }
 }}"""
 
-        consensus_res, _, _ = await llm.chat(
-            system=SPARK1_MANAGER_PROMPT,
-            user=consensus_prompt,
-            agent_name=f"consensus_check_r{round_i + 1}",
+        consensus_res, _, _ = await call_prism_agent(
+            agent_id="CUSTOM_CONSENSUS_CHECK_AGENT",
+            user_message=consensus_prompt,
+            fallback_system_prompt=SPARK1_MANAGER_PROMPT,
+            fallback_agent_name=f"consensus_check_r{round_i + 1}",
             ticker=ticker,
             temperature=0.1,
             cycle_id=cycle_id,
@@ -580,10 +583,11 @@ As CIO, you must now make a FINAL executive decision.
 Respond ONLY in JSON:
 {{"final_action": "BUY/SELL/HOLD", "final_confidence": 0-100, "rationale": "Your executive decision summary"}}"""
 
-    exec_res, _, _ = await llm.chat(
-        system=SPARK1_MANAGER_PROMPT,
-        user=executive_prompt,
-        agent_name="executive_decision_120B",
+    exec_res, _, _ = await call_prism_agent(
+        agent_id="CUSTOM_EXECUTIVE_DECISION_AGENT",
+        user_message=executive_prompt,
+        fallback_system_prompt=SPARK1_MANAGER_PROMPT,
+        fallback_agent_name="executive_decision_120B",
         ticker=ticker,
         temperature=0.1,
         cycle_id=cycle_id,

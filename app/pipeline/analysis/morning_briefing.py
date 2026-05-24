@@ -11,6 +11,7 @@ from app.trading.portfolio import get_current_state
 from app.trading.watchlist import get_active
 from app.pipeline.analysis.thesis_store import get_thesis
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +66,14 @@ async def generate_morning_briefing() -> str:
     logger.info(f"[MORNING BRIEFING] Running LLM analysis on {len(evaluated_tickers)} theses...")
     
     # 3. Run LLM
-    response, tokens, ms = await llm.chat(
-        system=system_prompt,
-        user=context,
+    response, tokens, ms = await call_prism_agent(
+        agent_id="CUSTOM_MORNING_BRIEFING_AGENT",
+        user_message=context,
+        fallback_system_prompt=system_prompt,
+        fallback_agent_name="morning_briefing_analyst",
         temperature=0.3,
         max_tokens=1500,
         priority=Priority.HIGH,
-        agent_name="morning_briefing_analyst"
     )
     
     # 4. Save to DB

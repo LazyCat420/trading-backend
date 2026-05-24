@@ -30,7 +30,7 @@ async def test_prism_healthy_routes_through_proxy(mock_vllm_client):
     # Mock payload generation
     mock_vllm_client.prism_client.get_stream_payload_and_url.return_value = (
         {"prism_proxied": True},
-        "http://prism_host:7777/chat?stream=true",
+        "http://prism_host:7777/agent",
         {"Content-Type": "application/json"}
     )
     
@@ -63,7 +63,7 @@ async def test_prism_healthy_routes_through_proxy(mock_vllm_client):
     # Verify Prism formatting was used (via the HTTP call arguments)
     mock_http_client.stream.assert_called_once()
     call_args = mock_http_client.stream.call_args
-    assert call_args[0][1] == "http://prism_host:7777/chat?stream=true"
+    assert call_args[0][1] == "http://prism_host:7777/agent"
     assert call_args[1]["json"] == {"prism_proxied": True}
     
     assert "Hello" in chunks
@@ -138,7 +138,7 @@ def test_prism_client_payload_construction():
     assert payload["systemPrompt"] == "system instructions"
     assert payload["conversationMeta"]["systemPrompt"] == "system instructions"
     assert payload["conversationMeta"]["title"] == "thesis_agent · LLY · cycle-1234"
-    assert url == "http://prism_host:7777/chat?stream=false"
+    assert url == "http://prism_host:7777/agent?stream=false"
     
     # Assert session ID is isolated and cached under compound key: cycle-1234-LLY-thesis_agent
     expected_group_key = "cycle-1234-LLY-thesis_agent"
@@ -178,7 +178,7 @@ def test_prism_client_payload_construction():
         agentic_mode=False
     )
     assert payload_s["systemPrompt"] == "system instructions"
-    assert url_s == "http://prism_host:7777/chat"
+    assert url_s == "http://prism_host:7777/agent"
 
 
 def test_prism_client_conversation_caching():
@@ -254,7 +254,7 @@ async def test_vllm_client_skip_conversation_from_settings(mock_vllm_client):
     
     # We will track what goes into get_chat_payload_and_url
     def capture_payload(**kwargs):
-        return {"conversationId": "fake-conv-id"}, "http://prism_host:7777/chat?stream=false", {}
+        return {"conversationId": "fake-conv-id"}, "http://prism_host:7777/agent?stream=false", {}
         
     mock_vllm_client.prism_client.get_chat_payload_and_url = MagicMock(side_effect=capture_payload)
     mock_vllm_client._call_endpoint = AsyncMock(return_value=MagicMock(json=lambda: {"text": "hello"}))

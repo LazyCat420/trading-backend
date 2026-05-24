@@ -49,6 +49,7 @@ async def maybe_learn(
             rationale = rationale[:500] + "..."
 
         from app.services.vllm_client import llm, Priority
+        from app.services.prism_agent_caller import call_prism_agent
 
         prompt = (
             f"Ticker: {ticker}\n"
@@ -59,12 +60,13 @@ async def maybe_learn(
             f"Extract ONE reusable lesson or respond SKIP."
         )
 
-        response, tokens, elapsed = await llm.chat(
-            system=LEARN_SYSTEM,
-            user=prompt,
+        response, tokens, elapsed = await call_prism_agent(
+            agent_id="CUSTOM_POST_CYCLE_LEARNER_AGENT",
+            user_message=prompt,
+            fallback_system_prompt=LEARN_SYSTEM,
+            fallback_agent_name="post_cycle_learner",
             temperature=0.0,
             max_tokens=450,
-            agent_name="post_cycle_learner",
             ticker=ticker,
             priority=Priority.LOW,
         )

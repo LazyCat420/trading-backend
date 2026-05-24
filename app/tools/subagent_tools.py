@@ -3,6 +3,7 @@ import json
 from app.tools.registry import registry
 from app.tools.executor import run_tool_agent, AgentYielded
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 
 logger = logging.getLogger(__name__)
 
@@ -190,13 +191,14 @@ async def spawn_research_subagent(
             partial_history.append({"role": "user", "content": YIELD_SUMMARY_PROMPT})
 
             # One final LLM call — NO tools, just summarize
-            summary_response, summary_tokens, summary_ms = await llm.chat(
-                system="You are summarizing your own partial research. Be factual and concise.",
-                user=YIELD_SUMMARY_PROMPT,
+            summary_response, summary_tokens, summary_ms = await call_prism_agent(
+                agent_id="CUSTOM_RESEARCH_SUBAGENT_YIELD_AGENT",
+                user_message=YIELD_SUMMARY_PROMPT,
+                fallback_system_prompt="You are summarizing your own partial research. Be factual and concise.",
+                fallback_agent_name="research_subagent_yield",
                 temperature=0.2,
                 max_tokens=512,
                 priority=Priority.NORMAL,
-                agent_name="research_subagent_yield",
                 ticker=ticker,
             )
 

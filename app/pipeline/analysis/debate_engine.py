@@ -21,6 +21,7 @@ import logging
 import time
 
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.utils.text_utils import parse_json_response, sanitize_ascii
 from app.utils.pipeline_utils import elapsed_ms
 
@@ -194,13 +195,14 @@ async def run_debate(
     )
 
     try:
-        meta_response, meta_tokens, meta_ms = await llm.chat(
-            system=META_SYSTEM_PROMPT,
-            user=meta_user,
-            temperature=0.7,  # Higher temp for creative persona generation
+        meta_response, meta_tokens, meta_ms = await call_prism_agent(
+            agent_id="CUSTOM_DEBATE_META_AGENT",
+            user_message=meta_user,
+            fallback_system_prompt=META_SYSTEM_PROMPT,
+            fallback_agent_name="debate_meta",
+            temperature=0.7,
             max_tokens=512,
             priority=Priority.NORMAL,
-            agent_name="debate_meta",
             ticker=ticker,
             cycle_id=cycle_id,
             bot_id=bot_id,
@@ -292,13 +294,14 @@ async def run_debate(
     )
 
     try:
-        debate_response, debate_tokens, debate_ms = await llm.chat(
-            system=persona_prompt,
-            user=debate_user,
-            temperature=0.4,  # Slightly creative but grounded
+        debate_response, debate_tokens, debate_ms = await call_prism_agent(
+            agent_id="CUSTOM_DEBATE_CHALLENGE_AGENT",
+            user_message=debate_user,
+            fallback_system_prompt=persona_prompt,
+            fallback_agent_name="debate_challenge",
+            temperature=0.4,
             max_tokens=768,
             priority=Priority.NORMAL,
-            agent_name="debate_challenge",
             ticker=ticker,
             cycle_id=cycle_id,
             bot_id=bot_id,
@@ -348,13 +351,14 @@ async def run_debate(
                 structured_facts=safe_context[:15000],
             )
 
-            cross_response, _, _ = await llm.chat(
-                system=CROSS_EXAM_SYSTEM_PROMPT,
-                user=cross_user,
+            cross_response, _, _ = await call_prism_agent(
+                agent_id="CUSTOM_DEBATE_CROSS_EXAM_AGENT",
+                user_message=cross_user,
+                fallback_system_prompt=CROSS_EXAM_SYSTEM_PROMPT,
+                fallback_agent_name="debate_cross_exam",
                 temperature=0.1,
                 max_tokens=512,
                 priority=Priority.NORMAL,
-                agent_name="debate_cross_exam",
                 ticker=ticker,
                 cycle_id=cycle_id,
                 bot_id=bot_id,
@@ -395,13 +399,14 @@ async def run_debate(
     )
 
     try:
-        synth_response, synth_tokens, synth_ms = await llm.chat(
-            system=_SYNTHESIS_SYSTEM_BASE.format(allowed_actions=allowed_actions),
-            user=synthesis_user,
-            temperature=0.2,  # Low temp for decisive final call
+        synth_response, synth_tokens, synth_ms = await call_prism_agent(
+            agent_id="CUSTOM_DEBATE_SYNTHESIS_AGENT",
+            user_message=synthesis_user,
+            fallback_system_prompt=_SYNTHESIS_SYSTEM_BASE.format(allowed_actions=allowed_actions),
+            fallback_agent_name="debate_synthesis",
+            temperature=0.2,
             max_tokens=512,
             priority=Priority.NORMAL,
-            agent_name="debate_synthesis",
             ticker=ticker,
             cycle_id=cycle_id,
             bot_id=bot_id,

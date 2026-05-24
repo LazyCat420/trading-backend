@@ -171,30 +171,34 @@ def _cluster_lessons(rows: list, similarity_threshold: float = 0.85) -> list[lis
 async def _llm_consolidate(lesson_texts: list[str]) -> str | None:
     """Use LLM to consolidate multiple lessons into one unified rule."""
     try:
-        from app.services.vllm_client import llm, Priority
+        from app.services.vllm_client import Priority
+        from app.services.prism_agent_caller import call_prism_agent
 
         lessons_block = "\n".join(f"- {t}" for t in lesson_texts[:10])
 
-        response, tokens, elapsed = await llm.chat(
-            system=(
-                "You are a trading strategy auditor. Below are multiple lessons learned "
-                "from past trading cycles. Some may contradict each other.\n"
-                "Your job is to:\n"
-                "1. Identify contradictions\n"
-                "2. Resolve them using the MOST RECENT lesson as the tiebreaker "
-                "(lessons are listed newest-first)\n"
-                "3. Output a single, clear, actionable rule\n\n"
-                "Output ONE consolidated rule (max 120 characters). No explanation needed."
-            ),
-            user=f"Lessons to consolidate:\n{lessons_block}",
+        system_prompt = (
+            "You are a trading strategy auditor. Below are multiple lessons learned "
+            "from past trading cycles. Some may contradict each other.\n"
+            "Your job is to:\n"
+            "1. Identify contradictions\n"
+            "2. Resolve them using the MOST RECENT lesson as the tiebreaker "
+            "(lessons are listed newest-first)\n"
+            "3. Output a single, clear, actionable rule\n\n"
+            "Output ONE consolidated rule (max 120 characters). No explanation needed."
+        )
+
+        response_text, tokens, ms = await call_prism_agent(
+            agent_id="CUSTOM_MEMORY_CONSOLIDATION_AGENT",
+            user_message=f"Lessons to consolidate:\n{lessons_block}",
+            fallback_system_prompt=system_prompt,
+            fallback_agent_name="memory_consolidation",
             temperature=0.1,
             max_tokens=100,
             priority=Priority.LOW,
-            agent_name="memory_consolidation",
             ticker="_system",
         )
 
-        unified = response.strip()
+        unified = response_text.strip() if response_text else ""
         if len(unified) > 5:
             logger.info(
                 "[CONSOLIDATION] Unified %d lessons → '%s'",

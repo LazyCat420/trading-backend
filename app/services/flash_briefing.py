@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 from app.db.connection import get_db
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 
 logger = logging.getLogger(__name__)
 
@@ -62,13 +63,14 @@ async def generate_flash_briefing() -> str | None:
         "Output in Markdown format."
     )
 
-    response, tokens, ms = await llm.chat(
-        system=system_prompt,
-        user=context,
+    response, tokens, ms = await call_prism_agent(
+        agent_id="CUSTOM_FLASH_BRIEFING_AGENT",
+        user_message=context,
+        fallback_system_prompt=system_prompt,
+        fallback_agent_name="flash_briefing",
         temperature=0.3,
         max_tokens=800,
         priority=Priority.NORMAL,
-        agent_name="flash_briefing",
     )
 
     # Save to DB

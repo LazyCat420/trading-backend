@@ -30,16 +30,56 @@ class PrismClient:
     """
 
     def __init__(self):
-        self.url = settings.PRISM_URL
-        self.project = settings.PRISM_PROJECT
-        self.username = settings.PRISM_USERNAME
-        self.enabled = settings.PRISM_ENABLED
-        self.agent = settings.PRISM_AGENT
         self._sessions: dict[str, str] = {}
         self._conversations: dict[str, str] = {}
         self._client: httpx.AsyncClient | None = None
         self._is_healthy = False
         self._last_health_check = 0.0
+        self._url: str | None = None
+        self._project: str | None = None
+        self._username: str | None = None
+        self._enabled: bool | None = None
+        self._agent: str | None = None
+
+    @property
+    def url(self) -> str:
+        return self._url if self._url is not None else settings.PRISM_URL
+
+    @url.setter
+    def url(self, value: str):
+        self._url = value
+
+    @property
+    def project(self) -> str:
+        return self._project if self._project is not None else settings.PRISM_PROJECT
+
+    @project.setter
+    def project(self, value: str):
+        self._project = value
+
+    @property
+    def username(self) -> str:
+        return self._username if self._username is not None else settings.PRISM_USERNAME
+
+    @username.setter
+    def username(self, value: str):
+        self._username = value
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled if self._enabled is not None else settings.PRISM_ENABLED
+
+    @enabled.setter
+    def enabled(self, value: bool):
+        self._enabled = value
+
+    @property
+    def agent(self) -> str:
+        return self._agent if self._agent is not None else settings.PRISM_AGENT
+
+    @agent.setter
+    def agent(self, value: str):
+        self._agent = value
 
     async def check_health(self) -> bool:
         """Dynamically check if Prism is available.
@@ -167,35 +207,107 @@ class PrismClient:
                 formatted_tools.append(t)
         return formatted_tools
 
+    def _enrich_payload_with_tools_and_prefixes(
+        self,
+        payload: dict[str, Any],
+        tools: list[dict] | None,
+        system_prompt: str,
+        messages: list[dict]
+    ) -> None:
+        """Enriches the payload with enabledTools and prefixes tool names in system_prompt/messages."""
+        import re
+        from app.tools.registry import registry
+        
+        # 1. Collect all tool names
+        tool_names = set()
+        if tools:
+            for t in tools:
+                if isinstance(t, dict):
+                    if t.get("type") == "function" and "function" in t:
+                        name = t["function"].get("name")
+                        if name:
+                            tool_names.add(name)
+                    elif t.get("name"):
+                        tool_names.add(t["name"])
+        
+        # Add all registry tools
+        for name in registry.tools.keys():
+            tool_names.add(name)
+            
+        mcp_prefix = "mcp__lazy-tool-service__"
+        
+        # 2. Build enabledTools list
+        enabled_tools = []
+        for name in tool_names:
+            enabled_tools.append(name)
+            enabled_tools.append(f"{mcp_prefix}{name}")
+            
+        # Add core built-in tools
+        built_ins = [
+            "execute_python", "search_web", "read_file", "write_file",
+            "str_replace_file", "file_info", "file_diff", "browser_action",
+            "browser_script", "precise_calculator"
+        ]
+        for bi in built_ins:
+            if bi not in enabled_tools:
+                enabled_tools.append(bi)
+                
+        payload["enabledTools"] = enabled_tools
+        
+        # 3. Prefix prompt and messages
+        def prefix_text(text: str) -> str:
+            if not text:
+                return text
+            # Sort by length descending to avoid partial matches
+            sorted_names = sorted(list(tool_names), key=len, reverse=True)
+            for name in sorted_names:
+                pattern = r'\b(?<!' + re.escape(mcp_prefix) + r')' + re.escape(name) + r'\b'
+                text = re.sub(pattern, mcp_prefix + name, text)
+            return text
+            
+        prefixed_system_prompt = prefix_text(system_prompt)
+        payload["systemPrompt"] = prefixed_system_prompt[:15000]
+        if "conversationMeta" in payload:
+            payload["conversationMeta"]["systemPrompt"] = prefixed_system_prompt[:15000]
+            
+        prefixed_messages = []
+        for msg in messages:
+            content = msg.get("content")
+            new_msg = {**msg}
+            if isinstance(content, str):
+                new_msg["content"] = prefix_text(content)
+            
+            # Prefix name field for tool responses
+            if msg.get("role") == "tool":
+                tool_name = msg.get("name")
+                if tool_name and tool_name in tool_names:
+                    new_msg["name"] = f"{mcp_prefix}{tool_name}"
+                    
+            # Prefix tool calls
+            if "tool_calls" in msg:
+                prefixed_calls = []
+                for tc in msg["tool_calls"]:
+                    func_info = tc.get("function", {})
+                    func_name = func_info.get("name")
+                    if func_name and func_name in tool_names:
+                        prefixed_calls.append({
+                            **tc,
+                            "function": {
+                                **func_info,
+                                "name": f"{mcp_prefix}{func_name}"
+                            }
+                        })
+                    else:
+                        prefixed_calls.append(tc)
+                new_msg["tool_calls"] = prefixed_calls
+            prefixed_messages.append(new_msg)
+            
+        payload["messages"] = prefixed_messages
+
     def _resolve_prism_agent_id(self, agent_name: str) -> str:
         """Map local trading service agent names to custom agent IDs registered in Prism."""
-        if not agent_name:
-            return self.agent
-        
-        name_lower = agent_name.lower()
-        if "quant_research" in name_lower:
-            return "CUSTOM_QUANT_RESEARCH_AGENT"
-        elif "janitor" in name_lower or "maintenance" in name_lower:
-            return "CUSTOM_SYSTEM_JANITOR_AGENT"
-        elif "technical" in name_lower:
-            return "CUSTOM_TECHNICAL_ANALYSIS_AGENT"
-        elif "agent_architect" in name_lower or "architect" in name_lower:
-            return "CUSTOM_AGENT_ARCHITECT"
-        elif "budget" in name_lower:
-            return "CUSTOM_AGENT_BUDGET_MANAGER"
-        elif "debater" in name_lower:
-            return "CUSTOM_BULLISH_DEBATER"
-        
-        # All other standard specialist/analysis/execution agents
-        standard_analysis_agents = {
-            "sentiment", "fundamental", "risk", "fund_flow", "comparative",
-            "retriever", "verifier", "synthesizer", "pre_trade", "meta_audit",
-            "decision_engine", "trading_phase", "trading_cycle"
-        }
-        if any(x in name_lower for x in standard_analysis_agents):
-            return "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT"
-            
-        return self.agent
+        from app.services.prism_agent_registry import resolve_agent_id
+        return resolve_agent_id(agent_name, default_agent=self.agent)
 
     def get_chat_payload_and_url(
         self,
@@ -271,6 +383,8 @@ class PrismClient:
                 },
             },
         }
+        if agentic_mode:
+            self._enrich_payload_with_tools_and_prefixes(payload, tools, system_prompt, messages)
         if is_qwen_model:
             payload["thinkingEnabled"] = enable_thinking
         # Forward tools if present.
@@ -282,10 +396,8 @@ class PrismClient:
         elif session_id:
             payload["sessionId"] = session_id
 
-        if agentic_mode:
-            target_url = f"{self.url}/agent?stream=false"
-        else:
-            target_url = f"{self.url}/chat?stream=false"
+        # Always route through the agent endpoint
+        target_url = f"{self.url}/agent?stream=false"
         headers = {
             "Content-Type": "application/json",
             "x-project": self.project,
@@ -351,6 +463,8 @@ class PrismClient:
                 },
             },
         }
+        if agentic_mode:
+            self._enrich_payload_with_tools_and_prefixes(payload, tools, system_prompt, messages)
         if is_qwen_model:
             payload["thinkingEnabled"] = enable_thinking
         if tools:
@@ -361,10 +475,8 @@ class PrismClient:
         elif session_id:
             payload["sessionId"] = session_id
 
-        if agentic_mode:
-            target_url = f"{self.url}/agent"
-        else:
-            target_url = f"{self.url}/chat"
+        # Always route through the agent endpoint
+        target_url = f"{self.url}/agent"
         headers = {
             "Content-Type": "application/json",
             "x-project": self.project,

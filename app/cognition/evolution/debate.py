@@ -20,6 +20,7 @@ from typing import Optional
 
 from app.db.connection import get_db
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 
 logger = logging.getLogger(__name__)
 
@@ -276,15 +277,15 @@ class EvolutionDebateCouncil:
         proposer_user = "\n".join(user_parts)
 
         try:
-            proposed_response, _, _ = await llm.chat(
-                system=proposer_system,
-                user=proposer_user,
+            proposed_response, _, _ = await call_prism_agent(
+                agent_id="CUSTOM_EVO_PROPOSER_AGENT",
+                user_message=proposer_user,
+                fallback_system_prompt=proposer_system,
+                fallback_agent_name=f"evo_proposer_{round_tag}",
                 temperature=0.4,
                 max_tokens=4096,
                 priority=Priority.LOW,
-                agent_name=f"evo_proposer_{round_tag}",
                 cycle_id=cycle_id,
-                endpoint_override=roles["proposer"],
             )
         except Exception as e:
             tb = traceback.format_exc()
@@ -343,15 +344,15 @@ class EvolutionDebateCouncil:
         critic_user = "\n\n".join(critic_parts)
 
         try:
-            critic_response, _, _ = await llm.chat(
-                system=critic_system,
-                user=critic_user,
+            critic_response, _, _ = await call_prism_agent(
+                agent_id="CUSTOM_EVO_CRITIC_AGENT",
+                user_message=critic_user,
+                fallback_system_prompt=critic_system,
+                fallback_agent_name=f"evo_critic_{round_tag}",
                 temperature=0.3,
                 max_tokens=2048,
                 priority=Priority.LOW,
-                agent_name=f"evo_critic_{round_tag}",
                 cycle_id=cycle_id,
-                endpoint_override=roles["critic"],
             )
         except Exception as e:
             tb = traceback.format_exc()
@@ -429,15 +430,15 @@ class EvolutionDebateCouncil:
         )
 
         try:
-            judge_response, _, _ = await llm.chat(
-                system=judge_system,
-                user=judge_user,
+            judge_response, _, _ = await call_prism_agent(
+                agent_id="CUSTOM_EVO_JUDGE_AGENT",
+                user_message=judge_user,
+                fallback_system_prompt=judge_system,
+                fallback_agent_name=f"evo_judge_{round_tag}",
                 temperature=0.1,
                 max_tokens=2048,
                 priority=Priority.LOW,
-                agent_name=f"evo_judge_{round_tag}",
                 cycle_id=cycle_id,
-                endpoint_override=roles["judge"],
             )
         except Exception as e:
             tb = traceback.format_exc()

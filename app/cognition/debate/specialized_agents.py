@@ -1,5 +1,6 @@
 import logging
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.config.config_cognition import LLM_TEMPERATURES
 from app.cognition.contracts.evidence import EvidencePacket
 
@@ -19,13 +20,14 @@ async def _run_specialized_agent(
 
     tokens_used = 0
     try:
-        response, tokens, ms = await llm.chat(
-            system=system_prompt,
-            user=user_prompt,
+        response, tokens, ms = await call_prism_agent(
+            agent_id=f"CUSTOM_{agent_name.upper()}",
+            user_message=user_prompt,
+            fallback_system_prompt=system_prompt,
+            fallback_agent_name=agent_name,
             temperature=LLM_TEMPERATURES.get(agent_name, 0.3),
             max_tokens=256,
             priority=Priority.NORMAL,
-            agent_name=agent_name,
             ticker=entity_id,
             cycle_id=cycle_id,
             bot_id=bot_id,

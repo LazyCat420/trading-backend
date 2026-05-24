@@ -13,6 +13,7 @@ from app.db.memory_repo import (
     log_consolidation_run,
 )
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 
 logger = logging.getLogger(__name__)
 
@@ -90,13 +91,14 @@ async def run_ticker_consolidation(ticker: str):
 
     # Execute LLM call
     try:
-        response_text, _, _ = await llm.chat(
-            system=CONSOLIDATION_SYSTEM_PROMPT,
-            user=user_prompt,
+        response_text, _, _ = await call_prism_agent(
+            agent_id="CUSTOM_CONSOLIDATOR_AGENT",
+            user_message=user_prompt,
+            fallback_system_prompt=CONSOLIDATION_SYSTEM_PROMPT,
+            fallback_agent_name="memory_consolidator",
             temperature=0.2,
             max_tokens=2048,
             priority=Priority.LOW,
-            agent_name="memory_consolidator",
             ticker=ticker,
         )
 

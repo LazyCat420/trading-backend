@@ -251,6 +251,7 @@ async def analyze_ticker(
     if triage_tier == "glance":
         try:
             from app.services.vllm_client import llm, Priority
+            from app.services.prism_agent_caller import call_prism_agent
 
             logger.info(
                 "[PIPELINE] [TRIAGE] %s is Glance tier — running change detection only",
@@ -301,20 +302,23 @@ async def analyze_ticker(
                 else "No context available."
             )
 
-            glance_resp, glance_tokens, glance_ms = await llm.chat(
-                system=(
-                    "You are a fast market change detector. "
-                    "Given a stock's last analysis and recent news, determine if anything "
-                    "has MATERIALLY changed that would warrant a full re-analysis. "
-                    "Respond with EXACTLY one of:\n"
-                    "  SKIP — No material change\n"
-                    "  CHANGED — Material change detected (explain briefly)\n"
-                ),
-                user=f"Ticker: {ticker}\n\n{_glance_ctx}",
+            glance_system_prompt = (
+                "You are a fast market change detector. "
+                "Given a stock's last analysis and recent news, determine if anything "
+                "has MATERIALLY changed that would warrant a full re-analysis. "
+                "Respond with EXACTLY one of:\n"
+                "  SKIP — No material change\n"
+                "  CHANGED — Material change detected (explain briefly)\n"
+            )
+
+            glance_resp, glance_tokens, glance_ms = await call_prism_agent(
+                agent_id="CUSTOM_DECISION_GLANCE_AGENT",
+                user_message=f"Ticker: {ticker}\n\n{_glance_ctx}",
+                fallback_system_prompt=glance_system_prompt,
+                fallback_agent_name="glance_detector",
                 temperature=0.1,
                 max_tokens=100,
                 priority=Priority.LOW,
-                agent_name="glance_detector",
                 ticker=ticker,
                 cycle_id=cycle_id,
             )

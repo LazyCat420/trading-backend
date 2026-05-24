@@ -1,19 +1,29 @@
 import pymongo
 import json
+from datetime import datetime
+
+class MongoEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
 uri = "mongodb://sun:sun@10.0.0.16:27017/?directConnection=true&authSource=admin"
 client = pymongo.MongoClient(uri)
-db = client["prism"]
+db = client.get_database("prism")
 
-def default_serializer(obj):
-    import datetime
-    if isinstance(obj, datetime.datetime) or isinstance(obj, datetime.date):
-        return obj.isoformat()
-    raise TypeError(f"Type {type(obj)} not serializable")
+print("--- CUSTOM AGENTS ---")
+try:
+    for a in db.custom_agents.find():
+        a["_id"] = str(a["_id"])
+        print(json.dumps(a, indent=2, cls=MongoEncoder))
+except Exception as e:
+    print("Error reading custom_agents:", e)
 
-for col_name in ["mcp_servers", "custom_tools", "settings", "workspaces"]:
-    col = db[col_name]
-    print(f"--- Documents in {col_name} ---")
-    for doc in col.find():
-        doc["_id"] = str(doc["_id"])
-        print(json.dumps(doc, indent=2, default=default_serializer))
+print("\n--- MCP SERVERS ---")
+try:
+    for s in db.mcp_servers.find():
+        s["_id"] = str(s["_id"])
+        print(json.dumps(s, indent=2, cls=MongoEncoder))
+except Exception as e:
+    print("Error reading mcp_servers:", e)

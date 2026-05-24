@@ -55,13 +55,15 @@ async def generate_consensus(ticker: str, articles: list[dict]) -> dict:
         payload += f"CONTENT: {content}\n\n"
         
     try:
-        response, _, _ = await llm.chat(
-            system=CONSENSUS_PROMPT,
-            user=payload,
+        from app.services.prism_agent_caller import call_prism_agent
+        response, _, _ = await call_prism_agent(
+            agent_id="CUSTOM_CONSENSUS_ENGINE_AGENT",
+            user_message=payload,
+            fallback_system_prompt=CONSENSUS_PROMPT,
+            fallback_agent_name="consensus_engine",
             temperature=0.2,
             max_tokens=2048,
             priority=Priority.NORMAL,
-            agent_name="consensus_engine",
         )
         
         import re

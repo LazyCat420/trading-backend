@@ -14,6 +14,7 @@ from typing import Callable
 
 from app.db.connection import get_db
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.utils.pipeline_utils import noop as _noop
 from app.cognition.reflection_utils import generate_critique_prompt
 
@@ -93,13 +94,14 @@ async def evaluate_relevance(text: str, context: str = "") -> dict:
 
     for attempt in range(max_retries):
         try:
-            response, _, _ = await llm.chat(
-                system=current_prompt,
-                user=JANITOR_PROMPT.format(text=text[:15000], context=context),
+            response, _, _ = await call_prism_agent(
+                agent_id="CUSTOM_DATA_JANITOR_AGENT",
+                user_message=JANITOR_PROMPT.format(text=text[:15000], context=context),
+                fallback_system_prompt=current_prompt,
+                fallback_agent_name="data_janitor",
                 temperature=0.1,
                 max_tokens=800,
                 priority=Priority.LOW,
-                agent_name="data_janitor",
             )
 
             import re
@@ -119,15 +121,16 @@ async def evaluate_relevance(text: str, context: str = "") -> dict:
 
             # Reflection pass if confidence is low or marked as relevant
             if status == "relevant" and confidence < 90:
-                critic_res, _, _ = await llm.chat(
-                    system="You are a strict QA API. Respond ONLY in JSON.",
-                    user=CRITIC_PROMPT.format(
+                critic_res, _, _ = await call_prism_agent(
+                    agent_id="CUSTOM_DATA_JANITOR_CRITIC_AGENT",
+                    user_message=CRITIC_PROMPT.format(
                         status=status, reason=data.get("reason", ""), context=context, text=text[:15000]
                     ),
+                    fallback_system_prompt="You are a strict QA API. Respond ONLY in JSON.",
+                    fallback_agent_name="data_janitor_critic",
                     temperature=0.1,
                     max_tokens=150,
                     priority=Priority.LOW,
-                    agent_name="data_janitor_critic",
                 )
                 critic_match = re.search(r"\{.*\}", critic_res, re.DOTALL)
                 if critic_match:

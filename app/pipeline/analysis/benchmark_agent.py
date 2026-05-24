@@ -11,6 +11,7 @@ import json
 import logging
 
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -140,13 +141,14 @@ async def run_benchmark_agent(cycle_id: str, days_back: int = 30) -> dict:
     )
 
     try:
-        response, tokens, elapsed_ms = await llm.chat(
-            system=SYSTEM_PROMPT,
-            user=user_prompt,
+        response, tokens, elapsed_ms = await call_prism_agent(
+            agent_id="CUSTOM_BENCHMARK_AGENT",
+            user_message=user_prompt,
+            fallback_system_prompt=SYSTEM_PROMPT,
+            fallback_agent_name="benchmark_agent",
             temperature=0.2,
             max_tokens=2048,
             priority=Priority.LOW,
-            agent_name="benchmark_agent",
             cycle_id=cycle_id,
         )
 

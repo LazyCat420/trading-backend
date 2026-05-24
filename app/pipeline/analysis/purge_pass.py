@@ -22,6 +22,7 @@ from typing import Callable
 from app.config import settings
 from app.db.connection import get_db
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.utils.pipeline_utils import noop as _noop
 
 logger = logging.getLogger(__name__)
@@ -256,14 +257,14 @@ async def run_purge_pass(
             )
 
             try:
-                content, tokens, elapsed = await llm.chat(
-                    system=system_prompt,
-                    user=user_prompt,
+                content, tokens, elapsed = await call_prism_agent(
+                    agent_id="CUSTOM_PURGE_PASS_AGENT",
+                    user_message=user_prompt,
+                    fallback_system_prompt=system_prompt,
+                    fallback_agent_name="purge_pass",
                     temperature=0.3,
                     max_tokens=512,
                     priority=Priority.LOW,
-                    agent_name="purge_pass",
-                    ticker="",
                     cycle_id=cycle_id,
                 )
 

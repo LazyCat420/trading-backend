@@ -2,6 +2,7 @@ import logging
 from typing import Any
 from app.services.vllm_client import llm, Priority
 from app.tools.registry import registry
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ async def run_tool_agent(
     model_override: str | None = None,
     tools_override: list[dict] | None = None,
     yield_on_limit: bool = False,
+    bypass_prism: bool = False,
 ) -> dict[str, Any]:
     """
     Run an LLM agent with tools. Automatically loops back to the LLM
@@ -46,6 +48,26 @@ async def run_tool_agent(
                         when max_loops is exhausted while the LLM still wants tools.
                         The caller can then decide to summarize, retry, or resume.
     """
+    if not bypass_prism and settings.PRISM_ENABLED and settings.PRISM_AGENT_ROUTING:
+        try:
+            prism_healthy = await llm.prism_client.check_health()
+            if prism_healthy:
+                from app.tools.prism_agent_harness import run_prism_agent
+                logger.info("[Executor] Routing %s agentic loop to Prism /agent", agent_name)
+                return await run_prism_agent(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    ticker=ticker,
+                    agent_name=agent_name,
+                    cycle_id=cycle_id,
+                    bot_id=bot_id,
+                    priority=priority,
+                    tools_override=tools_override,
+                    temperature=0.3,
+                )
+        except Exception as pe:
+            logger.error("[Executor] Prism routing failed for %s, falling back to local: %s", agent_name, pe)
+
     if previous_messages:
         messages = previous_messages.copy()
         # Ensure we don't duplicate user prompts if they're just appending

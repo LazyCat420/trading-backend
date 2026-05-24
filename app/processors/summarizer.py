@@ -141,13 +141,15 @@ async def _summarize_one(
     from app.services.vllm_client import llm, Priority
 
     try:
-        response, tokens, elapsed_ms = await llm.chat(
-            system=system,
-            user=user_text,
+        from app.services.prism_agent_caller import call_prism_agent
+        response, tokens, elapsed_ms = await call_prism_agent(
+            agent_id="CUSTOM_SUMMARIZER_AGENT",
+            user_message=user_text,
+            fallback_system_prompt=system,
+            fallback_agent_name=agent_name,
             max_tokens=512,
             temperature=0.2,
             priority=Priority.LOW,
-            agent_name=agent_name,
             ticker=ticker,
             cycle_id=cycle_id,
         )

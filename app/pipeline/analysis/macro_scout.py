@@ -256,8 +256,9 @@ DATA SNAPSHOT:
 
 
 async def _call_llm_for_memo(data_snapshot: str, emit: Callable) -> str:
-    """Call vLLM to generate the macro strategy memo."""
-    from app.services.vllm_client import llm, Priority
+    """Call Prism /agent (or local vLLM fallback) to generate the macro strategy memo."""
+    from app.services.prism_agent_caller import call_prism_agent
+    from app.services.vllm_client import Priority
 
     system_prompt = (
         "You are a macro strategist. Produce structured analysis. "
@@ -265,13 +266,14 @@ async def _call_llm_for_memo(data_snapshot: str, emit: Callable) -> str:
     )
     user_prompt = MACRO_SCOUT_PROMPT + data_snapshot
 
-    text, tokens, ms = await llm.chat(
-        system=system_prompt,
-        user=user_prompt,
+    text, tokens, ms = await call_prism_agent(
+        agent_id="CUSTOM_MACRO_SCOUT_AGENT",
+        user_message=user_prompt,
+        fallback_system_prompt=system_prompt,
+        fallback_agent_name="macro_scout",
         temperature=0.3,
         max_tokens=2000,
-        priority=Priority.LOW,  # don't block user chat or agents
-        agent_name="macro_scout",
+        priority=Priority.LOW,
     )
 
     logger.info(

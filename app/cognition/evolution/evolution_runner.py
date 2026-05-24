@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from app.db.connection import get_db
 from app.trading.sandbox_executor import run_sandboxed_backtest
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.utils.text_utils import parse_json_response
 
 logger = logging.getLogger(__name__)
@@ -40,12 +41,13 @@ async def generate_strategy_candidates(session_id: str, num_candidates: int = 3)
         user_prompt = f"Design a novel technical trading strategy.\nPrevious outcomes:\n{lesson_text}\n"
 
         for _ in range(num_candidates):
-            response, _, _ = await llm.chat(
-                system=EVOLUTION_SYSTEM_PROMPT,
-                user=user_prompt,
+            response, _, _ = await call_prism_agent(
+                agent_id="CUSTOM_EVO_GENERATOR_AGENT",
+                user_message=user_prompt,
+                fallback_system_prompt=EVOLUTION_SYSTEM_PROMPT,
+                fallback_agent_name="evo_generator",
                 temperature=0.8,
                 priority=Priority.LOW,
-                agent_name="evo_generator"
             )
             parsed = parse_json_response(response)
             if "code" in parsed:

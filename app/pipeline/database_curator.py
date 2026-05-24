@@ -16,6 +16,7 @@ from typing import Callable
 
 from app.db.connection import get_db
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.utils.pipeline_utils import noop as _noop
 
 logger = logging.getLogger(__name__)
@@ -32,13 +33,14 @@ async def generate_summary(text: str, source_type: str, max_words: int = 100) ->
     sys_prompt = f"You are a strict data curator for a quantitative trading system. {CURATOR_PROMPT_MAP.get(source_type, 'Summarize this context.')} Do not exceed {max_words} words."
     try:
         summary, _, _ = await asyncio.wait_for(
-            llm.chat(
-                system=sys_prompt,
-                user=text,
+            call_prism_agent(
+                agent_id="CUSTOM_DATA_CURATOR_AGENT",
+                user_message=text,
+                fallback_system_prompt=sys_prompt,
+                fallback_agent_name="data_curator",
                 temperature=0.2,
                 max_tokens=256,
                 priority=Priority.LOW,
-                agent_name="data_curator",
             ),
             timeout=90.0,
         )

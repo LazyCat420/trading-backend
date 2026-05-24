@@ -8,6 +8,7 @@ import uuid
 from typing import Any
 
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 from app.db.connection import get_db
 
 logger = logging.getLogger(__name__)
@@ -75,11 +76,12 @@ async def reflect_on_trajectory(
 
         user_prompt = f"### TRAJECTORY\n{trajectory_text}\n\n### EXTRACTED LESSON:"
 
-        response_text, tokens, ms = await llm.chat(
-            system=system_prompt,
-            user=user_prompt,
-            priority=Priority.LOW,  # Run in background without blocking core trading
-            agent_name="reflector",
+        response_text, tokens, ms = await call_prism_agent(
+            agent_id="CUSTOM_REFLECTOR_AGENT",
+            user_message=user_prompt,
+            fallback_system_prompt=system_prompt,
+            fallback_agent_name="reflector",
+            priority=Priority.LOW,
             ticker=ticker,
             cycle_id=cycle_id,
             bot_id="system",

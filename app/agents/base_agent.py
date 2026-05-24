@@ -120,13 +120,15 @@ async def _generate_dynamic_prompt(
             retries=2, backoff="exponential", base_delay=1.0, max_delay=10.0
         )
         async def _meta_llm_call():
-            return await llm.chat(
-                system=AGENT_META_SYSTEM,
-                user=meta_user,
+            from app.services.prism_agent_caller import call_prism_agent
+            return await call_prism_agent(
+                agent_id=f"CUSTOM_{agent_name.upper()}_META",
+                user_message=meta_user,
+                fallback_system_prompt=AGENT_META_SYSTEM,
+                fallback_agent_name=f"{agent_name}_meta",
                 temperature=0.5,
                 max_tokens=2048,
                 priority=Priority.NORMAL,
-                agent_name=f"{agent_name}_meta",
                 ticker=ticker,
                 cycle_id=cycle_id,
                 bot_id=bot_id,
@@ -296,7 +298,7 @@ async def run_agent(
         agent_tools = get_agent_tools(agent_name) if enable_tools else None
 
         # Try routing via Prism agent harness first if routing is enabled and healthy
-        if enable_tools and settings.PRISM_ENABLED and settings.PRISM_AGENT_ROUTING:
+        if settings.PRISM_ENABLED and settings.PRISM_AGENT_ROUTING:
             try:
                 prism_healthy = await llm.prism_client.check_health()
                 if prism_healthy:

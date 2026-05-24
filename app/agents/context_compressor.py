@@ -131,13 +131,15 @@ async def compress_history(
     )
 
     try:
-        summary_response, _, _ = await llm.chat(
-            system="You are a context compression engine. Summarize facts densely.",
-            user=summary_prompt,
+        from app.services.prism_agent_caller import call_prism_agent
+        summary_response, _, _ = await call_prism_agent(
+            agent_id="CUSTOM_CONTEXT_COMPRESSOR_AGENT",
+            user_message=summary_prompt,
+            fallback_system_prompt="You are a context compression engine. Summarize facts densely.",
+            fallback_agent_name="context_compressor",
             temperature=0.1,
             max_tokens=1000,
             priority=Priority.NORMAL,
-            agent_name="context_compressor",
         )
 
         compressed_msg = {

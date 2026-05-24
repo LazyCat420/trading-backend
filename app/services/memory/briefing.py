@@ -89,12 +89,14 @@ Example output:
 {{"brief_text": "## MEMORY BRIEF\\n- Rule: Never short before earnings\\n- TSLA Pattern: High volatility near resistance... "}}
 """
     try:
-        response, tokens_used, _ = await llm.chat(
-            system="You are a strict JSON data summarizer.",
-            user=prompt,
+        from app.services.prism_agent_caller import call_prism_agent
+        response, tokens_used, _ = await call_prism_agent(
+            agent_id="CUSTOM_MEMORY_BRIEFER_AGENT",
+            user_message=prompt,
+            fallback_system_prompt="You are a strict JSON data summarizer.",
+            fallback_agent_name="memory_briefer",
             temperature=0.0,
             max_tokens=600,
-            agent_name="memory_briefer",
             priority=Priority.HIGH,
         )
 

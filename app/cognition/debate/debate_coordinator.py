@@ -391,6 +391,34 @@ async def _run_biased_agent(
     if allowed_tools is None:
         allowed_tools = registry.schemas
 
+    # ── Try Prism /agent routing first ──
+    from app.config import settings
+    if settings.PRISM_ENABLED and settings.PRISM_AGENT_ROUTING:
+        try:
+            prism_healthy = await llm.prism_client.check_health()
+            if prism_healthy:
+                from app.tools.prism_agent_harness import run_prism_agent
+                logger.info("[Debate] Routing %s agentic loop to Prism /agent", agent_name)
+                result = await run_prism_agent(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    ticker=entity_id,
+                    agent_name=agent_name,
+                    cycle_id=cycle_id,
+                    bot_id=bot_id,
+                    priority=Priority.NORMAL,
+                    tools_override=allowed_tools,
+                    temperature=LLM_TEMPERATURES.get(agent_name, 0.4),
+                    max_tokens=4096,
+                )
+                return (
+                    result.get("final_text", "").strip(),
+                    result.get("token_usage", 0),
+                    [],  # tool_history is not populated for Prism-delegated runs
+                )
+        except Exception as pe:
+            logger.error("[Debate] Prism routing failed for %s, falling back to local: %s", agent_name, pe)
+
     try:
         max_tool_turns = cognition_settings.DEBATE_MAX_TOOL_TURNS
         for turn_idx in range(max_tool_turns):  # Configurable tool-calling turns
@@ -1376,13 +1404,15 @@ async def run_adversarial_debate(
         critic_user = f"BULL CLAIMS REJECTED: {unverified_bull}\nBEAR CLAIMS REJECTED: {unverified_bear}\n\nCROSS EXAM FINDINGS: {cross_findings}\n\nWrite a strict, short critique for the Bull and Bear telling them what data they hallucinated and that they must use tools."
 
         try:
-            critic_res, _, _ = await llm.chat(
-                system=critic_sys,
-                user=critic_user,
+            from app.services.prism_agent_caller import call_prism_agent
+            critic_res, _, _ = await call_prism_agent(
+                agent_id="CUSTOM_DEBATE_CRITIC_AGENT",
+                user_message=critic_user,
+                fallback_system_prompt=critic_sys,
+                fallback_agent_name="debate_critic",
                 temperature=0.2,
                 max_tokens=256,
                 priority=Priority.NORMAL,
-                agent_name="debate_critic",
                 ticker=ticker,
                 cycle_id=cycle_id,
                 bot_id=bot_id,

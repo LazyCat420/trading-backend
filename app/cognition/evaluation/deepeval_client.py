@@ -1,6 +1,7 @@
 import asyncio
 from deepeval.models import DeepEvalBaseLLM
 from app.services.vllm_client import llm, Priority
+from app.services.prism_agent_caller import call_prism_agent
 
 
 class VLLMDeepEvalWrapper(DeepEvalBaseLLM):
@@ -31,13 +32,14 @@ class VLLMDeepEvalWrapper(DeepEvalBaseLLM):
     async def a_generate(self, prompt: str) -> str:
         """Asynchronous generate for DeepEval."""
         from app.utils.text_utils import strip_think_tags
-        response, _, _ = await llm.chat(
-            system="You are an expert impartial evaluator determining factual alignment.",
-            user=prompt,
+        response, _, _ = await call_prism_agent(
+            agent_id="CUSTOM_DEEPEVAL_JUDGE_AGENT",
+            user_message=prompt,
+            fallback_system_prompt="You are an expert impartial evaluator determining factual alignment.",
+            fallback_agent_name="deepeval_judge",
             temperature=0.0,
             max_tokens=2048,
-            priority=Priority.HIGH,  # Evaluators need high priority so they don't block
-            agent_name="deepeval_judge",
+            priority=Priority.HIGH,
         )
         return strip_think_tags(response)
 

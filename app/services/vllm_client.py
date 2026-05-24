@@ -1416,7 +1416,11 @@ class VLLMClient:
             )
             elapsed_ms = int((time.monotonic() - start) * 1000)
             data = r.json()
-            content = data.get("text") or ""
+            response_data = data.get("response")
+            if isinstance(response_data, dict):
+                data = response_data
+
+            content = data.get("text") or data.get("content") or ""
             thinking = data.get("thinking") or ""
             if thinking:
                 meta["_think_content"] = thinking

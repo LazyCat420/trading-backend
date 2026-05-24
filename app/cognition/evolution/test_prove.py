@@ -97,18 +97,20 @@ async def _validate_prompt(
     tests_run += 1
     try:
         from app.services.vllm_client import llm, Priority
+        from app.services.prism_agent_caller import call_prism_agent
 
         test_user = (
             "Given the stock ticker AAPL, provide a brief analysis. "
             "Output valid JSON with keys: action, confidence, reasoning."
         )
-        response, tokens, elapsed = await llm.chat(
-            system=proposed_fix[:2000],  # Use the proposed prompt as system
-            user=test_user,
+        response, tokens, elapsed = await call_prism_agent(
+            agent_id="CUSTOM_EVO_TEST_PROVE_AGENT",
+            user_message=test_user,
+            fallback_system_prompt=proposed_fix[:2000],
+            fallback_agent_name="evo_test_prove",
             temperature=0.1,
             max_tokens=512,
             priority=Priority.LOW,
-            agent_name="evo_test_prove",
             ticker="_test",
         )
 
