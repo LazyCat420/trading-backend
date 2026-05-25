@@ -14,7 +14,7 @@ import pytest
 @pytest.mark.parametrize("agent_name, enable_tools, expected_turns", [
     ("risk", True, 5),          # Needs room for calculator tools
     ("verifier", True, 5),      # Extra turns for verification
-    ("retriever", True, 5),     # Extra turns for data gathering
+    ("retriever", True, 8),     # Extra turns for data gathering
     ("pre_trade", True, 12),    # Full calculator chain + buy
     ("meta_audit", True, 10),   # Deep audit cycle
     ("sentiment", True, 3),     # Not overridden, default

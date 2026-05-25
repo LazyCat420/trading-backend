@@ -1,8 +1,1 @@
-## LESSON: Model Output Validation & Data Freshness Protocol
-
-**Problem**: TMO analysis failed 4+ consecutive cycles due to empty LLM response after JSON parsing. System stuck in 0-confidence HOLD loop with 30+ hour stale data.
-
-**Root Cause**: No validation layer between model output and decision engine. Stale data fallbacks being used without triggering alerts.
-
-**Action Items**:
-1. **Add output
+[LRMR] [LOW] RSI < 35 + Net Income < 0 + Revenue = 0 = speculative hold; wait for bounce above 20-day SMA ($3.92) before entry.

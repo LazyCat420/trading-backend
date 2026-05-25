@@ -14,17 +14,17 @@ async def test_data_janitor_future_earnings():
     context = "CURRENT DATE: 2026-05-14\nCONTEXT: The user's active portfolio/watchlist currently tracks these tickers: NVDA. News related to these companies is HIGHLY RELEVANT."
 
     # Mock the LLM to simulate behavior
-    with patch("app.pipeline.data.data_janitor.llm") as mock_llm:
+    with patch("app.pipeline.data.data_janitor.call_prism_agent") as mock_prism:
         # Mock responses
         # Attempt 1: Janitor says relevant, confidence 80 (so critic is called)
         janitor_res = '{"status": "relevant", "reason": "Future guidance", "confidence": 80}'
         # Critic says VALID
         critic_res = '{"verdict": "VALID", "critique": ""}'
         
-        mock_llm.chat = AsyncMock(side_effect=[
+        mock_prism.side_effect = [
             (janitor_res, 100, 100),
             (critic_res, 100, 100)
-        ])
+        ]
         
         result = await evaluate_relevance(future_text, context)
         
@@ -32,13 +32,13 @@ async def test_data_janitor_future_earnings():
         assert result["confidence"] == 80
         
         # Verify prompts had CURRENT DATE
-        calls = mock_llm.chat.call_args_list
+        calls = mock_prism.call_args_list
         assert len(calls) == 2
         
         # Janitor call
         janitor_call = calls[0]
-        assert "CURRENT DATE: 2026-05-14" in janitor_call.kwargs["user"]
+        assert "CURRENT DATE: 2026-05-14" in janitor_call.kwargs["user_message"]
         
         # Critic call
         critic_call = calls[1]
-        assert "CURRENT DATE: 2026-05-14" in critic_call.kwargs["user"]
+        assert "CURRENT DATE: 2026-05-14" in critic_call.kwargs["user_message"]

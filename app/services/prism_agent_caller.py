@@ -130,9 +130,15 @@ async def _call_via_prism(
     # from defaulting to the Jetson endpoint, which causes execution failures.
     provider = llm.resolve_provider_for_model(model)
 
+    messages = []
+    if provider and (provider.startswith("vllm") or provider in ("lm-studio", "lm_studio", "llama-cpp", "llama_cpp")):
+        if fallback_system_prompt:
+            messages.append({"role": "system", "content": fallback_system_prompt})
+    messages.append({"role": "user", "content": user_message})
+
     payload, url, headers = llm.prism_client.get_chat_payload_and_url(
         model=model,
-        messages=[{"role": "user", "content": user_message}],
+        messages=messages,
         max_tokens=max_tokens,
         temperature=temperature,
         system_prompt=fallback_system_prompt,

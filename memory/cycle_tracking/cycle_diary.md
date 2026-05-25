@@ -177,3 +177,7 @@
 ## **Recommendation: HOLD**
 **Action:** Maintain current position (5.5755 shares). Do not add to the...
 
+## 2026-05-25 07:31:23 - LRMR
+- **Action:** HOLD @ 45%
+- **Rationale:** While the 'Risk-On' macro regime generally supports equities, LRMR shows no fundamental earnings support with 'net_income: -166004992.0' and 'revenue: 0.0', making it a speculative hold rather than a ...
+

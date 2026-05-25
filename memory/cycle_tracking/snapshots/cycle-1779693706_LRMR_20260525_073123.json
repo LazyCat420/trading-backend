@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 45,
+  "rationale": "While the 'Risk-On' macro regime generally supports equities, LRMR shows no fundamental earnings support with 'net_income: -166004992.0' and 'revenue: 0.0', making it a speculative hold rather than a growth investment. Technically, the 'rsi_14: 34.94763642790569' indicates the stock is oversold and not overbought, satisfying the BUY requirement of RSI < 65, but the lack of a confirmed reversal or thesis confirmation after 2 days suggests waiting for a bounce above the 20-day SMA ($3.92) before a",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

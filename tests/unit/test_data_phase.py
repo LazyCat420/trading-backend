@@ -41,7 +41,7 @@ async def test_data_phase_concurrency_order():
          patch("app.pipeline.data.data_janitor.run_data_janitor", return_value={}), \
          patch("asyncio.create_task", side_effect=mock_create_task) as mock_ct:
 
-        await run(tickers=["AAPL"], max_tickers=10)
+        await run(tickers=["AAPL", "MSFT"], max_tickers=10)
 
     # Verify that the tasks were created before the global collection was executed
     assert "curation_task_created" in execution_order
