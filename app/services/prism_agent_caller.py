@@ -32,6 +32,7 @@ async def call_prism_agent(
     ticker: str = "",
     cycle_id: str = "",
     bot_id: str = "",
+    agentic_mode: bool = False,
 ) -> tuple[str, int, int]:
     """Route an LLM call through Prism /agent or fall back to local llm.chat().
 
@@ -73,6 +74,7 @@ async def call_prism_agent(
                     max_tokens=max_tokens,
                     ticker=ticker,
                     cycle_id=cycle_id,
+                    agentic_mode=agentic_mode,
                 )
         except Exception as e:
             logger.warning(
@@ -108,6 +110,7 @@ async def _call_via_prism(
     max_tokens: int,
     ticker: str,
     cycle_id: str,
+    agentic_mode: bool = False,
 ) -> tuple[str, int, int]:
     """Execute the actual Prism /agent call.
 
@@ -138,7 +141,7 @@ async def _call_via_prism(
         cycle_id=cycle_id,
         enable_thinking=False,
         tools=None,
-        agentic_mode=True,
+        agentic_mode=agentic_mode,
         provider=provider,
     )
     payload["autoApprove"] = True
