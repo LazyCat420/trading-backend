@@ -8,17 +8,14 @@ def _make_client():
     with patch("app.services.vllm_client.settings") as mock_settings:
         mock_settings.JETSON_VLLM_URL = "http://10.0.0.30:8000"
         mock_settings.DGX_SPARK_VLLM_URL = "http://10.0.0.141:8000"
-        mock_settings.DGX_SPARK_2_VLLM_URL = "http://10.0.0.103:8000"
         mock_settings.JETSON_MAX_CONCURRENT = 10
         mock_settings.DGX_MAX_CONCURRENT = 10
-        mock_settings.DGX_SPARK_2_MAX_CONCURRENT = 10
         mock_settings.ACTIVE_MODEL = "qwen-3.5-7b"
         mock_settings.PRISM_AGENT_ROUTING = False
         mock_settings.BATCH_TIMEOUT = 10.0
         mock_settings.BATCH_CIRCUIT_BREAKER_THRESHOLD = 3
         mock_settings.JETSON_BATCH_SIZE = 10
         mock_settings.DGX_BATCH_SIZE = 10
-        mock_settings.DGX_SPARK_2_BATCH_SIZE = 10
         mock_settings.VLLM_FUTURE_TIMEOUT = 60
         client = VLLMClient()
     
@@ -120,9 +117,6 @@ async def test_balanced_routing():
     client._endpoints["dgx_spark"].max_concurrent = 5
     client._endpoints["dgx_spark"].init_concurrency()
     
-    # Disable 3rd endpoint
-    client._endpoints["dgx_spark_2"].enabled = False
-    
     client._roles_discovered = True
     
     # Mock execute_item to simulate a slow response
@@ -164,9 +158,6 @@ async def test_parameter_size_routing():
     client._endpoints["dgx_spark"].max_concurrent = 5
     client._endpoints["dgx_spark"].init_concurrency()
     
-    # Disable DGX Spark 2
-    client._endpoints["dgx_spark_2"].enabled = False
-    
     client._roles_discovered = True
     
     # 1. 'predict_quant_26B' contains '26B' -> closest model size is 35B (Jetson)
@@ -183,8 +174,8 @@ async def test_parameter_size_routing():
 
 
 @pytest.mark.asyncio
-async def test_qwen_35b_and_msi_spark_routing_rules():
-    """Verify that cyankiwi 35B models force Jetson routing, and MSI Spark resolves to Gold Spark."""
+async def test_qwen_35b_routing_rules():
+    """Verify that cyankiwi 35B models force Jetson routing, and heavy models resolve to Gold Spark."""
     client, mock_http = _make_client()
     
     # Enable all endpoints
@@ -194,18 +185,15 @@ async def test_qwen_35b_and_msi_spark_routing_rules():
     client._endpoints["dgx_spark"].enabled = True
     client._endpoints["dgx_spark"].model = "Qwen/Qwen3.5-122B-A10B-FP8"
     
-    client._endpoints["dgx_spark_2"].enabled = True
-    client._endpoints["dgx_spark_2"].model = "cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit"
-    
     client._roles_discovered = True
 
     # 1. Verify resolving cyankiwi model provider always returns "vllm" (Jetson)
     assert client.resolve_provider_for_model("cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit") == "vllm"
     assert client.resolve_provider_for_model("Qwen3.6-35B") == "vllm"
 
-    # 2. Verify MSI Spark URL resolving maps to "vllm-3" (Gold Spark)
-    client._endpoints["dgx_spark_2"].model = "some-other-heavy-model"
-    assert client.resolve_provider_for_model("some-other-heavy-model") == "vllm-3"
+    # 2. Verify Gold Spark URL resolving maps to "vllm-2" (Gold Spark)
+    client._endpoints["dgx_spark"].model = "some-other-heavy-model"
+    assert client.resolve_provider_for_model("some-other-heavy-model") == "vllm-2"
 
     # 3. Verify pick best endpoint forces Jetson for cyankiwi
     best_ep = client._pick_best_endpoint(requested_model="cyankiwi/Qwen3.6-35B-A3B-AWQ-4bit")

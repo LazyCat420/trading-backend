@@ -58,7 +58,20 @@ async def test_run_adversarial_debate_persistence(patch_llm, patch_get_db, mock_
             packet=packet,
             cycle_id="cycle_123",
             bot_id="bot_abc",
-            position_context={"held": True}
+            position_context={
+                "held": True,
+                "qty": 10,
+                "avg_entry": 150.00,
+                "current_price": 160.00,
+                "unrealized_pnl": 100.00,
+                "unrealized_pnl_pct": 6.67,
+                "holding_days": 14,
+                "stop_loss_pct": 8.0,
+                "stop_price": 138.00,
+                "original_thesis": "Bullish breakout",
+                "original_thesis_date": "2026-05-10",
+                "original_thesis_conf": 85,
+            }
         )
         
     assert result.judge_action == "HOLD"

@@ -80,26 +80,25 @@ async def test_pipeline_abort_mid_analysis():
     
     with patch("app.services.vllm_client.settings.JETSON_MAX_CONCURRENT", 10):
         with patch("app.services.vllm_client.settings.DGX_MAX_CONCURRENT", 10):
-            with patch("app.services.vllm_client.settings.DGX_SPARK_2_MAX_CONCURRENT", 10):
-                client = VLLMClient()
+            client = VLLMClient()
                 
-                # Test that new pipeline requests are rejected after stop
-                with patch("app.pipeline.orchestration.cycle_control.cycle_control", control):
-                    with pytest.raises(asyncio.CancelledError, match="Pipeline stopped"):
-                        await client.chat(
-                            system="system",
-                            user="user",
-                            priority=Priority.NORMAL  # Normal priority is rejected when stopped
-                        )
-                        
-                    # Mock discover_roles to raise the expected error to avoid hitting live servers
-                    client.discover_roles = AsyncMock(side_effect=RuntimeError("All configured vLLM endpoints failed to respond"))
+            # Test that new pipeline requests are rejected after stop
+            with patch("app.pipeline.orchestration.cycle_control.cycle_control", control):
+                with pytest.raises(asyncio.CancelledError, match="Pipeline stopped"):
+                    await client.chat(
+                        system="system",
+                        user="user",
+                        priority=Priority.NORMAL  # Normal priority is rejected when stopped
+                    )
                     
-                    # Test that user chat (HIGH priority) is still allowed through the gate!
-                    # (It will fail in _pick_best_endpoint because no endpoints, but it passes the gate)
-                    with pytest.raises(RuntimeError, match="All configured vLLM endpoints failed to respond"):
-                        await client.chat(
-                            system="system",
-                            user="user",
-                            priority=Priority.HIGH  # High priority bypasses the stop gate
-                        )
+                # Mock discover_roles to raise the expected error to avoid hitting live servers
+                client.discover_roles = AsyncMock(side_effect=RuntimeError("All configured vLLM endpoints failed to respond"))
+                
+                # Test that user chat (HIGH priority) is still allowed through the gate!
+                # (It will fail in _pick_best_endpoint because no endpoints, but it passes the gate)
+                with pytest.raises(RuntimeError, match="All configured vLLM endpoints failed to respond"):
+                    await client.chat(
+                        system="system",
+                        user="user",
+                        priority=Priority.HIGH  # High priority bypasses the stop gate
+                    )

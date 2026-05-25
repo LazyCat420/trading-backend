@@ -9,17 +9,14 @@ from app.services.vllm_client import VLLMClient, Priority
 def mocked_vllm_cb(monkeypatch):
     monkeypatch.setattr("app.services.vllm_client.settings.JETSON_VLLM_URL", "http://10.0.0.30:8000")
     monkeypatch.setattr("app.services.vllm_client.settings.DGX_SPARK_VLLM_URL", "http://10.0.0.141:8000")
-    monkeypatch.setattr("app.services.vllm_client.settings.DGX_SPARK_2_VLLM_URL", "http://10.0.0.103:8000")
     monkeypatch.setattr("app.services.vllm_client.settings.JETSON_MAX_CONCURRENT", 10)
     monkeypatch.setattr("app.services.vllm_client.settings.DGX_MAX_CONCURRENT", 10)
-    monkeypatch.setattr("app.services.vllm_client.settings.DGX_SPARK_2_MAX_CONCURRENT", 10)
     monkeypatch.setattr("app.services.vllm_client.settings.ACTIVE_MODEL", "test-model")
     monkeypatch.setattr("app.services.vllm_client.settings.PRISM_AGENT_ROUTING", False)
     monkeypatch.setattr("app.services.vllm_client.settings.BATCH_TIMEOUT", 5.0)
     monkeypatch.setattr("app.services.vllm_client.settings.BATCH_CIRCUIT_BREAKER_THRESHOLD", 3)
     monkeypatch.setattr("app.services.vllm_client.settings.JETSON_BATCH_SIZE", 10)
     monkeypatch.setattr("app.services.vllm_client.settings.DGX_BATCH_SIZE", 10)
-    monkeypatch.setattr("app.services.vllm_client.settings.DGX_SPARK_2_BATCH_SIZE", 10)
     monkeypatch.setattr("app.services.vllm_client.settings.VLLM_FUTURE_TIMEOUT", 60.0)
     
     client = VLLMClient()

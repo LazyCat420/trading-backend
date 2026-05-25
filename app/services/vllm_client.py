@@ -129,6 +129,19 @@ def _parse_parameter_size(model_id: str) -> float | None:
     return None
 
 
+def _url_to_prism_provider(url: str | None) -> str:
+    """Resolve the canonical Prism provider name ('vllm', 'vllm-2')
+    based on the endpoint URL (10.0.0.30 -> vllm, 10.0.0.141 -> vllm-2).
+    """
+    if not url:
+        return "vllm"
+    if "10.0.0.30" in url:
+        return "vllm"
+    if "10.0.0.141" in url:
+        return "vllm-2"
+    return "vllm"
+
+
 
 
 # ── Priority Levels ────────────────────────────────────────────────────
@@ -346,20 +359,6 @@ class VLLMClient:
             ep.init_concurrency(self.RESERVED_HIGH_SLOTS)
             self._endpoints["dgx_spark"] = ep
 
-        if settings.DGX_SPARK_2_VLLM_URL:
-            is_enabled = not getattr(settings, "DISREGARD_MSI_SPARK", False)
-            ep = VLLMEndpoint(
-                name="dgx_spark_2",
-                url=settings.DGX_SPARK_2_VLLM_URL,
-                role="analyst",
-                max_concurrent=settings.DGX_SPARK_2_MAX_CONCURRENT,
-                purpose="Deep analysis, RLM decisions, debate engine",
-                batch_size=settings.DGX_SPARK_2_BATCH_SIZE,
-                enabled=is_enabled,
-            )
-            ep.init_concurrency(self.RESERVED_HIGH_SLOTS)
-            self._endpoints["dgx_spark_2"] = ep
-
         # ── Prism gateway ──
         self.prism_client = PrismClient()
 
@@ -414,10 +413,10 @@ class VLLMClient:
         import re
 
         # CRITICAL: Force Qwen 35B / cyankiwi models to route strictly to Jetson Orin AGX 64GB
-        if requested_model and ("cyankiwi" in requested_model.lower() or "qwen3.6-35b" in requested_model.lower()):
+        if requested_model and ("cyankiwi" in requested_model.lower() or "qwen3.6-35b" in requested_model.lower() or "35b" in requested_model.lower()):
             jetson_ep = self._endpoints.get("jetson")
             if jetson_ep and jetson_ep.enabled:
-                logger.info("[VLLM] Forcing Jetson Orin AGX 64GB routing for cyankiwi model: %s", requested_model)
+                logger.info("[VLLM] Forcing Jetson Orin AGX 64GB routing for 35B model: %s", requested_model)
                 return jetson_ep
 
         # Step 1: All endpoints with models loaded
@@ -970,16 +969,7 @@ class VLLMClient:
                         self.prism_client.agent,
                     )
                     # Determine target provider ID on Prism side based on endpoint URL
-                    prism_provider = "vllm"
-                    if ep and ep.url:
-                        url_str = ep.url.rstrip('/')
-                        if "10.0.0.30" in url_str:
-                            prism_provider = "vllm"
-                        elif "10.0.0.103" in url_str:
-                            # MSI Spark is clustered to Gold Spark, default to Gold Spark (vllm-3)
-                            prism_provider = "vllm-3"
-                        elif "10.0.0.141" in url_str:
-                            prism_provider = "vllm-3"
+                    prism_provider = _url_to_prism_provider(ep.url if ep else None)
 
                     content, total_tokens, elapsed_ms = await self._call_prism_agent(
                         client, item.payload, meta, start, provider=prism_provider
@@ -1272,7 +1262,7 @@ class VLLMClient:
         silently defaulting to an endpoint.
         """
         # CRITICAL: Force Qwen 35B / cyankiwi models to route strictly to Jetson Orin AGX 64GB
-        if model_id and ("cyankiwi" in model_id.lower() or "qwen3.6-35b" in model_id.lower()):
+        if model_id and ("cyankiwi" in model_id.lower() or "qwen3.6-35b" in model_id.lower() or "35b" in model_id.lower()):
             jetson_ep = self._endpoints.get("jetson")
             if jetson_ep and jetson_ep.enabled:
                 logger.info("[VLLM] Forcing Jetson Orin AGX 64GB routing for model resolution: %s", model_id)
@@ -2849,44 +2839,35 @@ class VLLMClient:
     # Changing them will break the agent routing, causing 122B requests to be sent to Jetson and fail.
 
     def resolve_provider_for_model(self, model: str) -> str:
-        """Resolve the canonical Prism provider name ('vllm', 'vllm-2', 'vllm-3')
+        """Resolve the canonical Prism provider name ('vllm', 'vllm-2')
         based on which active endpoint hosts the given model.
         """
-        # CRITICAL: Qwen 35B / cyankiwi models must ALWAYS route to Jetson Orin AGX 64GB
-        model_lower = model.lower() if model else ""
-        if "cyankiwi" in model_lower or "qwen3.6-35b" in model_lower:
-            return "vllm"
-
-        # Find endpoint hosting the model
+        # Find endpoint hosting the model by reading model from active endpoints
         for ep in self._endpoints.values():
             if ep.enabled and ep.model == model:
-                if "10.0.0.30" in ep.url:
-                    return "vllm"
-                elif "10.0.0.103" in ep.url:
-                    # MSI Spark is clustered to Gold Spark, default to Gold Spark (vllm-3)
-                    return "vllm-3"
-                elif "10.0.0.141" in ep.url:
-                    return "vllm-3"
-                    
-        # Fallback to dynamic URL lookup in all endpoints (enabled or not)
+                return _url_to_prism_provider(ep.url)
+
+        # Fallback: check all endpoints (enabled or not)
         for ep in self._endpoints.values():
             if ep.model == model:
-                if "10.0.0.30" in ep.url:
-                    return "vllm"
-                elif "10.0.0.103" in ep.url:
-                    # MSI Spark is clustered to Gold Spark, default to Gold Spark (vllm-3)
-                    return "vllm-3"
-                elif "10.0.0.141" in ep.url:
-                    return "vllm-3"
+                return _url_to_prism_provider(ep.url)
 
-        # Safe defaults based on model size or string match
-        if "122b" in model_lower or "120b" in model_lower:
-            # Gold Spark hosts the heavy models
-            return "vllm-3"
-        elif "35b" in model_lower:
+        # Fallback to model-to-endpoint-name cache populated by discover_roles()
+        if model and model in self._model_endpoint_cache:
+            ep_name = self._model_endpoint_cache[model]
+            ep = self._endpoints.get(ep_name)
+            if ep:
+                return _url_to_prism_provider(ep.url)
+
+        # Heuristic fallback (guessing based on model size/names) only if not found on endpoints
+        model_lower = model.lower() if model else ""
+        if "cyankiwi" in model_lower or "qwen3.6-35b" in model_lower or "35b" in model_lower:
             # Jetson hosts the 35B models
             return "vllm"
-            
+        elif "122b" in model_lower or "120b" in model_lower:
+            # Gold Spark hosts the heavy models
+            return "vllm-2"
+
         return "vllm"
 
     def _resolve_model(self, agent_name: str) -> str:

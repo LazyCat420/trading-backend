@@ -102,6 +102,9 @@ async def execute_decisions(
         [p["ticker"] for p in portfolio.get("positions", [])],
     )
 
+    from app.cycle.orchestration.cycle_control import cycle_control
+    await cycle_control.wait_if_paused()
+
     # ── Call Portfolio Sizing Agent to allocate capital across all proposed BUYs as a batch ──
     allocations_map = {}
     try:

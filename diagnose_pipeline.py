@@ -190,7 +190,6 @@ async def main():
     endpoints = [
         ("Jetson", settings.JETSON_VLLM_URL),
         ("DGX Spark", settings.DGX_SPARK_VLLM_URL),
-        ("DGX Spark 2", settings.DGX_SPARK_2_VLLM_URL),
     ]
     for name, url in endpoints:
         result = await check_vllm_endpoint(name, url)

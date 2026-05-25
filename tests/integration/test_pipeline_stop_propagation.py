@@ -33,7 +33,8 @@ async def test_trading_phase_aborts_on_stop(cycle_control):
     cycle_control.stop()
 
     with patch("app.pipeline.orchestration.cycle_control.cycle_control", cycle_control), \
-         patch("app.cycle.orchestration.cycle_control.cycle_control", cycle_control):
+         patch("app.cycle.orchestration.cycle_control.cycle_control", cycle_control), \
+         patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
         # Mock at the TARGET module since it imports at the top
         with patch("app.pipeline.trading_phase.get_portfolio", return_value={
             "cash": 100000, "positions": [], "position_count": 0
@@ -57,7 +58,8 @@ async def test_trading_phase_executes_zero_trades_on_stop(cycle_control):
     cycle_control.stop()
 
     with patch("app.pipeline.orchestration.cycle_control.cycle_control", cycle_control), \
-         patch("app.cycle.orchestration.cycle_control.cycle_control", cycle_control):
+         patch("app.cycle.orchestration.cycle_control.cycle_control", cycle_control), \
+         patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
         with patch("app.pipeline.trading_phase.get_portfolio") as mock_portfolio:
             mock_portfolio.return_value = {
                 "cash": 100000, "positions": [], "position_count": 0
@@ -95,7 +97,9 @@ async def test_trading_phase_stops_mid_batch():
 
     with patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc:
         mock_cc.wait_if_paused = AsyncMock(side_effect=mock_wait_if_paused)
-        with patch("app.pipeline.orchestration.cycle_control.cycle_control", mock_cc):
+        mock_cc.is_stopped = False
+        with patch("app.pipeline.orchestration.cycle_control.cycle_control", mock_cc), \
+             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
             with patch("app.pipeline.trading_phase.get_portfolio", return_value={
                 "cash": 100000, "positions": [], "position_count": 0
             }):

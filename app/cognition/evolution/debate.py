@@ -27,24 +27,17 @@ logger = logging.getLogger(__name__)
 
 class EvolutionDebateCouncil:
     def __init__(self):
-        # The 3 primary hardware endpoints
-        self.endpoints = ["jetson", "dgx_spark", "dgx_spark_2"]
+        # The primary hardware endpoints
+        self.endpoints = ["jetson", "dgx_spark"]
 
     def _get_rotation_schedule(self) -> list[dict[str, str]]:
-        """Build a deterministic 3-round rotation so every box plays every role.
-
-        Round 1: [A=Proposer, B=Critic,   C=Judge]
-        Round 2: [B=Proposer, C=Critic,   A=Judge]
-        Round 3: [C=Proposer, A=Critic,   B=Judge]
-
-        The starting order is shuffled once so the first Proposer varies each debate.
+        """Build a deterministic 3-round rotation across available endpoints.
+        Since only 2 endpoints are available, we rotate roles using fallback duplication.
         """
-        order = self.endpoints.copy()
-        random.shuffle(order)
         return [
-            {"proposer": order[0], "critic": order[1], "judge": order[2]},
-            {"proposer": order[1], "critic": order[2], "judge": order[0]},
-            {"proposer": order[2], "critic": order[0], "judge": order[1]},
+            {"proposer": "jetson", "critic": "dgx_spark", "judge": "dgx_spark"},
+            {"proposer": "dgx_spark", "critic": "jetson", "judge": "dgx_spark"},
+            {"proposer": "dgx_spark", "critic": "dgx_spark", "judge": "jetson"},
         ]
 
     async def run_debate(

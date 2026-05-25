@@ -9,17 +9,14 @@ from app.services.vllm_client import VLLMClient, Priority
 def mocked_vllm(monkeypatch):
     monkeypatch.setattr("app.services.vllm_client.settings.JETSON_VLLM_URL", "http://10.0.0.30:8000")
     monkeypatch.setattr("app.services.vllm_client.settings.DGX_SPARK_VLLM_URL", "http://10.0.0.141:8000")
-    monkeypatch.setattr("app.services.vllm_client.settings.DGX_SPARK_2_VLLM_URL", "http://10.0.0.103:8000")
     monkeypatch.setattr("app.services.vllm_client.settings.JETSON_MAX_CONCURRENT", 5)
     monkeypatch.setattr("app.services.vllm_client.settings.DGX_MAX_CONCURRENT", 5)
-    monkeypatch.setattr("app.services.vllm_client.settings.DGX_SPARK_2_MAX_CONCURRENT", 5)
     monkeypatch.setattr("app.services.vllm_client.settings.ACTIVE_MODEL", "test-model")
     monkeypatch.setattr("app.services.vllm_client.settings.PRISM_AGENT_ROUTING", False)
     monkeypatch.setattr("app.services.vllm_client.settings.BATCH_TIMEOUT", 5.0)
     monkeypatch.setattr("app.services.vllm_client.settings.BATCH_CIRCUIT_BREAKER_THRESHOLD", 3)
     monkeypatch.setattr("app.services.vllm_client.settings.JETSON_BATCH_SIZE", 5)
     monkeypatch.setattr("app.services.vllm_client.settings.DGX_BATCH_SIZE", 5)
-    monkeypatch.setattr("app.services.vllm_client.settings.DGX_SPARK_2_BATCH_SIZE", 5)
     monkeypatch.setattr("app.services.vllm_client.settings.VLLM_FUTURE_TIMEOUT", 2.0)
     
     client = VLLMClient()
@@ -53,7 +50,6 @@ async def test_vllm_dispatcher_priority_and_concurrency(mocked_vllm):
     client._endpoints["jetson"].init_concurrency()
     
     client._endpoints["dgx_spark"].enabled = False
-    client._endpoints["dgx_spark_2"].enabled = False
     client._roles_discovered = True
 
     # Slow down HTTP mock to allow queue to build up
@@ -90,7 +86,7 @@ async def test_vllm_dispatcher_priority_and_concurrency(mocked_vllm):
         await asyncio.sleep(0.1)
         
         # Now start dispatcher to process the queued items
-        dispatcher_task = asyncio.create_task(client._dispatch_loop("jetson"))
+        dispatcher_task = asyncio.create_task(client._dispatch_loop(client._endpoints["jetson"]))
 
         # Wait for all
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -135,7 +131,7 @@ async def test_queue_timeout_and_eviction(mocked_vllm):
     with patch("app.services.vllm_client.tracker") as mock_tracker:
         mock_tracker.record = AsyncMock()
         
-        dispatcher_task = asyncio.create_task(client._dispatch_loop("jetson"))
+        dispatcher_task = asyncio.create_task(client._dispatch_loop(client._endpoints["jetson"]))
         
         start_time = time.monotonic()
         
@@ -202,7 +198,7 @@ async def test_hot_swap_model_stress(mocked_vllm):
         client._endpoints["jetson"].model = "new-dynamic-model"
         
         # Start dispatcher
-        dispatcher_task = asyncio.create_task(client._dispatch_loop("jetson"))
+        dispatcher_task = asyncio.create_task(client._dispatch_loop(client._endpoints["jetson"]))
         
         await asyncio.gather(*tasks, return_exceptions=True)
         dispatcher_task.cancel()
