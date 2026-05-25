@@ -93,3 +93,9 @@
 
 ⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 4.6 ho...
 
+## 2026-05-25 05:07:59 - AAPL
+- **Action:** SELL @ 0%
+- **Rationale:** Failed to parse thesis. Reason: LLM response is empty after stripping <think> tags (model failed to output JSON).. Raw: ...
+
+⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 0.8 ho...
+

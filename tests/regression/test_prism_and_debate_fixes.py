@@ -112,6 +112,76 @@ class TestPrismToolStripping:
 
         assert "tools" not in payload
 
+    def test_conversation_id_reused_only_in_agentic_mode(self):
+        """When agentic_mode=False, conversation_id should be unique on every call.
+        When agentic_mode=True, it should be reused for the same group key.
+        """
+        from app.services.prism_client import PrismClient
+
+        client = PrismClient()
+        client.url = "http://fake:3000"
+        client.project = "test"
+        client.username = "test"
+        client.agent = "test"
+
+        # 1. agentic_mode=False: Should get different conversation IDs
+        payload1, _, _ = client.get_chat_payload_and_url(
+            model="test-model",
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=1024,
+            temperature=0.3,
+            system_prompt="test",
+            agent_name="user_chat",
+            ticker="AAPL",
+            cycle_id="test-cycle",
+            enable_thinking=False,
+            tools=None,
+            agentic_mode=False,
+        )
+        payload2, _, _ = client.get_chat_payload_and_url(
+            model="test-model",
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=1024,
+            temperature=0.3,
+            system_prompt="test",
+            agent_name="user_chat",
+            ticker="AAPL",
+            cycle_id="test-cycle",
+            enable_thinking=False,
+            tools=None,
+            agentic_mode=False,
+        )
+        assert payload1["conversationId"] != payload2["conversationId"], "conversationId should be unique for agentic_mode=False"
+
+        # 2. agentic_mode=True: Should reuse the conversation ID
+        payload3, _, _ = client.get_chat_payload_and_url(
+            model="test-model",
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=1024,
+            temperature=0.3,
+            system_prompt="test",
+            agent_name="user_chat",
+            ticker="AAPL",
+            cycle_id="test-cycle",
+            enable_thinking=False,
+            tools=None,
+            agentic_mode=True,
+        )
+        payload4, _, _ = client.get_chat_payload_and_url(
+            model="test-model",
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=1024,
+            temperature=0.3,
+            system_prompt="test",
+            agent_name="user_chat",
+            ticker="AAPL",
+            cycle_id="test-cycle",
+            enable_thinking=False,
+            tools=None,
+            agentic_mode=True,
+        )
+        assert payload3["conversationId"] == payload4["conversationId"], "conversationId should be reused for agentic_mode=True"
+
     @pytest.mark.asyncio
     async def test_call_prism_agent_forwards_tools(self):
         """_call_prism_agent must forward tool schemas to Prism."""

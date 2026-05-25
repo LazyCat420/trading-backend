@@ -218,29 +218,34 @@ class PrismClient:
         import re
         from app.tools.registry import registry
         
-        # 1. Collect all tool names
+        # 1. Collect all tool names for prefixing
         tool_names = set()
-        if tools:
-            for t in tools:
-                if isinstance(t, dict):
-                    if t.get("type") == "function" and "function" in t:
-                        name = t["function"].get("name")
-                        if name:
-                            tool_names.add(name)
-                    elif t.get("name"):
-                        tool_names.add(t["name"])
-        
-        # Add all registry tools
         for name in registry.tools.keys():
             tool_names.add(name)
             
         mcp_prefix = "mcp__lazy-tool-service__"
         
-        # 2. Build enabledTools list
+        # 2. Build enabledTools list based on whitelist if provided, otherwise all registry tools
         enabled_tools = []
-        for name in tool_names:
-            enabled_tools.append(name)
-            enabled_tools.append(f"{mcp_prefix}{name}")
+        if tools is not None:
+            # We have a specific whitelist of tools
+            whitelist_names = set()
+            for t in tools:
+                if isinstance(t, dict):
+                    if t.get("type") == "function" and "function" in t:
+                        name = t["function"].get("name")
+                        if name:
+                            whitelist_names.add(name)
+                    elif t.get("name"):
+                        whitelist_names.add(t["name"])
+            for name in whitelist_names:
+                enabled_tools.append(name)
+                enabled_tools.append(f"{mcp_prefix}{name}")
+        else:
+            # Fall back to all registry tools
+            for name in tool_names:
+                enabled_tools.append(name)
+                enabled_tools.append(f"{mcp_prefix}{name}")
             
         # Add core built-in tools
         built_ins = [
@@ -353,8 +358,8 @@ class PrismClient:
             group_key = f"chat-{agent_name}" if agent_name == "user_chat" else ""
         session_id, is_new = self._get_or_create_session(group_key)
 
-        # Reuse conversation ID for the same group key (e.g. cycle/ticker/agent)
-        if group_key:
+        # Reuse conversation ID for the same group key (e.g. cycle/ticker/agent) only in agentic mode
+        if agentic_mode and group_key:
             if group_key not in self._conversations:
                 self._conversations[group_key] = str(uuid.uuid4())
             conversation_id = self._conversations[group_key]
@@ -434,8 +439,8 @@ class PrismClient:
         group_key = f"chat-{agent_name}" if agent_name == "user_chat" else ""
         session_id, is_new = self._get_or_create_session(group_key)
 
-        # Reuse conversation ID for the same group key
-        if group_key:
+        # Reuse conversation ID for the same group key only in agentic mode
+        if agentic_mode and group_key:
             if group_key not in self._conversations:
                 self._conversations[group_key] = str(uuid.uuid4())
             conversation_id = self._conversations[group_key]

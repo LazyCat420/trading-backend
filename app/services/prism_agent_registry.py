@@ -28,11 +28,15 @@ AGENT_ID_MAP: dict[str, str] = {
     "CUSTOM_DATA_JANITOR_CRITIC_AGENT": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "CUSTOM_DATA_CURATOR_AGENT": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "CUSTOM_LIFECYCLE_SUMMARIZER_AGENT": "CUSTOM_SYSTEM_JANITOR_AGENT",
+    "CUSTOM_SUMMARIZER_AGENT": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "data_janitor": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "data_janitor_critic": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "data_curator": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "database_curator": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "lifecycle_summarizer": "CUSTOM_SYSTEM_JANITOR_AGENT",
+    "summarizer_news": "CUSTOM_SYSTEM_JANITOR_AGENT",
+    "summarizer_youtube": "CUSTOM_SYSTEM_JANITOR_AGENT",
+    "summarizer_reddit": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "purge_pass": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "post_cycle_learner": "CUSTOM_SYSTEM_JANITOR_AGENT",
     "maintenance_agent": "CUSTOM_SYSTEM_JANITOR_AGENT",
@@ -146,7 +150,7 @@ def resolve_agent_id(agent_name: str, default_agent: str = "CUSTOM_MARKET_ALPHA"
     # Fuzzy matching for known prefixes (backward compat with prism_client.py logic)
     if "quant_research" in name_lower:
         return "CUSTOM_QUANT_RESEARCH_AGENT"
-    if "janitor" in name_lower or "maintenance" in name_lower:
+    if "janitor" in name_lower or "maintenance" in name_lower or "summarizer" in name_lower:
         return "CUSTOM_SYSTEM_JANITOR_AGENT"
     if "technical" in name_lower:
         return "CUSTOM_TECHNICAL_ANALYSIS_AGENT"
