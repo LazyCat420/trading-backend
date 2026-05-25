@@ -1,1 +1,1 @@
-[AAPL] [HIGH] RSI(14) > 78 + price near 52w high = reliable SELL signal (95% confidence). Violation of RSI < 65 buy rule confirmed overbought condition, triggering exit before pullback.
+[AAPL] [HIGH] RSI(14) > 70 + price within 1% of 52-week high = reliable SELL signal indicating momentum exhaustion and overbought conditions.

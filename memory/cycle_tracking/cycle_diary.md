@@ -189,3 +189,7 @@
 - **Action:** SELL @ 95%
 - **Rationale:** The trading bot must execute a SELL action because the asset violates the core BUY requirement of RSI < 65, with the provided evidence showing 'RSI(14): 78.61' [technical_data]. Additionally, the pric...
 
+## 2026-05-25 22:40:39 - AAPL
+- **Action:** SELL @ 95%
+- **Rationale:** The trading system must SELL AAPL because the RSI(14) is 78.61121848492485 [structured_data], which strictly violates the BUY requirement of RSI < 65 and triggers the SELL rule for RSI > 70. Additiona...
+

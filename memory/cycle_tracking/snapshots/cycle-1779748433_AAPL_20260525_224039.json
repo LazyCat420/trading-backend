@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 95,
+  "rationale": "The trading system must SELL AAPL because the RSI(14) is 78.61121848492485 [structured_data], which strictly violates the BUY requirement of RSI < 65 and triggers the SELL rule for RSI > 70. Additionally, the price of 308.82000732421875 [structured_data] is dangerously close to the 52-week high of 311.4 [structured_data], confirming the overbought condition. This decision aligns with the current market regime where high-momentum tech stocks are showing signs of exhaustion, and the thesis is inva",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

@@ -460,3 +460,79 @@ def sanitize_surrogates(val):
     return val
 
 
+def is_html(text: str) -> bool:
+    """Check if a string contains HTML/XML tags."""
+    if not text:
+        return False
+    return bool(re.search(r"<!DOCTYPE html|<html|<body|<div|<p>|<script|<span", text, re.IGNORECASE))
+
+
+def _extract_seeking_alpha_ssr(html: str) -> str | None:
+    """Extract and format Seeking Alpha article contents from embedded JSON state."""
+    import json
+    from bs4 import BeautifulSoup
+    match = re.search(r"window\.SSR_DATA\s*=\s*(\{.*?\});?\s*</script>", html, re.DOTALL)
+    if not match:
+        match = re.search(r"window\.SSR_DATA\s*=\s*(\{.*?\}),?\s*\n", html, re.DOTALL)
+    if not match:
+        return None
+    try:
+        data_str = match.group(1)
+        data = json.loads(data_str)
+        article = data.get("article", {}).get("response", {}).get("data", {}).get("attributes", {})
+        content_html = article.get("content")
+        if content_html:
+            soup = BeautifulSoup(content_html, "html.parser")
+            text = soup.get_text(separator=" ", strip=True)
+            
+            # Extract Quick Insights if available
+            insights = article.get("quickInsights", [])
+            if insights:
+                insights_text = []
+                for ins in sorted(insights, key=lambda x: x.get("order", 0)):
+                    q = ins.get("question", "")
+                    a = ins.get("answer", "")
+                    if q and a:
+                        insights_text.append(f"Q: {q}\nA: {a}")
+                if insights_text:
+                    text = text + "\n\nQuick Insights:\n" + "\n".join(insights_text)
+            return text.strip()
+    except Exception:
+        pass
+    return None
+
+
+def clean_html(html: str) -> str:
+    """Extract clean readable text from HTML content, using specialized scrapers and regex fallbacks."""
+    if not html:
+        return ""
+    
+    # 1. Seeking Alpha SSR extraction
+    if "seekingalpha" in html.lower() or "ssr_data" in html.lower():
+        sa_text = _extract_seeking_alpha_ssr(html)
+        if sa_text:
+            return sa_text
+
+    # 2. General BeautifulSoup parsing
+    try:
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html, "html.parser")
+        for tag in soup(["script", "style", "nav", "footer", "header"]):
+            tag.decompose()
+        text = soup.get_text(separator=" ", strip=True)
+        text = re.sub(r"\s+", " ", text).strip()
+        if len(text) > 50:
+            return text
+    except Exception:
+        pass
+
+    # 3. Regex fallback
+    cleaned = re.sub(r"<style[^>]*>.*?</style>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<script[^>]*>.*?</script>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<svg[^>]*>.*?</svg>", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"<!--.*?-->", "", cleaned, flags=re.DOTALL)
+    cleaned = re.sub(r"<[^>]+>", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
+

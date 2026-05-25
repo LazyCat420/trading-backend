@@ -18,6 +18,7 @@ from app.db.connection import get_db
 from app.services.vllm_client import llm, Priority
 from app.services.prism_agent_caller import call_prism_agent
 from app.utils.pipeline_utils import noop as _noop
+from app.utils.text_utils import is_html, clean_html
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,31 @@ async def run_data_curation(emit: Callable | None = None) -> dict:
         status="running",
     )
     logger.info("[CURATOR] Starting active database curation...")
+
+    # --- Phase 0: Sanitize raw HTML in database summaries ---
+    try:
+        with get_db() as db:
+            html_rows = db.execute("""
+                SELECT id, summary FROM news_articles
+                WHERE (summary LIKE '<!DOCTYPE%' OR summary LIKE '%<html%' OR summary LIKE '%<script%' OR summary LIKE '%<p>%')
+                  AND quality_status IS DISTINCT FROM 'discarded'
+                LIMIT 100
+            """).fetchall()
+            
+            cleaned_count = 0
+            for row_id, raw_summary in html_rows:
+                if raw_summary and is_html(raw_summary):
+                    clean_text = clean_html(raw_summary)
+                    if clean_text:
+                        db.execute(
+                            "UPDATE news_articles SET summary = %s WHERE id = %s",
+                            [clean_text, row_id]
+                        )
+                        cleaned_count += 1
+            if cleaned_count > 0:
+                logger.info(f"[CURATOR] Cleaned up {cleaned_count} existing raw HTML summaries in news_articles.")
+    except Exception as e:
+        logger.error(f"[CURATOR] Database HTML sanitization failed: {e}")
 
     # --- Phase 1: Deduplication (News & YouTube) ---
     # Find exact duplicate news titles for the same ticker
@@ -116,6 +142,8 @@ async def run_data_curation(emit: Callable | None = None) -> dict:
         """).fetchall()
 
     for uid, content in unsummarized_news:
+        if is_html(content):
+            content = clean_html(content)
         if len(content) > 50:
             summary = await generate_summary(content, "news")
             if not summary:

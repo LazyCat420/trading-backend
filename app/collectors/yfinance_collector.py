@@ -390,107 +390,16 @@ async def collect_all(ticker: str) -> dict:
 
 async def collect_news(ticker: str) -> int:
     """
-    Fetch ticker-specific news from yfinance.
-    These are guaranteed to be about this stock (Yahoo curates them).
-    Returns number of news articles written.
+    Fetch ticker-specific news from yfinance and scrape full article bodies.
+    Proxy to the robust news_collector.py to ensure full body extraction and quality gating.
     """
-    from app.collectors.news_collector import _get_article_id
-
-    stock = yf.Ticker(ticker)
     try:
-        news = await asyncio.to_thread(lambda: stock.news)
-        if not news:
-            logger.info(f"[yfinance] No news for {ticker}")
-            return 0
-            
-        with get_db() as db:
-            trusted = db.execute("SELECT source_name, win_rate, total_items FROM source_trust WHERE source_type='publisher'").fetchall()
-        bad_publishers = {row[0] for row in trusted if row[2] >= 5 and row[1] < 0.1}
-        
+        from app.collectors.news_collector import collect_yfinance_news
+        logger.info(f"[yfinance] Proxying collect_news({ticker}) to robust news_collector...")
+        return await collect_yfinance_news(ticker)
     except Exception as e:
-        logger.info(f"[yfinance] Error fetching news for {ticker}: {e}")
+        logger.error(f"[yfinance] Proxy call error for {ticker}: {e}")
         return 0
-
-    rows = []
-    for item in news:
-        content = item.get("content", {})
-        if not content:
-            continue
-
-        title = content.get("title", "")
-        if not title:
-            continue
-
-        # Extract URL from canonical or click URL
-        url = ""
-        canonical = content.get("canonicalUrl", {})
-        if canonical:
-            url = canonical.get("url", "")
-        if not url:
-            click_url = content.get("clickThroughUrl", {})
-            url = click_url.get("url", "") if click_url else ""
-
-        # Extract publisher
-        provider = content.get("provider", {})
-        publisher = (
-            provider.get("displayName", "Yahoo Finance")
-            if provider
-            else "Yahoo Finance"
-        )
-        
-        if publisher in bad_publishers:
-            continue
-
-        # Extract published date
-        published_at = None
-        pub_str = content.get("pubDate", "")
-        if pub_str:
-            try:
-                published_at = datetime.datetime.fromisoformat(
-                    pub_str.replace("Z", "+00:00")
-                )
-            except (ValueError, TypeError):
-                published_at = datetime.datetime.now(datetime.UTC)
-        else:
-            published_at = datetime.datetime.now(datetime.UTC)
-
-        # Summary/description
-        summary = content.get("description", "") or content.get("summary", "")
-
-        article_id = _get_article_id(title, ticker.upper())
-
-        rows.append(
-            [
-                article_id,
-                ticker,
-                title[:500],
-                publisher,
-                url,
-                published_at,
-                summary,
-            ]
-        )
-
-    if rows:
-
-        def _insert():
-            with get_db() as db:
-                db.executemany(
-                    """
-                    INSERT INTO news_articles
-                    (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'yfinance', CURRENT_TIMESTAMP)
-                    ON CONFLICT (id) DO NOTHING
-                """,
-                    rows,
-                )
-
-        await asyncio.to_thread(_insert)
-
-    count = len(rows)
-
-    logger.info(f"[yfinance] {ticker}: {count} news articles written")
-    return count
 
 
 def _safe_float(series, key: str) -> float | None:

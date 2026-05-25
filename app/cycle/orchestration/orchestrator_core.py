@@ -160,13 +160,16 @@ class OrchestratorCoreMixin:
             macro_task = None
             if ctx.collect and not _skip_collect:
                 async def _macro_scout_bg():
+                    _auditor.phase_entry(ctx.cycle_id, "macro")
                     try:
                         memo = await run_phase3_macro(cls.emit)
                         macro_memo_holder["memo"] = memo or ""
                         logger.info("[CYCLE] Macro scout complete (%d chars)", len(macro_memo_holder["memo"]))
+                        _auditor.phase_exit(ctx.cycle_id, "macro", message=f"Macro memo ready ({len(macro_memo_holder['memo'])} chars)")
                     except Exception as e:
                         logger.warning("[CYCLE] Macro scout failed (non-fatal): %s", e)
                         macro_memo_holder["memo"] = ""
+                        _auditor.phase_exit(ctx.cycle_id, "macro", severity="warning", message=f"Macro scout failed: {e}")
 
                 macro_task = asyncio.create_task(_macro_scout_bg())
                 logger.info("[CYCLE] Launched macro scout in background")
@@ -327,9 +330,16 @@ class OrchestratorCoreMixin:
             # ── Phase 6: Post-Enrichment (bounded housekeeping) ──
             cls._state["status"] = "persisted"
             cls.emit("persisted", "post", "Persisting results and launching bounded housekeeping", status="ok")
-            await run_phase6_post(
-                ctx, bot_id, results, trade_result, cls.emit, cls._state, cls._cycle_summary
-            )
+            _auditor.phase_entry(ctx.cycle_id, "post", ticker_count=len(results))
+            try:
+                await run_phase6_post(
+                    ctx, bot_id, results, trade_result, cls.emit, cls._state, cls._cycle_summary
+                )
+                _auditor.phase_exit(ctx.cycle_id, "post", results_count=len(results))
+            except Exception as e:
+                logger.error("[CYCLE] Post phase failed: %s", e)
+                _auditor.phase_exit(ctx.cycle_id, "post", severity="critical", message=f"Post phase failed: {e}")
+                raise
 
             cls._state["status"] = "evaluated"
             cls.emit("evaluated", "post", "Cycle evaluations and metrics collected", status="ok")

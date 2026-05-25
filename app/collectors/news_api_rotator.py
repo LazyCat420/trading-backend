@@ -458,7 +458,7 @@ async def _fetch_stockdata(
 # ---------------------------------------------------------------------------
 
 
-def _persist_articles(articles: list[NewsArticle]) -> int:
+async def _persist_articles(articles: list[NewsArticle]) -> int:
     """Write articles to DB with ticker tagging and deduplication.
 
     Uses the same pattern as news_collector.py:
@@ -470,6 +470,7 @@ def _persist_articles(articles: list[NewsArticle]) -> int:
     from app.collectors.news_collector import (
         _detect_tickers_in_text,
         _get_article_id,
+        _scrape_article_body_via_service,
     )
 
     with get_db() as db:
@@ -479,11 +480,27 @@ def _persist_articles(articles: list[NewsArticle]) -> int:
             if not article.title:
                 continue
 
-            # Use tickers from API if provided, otherwise detect from text
+            api_summary = article.summary or ""
+            summary = ""
+            if article.url and (len(api_summary) < 150 or "..." in api_summary):
+                try:
+                    body = await _scrape_article_body_via_service(article.url)
+                    if body:
+                        summary = body
+                except Exception as e:
+                    logger.warning("[rotator] Failed to scrape body for %s: %s", article.url, e)
+
+            if (not summary or len(summary) < 150) and len(api_summary) >= 150:
+                summary = api_summary
+
+            if len(summary) < 150:
+                continue
+
+            # Use tickers from API if provided, otherwise detect from full text
             if article.tickers:
                 detected = set(article.tickers)
             else:
-                full_text = f"{article.title} {article.summary}"
+                full_text = f"{article.title} {summary}"
                 detected = _detect_tickers_in_text(full_text)
 
             base_id = hashlib.md5(
@@ -507,7 +524,7 @@ def _persist_articles(articles: list[NewsArticle]) -> int:
                             article.source,
                             article.url,
                             article.published_at,
-                            article.summary[:2000],
+                            summary[:15000],
                             article.source,
                         ],
                     )
@@ -529,7 +546,7 @@ def _persist_articles(articles: list[NewsArticle]) -> int:
                         article.source,
                         article.url,
                         article.published_at,
-                        article.summary[:2000],
+                        summary[:15000],
                         article.source,
                     ],
                 )
@@ -692,7 +709,7 @@ class NewsApiRotator:
 
         # Persist to DB
         if persist and all_articles:
-            count = _persist_articles(all_articles)
+            count = await _persist_articles(all_articles)
             logger.info("[rotator] Persisted %d new articles from API providers", count)
             return count
 

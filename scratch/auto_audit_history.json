@@ -1,0 +1,36 @@
+{
+  "consecutive_runs": [
+    {
+      "timestamp": "2026-05-25T22:28:33.005679+00:00",
+      "cycle_id": "cycle-1779746060",
+      "run_type": "active-2h",
+      "errors_count": 1324,
+      "warnings_count": 1330,
+      "total_bugs": 2654
+    },
+    {
+      "timestamp": "2026-05-25T22:30:11.503506+00:00",
+      "cycle_id": "cycle-1779746060",
+      "run_type": "active-2h",
+      "errors_count": 1333,
+      "warnings_count": 1339,
+      "total_bugs": 2672
+    },
+    {
+      "timestamp": "2026-05-25T22:33:48.840194+00:00",
+      "cycle_id": "cycle-1779746060",
+      "run_type": "active-2h",
+      "errors_count": 1349,
+      "warnings_count": 1355,
+      "total_bugs": 2704
+    },
+    {
+      "timestamp": "2026-05-25T22:45:16.753977+00:00",
+      "cycle_id": "cycle-1779748433",
+      "run_type": "active-2h",
+      "errors_count": 6,
+      "warnings_count": 6,
+      "total_bugs": 12
+    }
+  ]
+}

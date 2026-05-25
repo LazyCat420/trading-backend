@@ -277,7 +277,17 @@ async def collect_feed(feed_name: str, feed_url: str) -> int:
                 else:
                     published_at = datetime.datetime.now(datetime.UTC)
 
-                # STRICT QUALITY GATE
+                # STRICT QUALITY GATE & BODY SCRAPING
+                api_summary = summary
+                summary = ""
+                if url and (len(api_summary) < 150 or "..." in api_summary):
+                    body = await _scrape_article_body_via_service(url)
+                    if body:
+                        summary = body
+
+                if (not summary or len(summary) < 150) and len(api_summary) >= 150:
+                    summary = api_summary
+
                 if len(summary) < 150:
                     continue
 
@@ -543,6 +553,10 @@ async def collect_yfinance_news(ticker: str, since: datetime.datetime | None = N
             return 0
 
         with get_db() as db:
+            trusted = db.execute("SELECT source_name, win_rate, total_items FROM source_trust WHERE source_type='publisher'").fetchall()
+        bad_publishers = {row[0] for row in trusted if row[2] >= 5 and row[1] < 0.1}
+
+        with get_db() as db:
             count = 0
             for article in news:
                 content = article.get("content", article)
@@ -567,6 +581,9 @@ async def collect_yfinance_news(ticker: str, since: datetime.datetime | None = N
                     else "yfinance"
                 )
 
+                if publisher in bad_publishers:
+                    continue
+
                 pub_date = content.get("pubDate", "")
                 published_at = None
                 if pub_date:
@@ -577,9 +594,14 @@ async def collect_yfinance_news(ticker: str, since: datetime.datetime | None = N
                     except Exception:
                         pass
 
+                api_summary = content.get("description", "") or content.get("summary", "")
                 summary = ""
                 if url:
                     summary = await _scrape_article_body_via_service(url)
+
+                # Fallback if scraping failed but the API summary is detailed enough
+                if (not summary or len(summary) < 150) and len(api_summary) >= 150:
+                    summary = api_summary
 
                 if len(summary) < 150:
                     continue

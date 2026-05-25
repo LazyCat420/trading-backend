@@ -208,6 +208,55 @@ async def run_prism_agent(
         from app.utils.text_utils import parse_json_response
         parsed = parse_json_response(final_text)
         if not parsed:
+            # Attempt fast JSON recovery before falling back to local
+            logger.info(
+                "[PrismHarness] %s response from Prism is not valid JSON. Attempting fast JSON recovery...",
+                agent_name
+            )
+            recovery_system = (
+                "You are a precise data converter. Your job is to extract the structured financial decision "
+                "from the provided unstructured analysis text and output it as a strictly valid JSON object."
+            )
+            recovery_user = (
+                "Here is the unstructured analysis text:\n"
+                f"{final_text}\n\n"
+                "Extract the following fields and output EXACTLY this JSON format (no markdown formatting or other text, just the raw JSON object):\n"
+                "{\n"
+                '  "action": "BUY" or "SELL",\n'
+                '  "claims": ["claim 1 with source citation", "claim 2...", ...],\n'
+                '  "confidence": <integer 0-100>,\n'
+                '  "key_argument": "single strongest argument"\n'
+                "}\n"
+                "If the text does not specify claims or arguments, fill them in based on the text. If the action is not clear, decide based on the tone."
+            )
+            try:
+                recovered_text, rec_tokens, rec_ms = await llm.chat(
+                    system=recovery_system,
+                    user=recovery_user,
+                    temperature=0.1,
+                    max_tokens=1024,
+                    priority=priority,
+                    agent_name=agent_name + "_recovery",
+                    ticker=ticker,
+                    cycle_id=cycle_id,
+                    bot_id=bot_id,
+                )
+                recovered_parsed = parse_json_response(recovered_text)
+                if recovered_parsed and "action" in recovered_parsed and "claims" in recovered_parsed:
+                    logger.info(
+                        "[PrismHarness] Fast JSON recovery succeeded for %s: action=%s, claims=%d",
+                        agent_name,
+                        recovered_parsed.get("action"),
+                        len(recovered_parsed.get("claims", []))
+                    )
+                    final_text = json.dumps(recovered_parsed)
+                    token_usage += rec_tokens
+                    elapsed_ms += rec_ms
+                    parsed = recovered_parsed
+            except Exception as re_err:
+                logger.warning("[PrismHarness] Fast JSON recovery failed for %s: %s", agent_name, re_err)
+
+        if not parsed:
             logger.warning(
                 "[PrismHarness] %s returned invalid/empty JSON response from Prism — falling back to local: %s",
                 agent_name,

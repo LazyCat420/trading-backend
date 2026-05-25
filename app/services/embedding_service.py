@@ -29,6 +29,8 @@ DEFAULT_CHUNK_OVERLAP = 51  # ~10% overlap
 CHARS_PER_TOKEN = 4  # rough approximation
 
 
+import threading
+
 class EmbeddingService:
     """Lazy-loading embedding service using sentence-transformers."""
 
@@ -37,6 +39,27 @@ class EmbeddingService:
         from app.config import settings
         # We assume the embedding server is OpenAI-compatible (e.g., vLLM or TEI)
         self.api_url = settings.EMBEDDING_SERVER_URL
+        self._client = None
+        self._lock = threading.Lock()
+
+    def _get_client(self):
+        if self._client is None:
+            with self._lock:
+                if self._client is None:
+                    import httpx
+                    limits = httpx.Limits(max_connections=50, max_keepalive_connections=10)
+                    self._client = httpx.Client(timeout=60.0, limits=limits)
+        return self._client
+
+    def close(self):
+        """Close the persistent client connection pool."""
+        with self._lock:
+            if self._client is not None:
+                try:
+                    self._client.close()
+                except Exception:
+                    pass
+                self._client = None
 
     @property
     def dimension(self) -> int:
@@ -58,8 +81,6 @@ class EmbeddingService:
         if not texts:
             return []
             
-        import httpx
-        
         if prefix:
             texts = [prefix + t for t in texts]
 
@@ -67,6 +88,7 @@ class EmbeddingService:
             logger.info(f"Embedding {len(texts)} texts via API at {self.api_url}")
 
         results = []
+        client = self._get_client()
         # Chunk into batches so we don't overload the API payload size
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
@@ -76,27 +98,26 @@ class EmbeddingService:
                     "model": self._model_name,
                     "input": batch,
                 }
-                # Use a sync client since these methods are currently synchronous
-                with httpx.Client(timeout=60.0) as client:
-                    response = client.post(self.api_url, json=payload)
-                    response.raise_for_status()
-                    data = response.json()
+                response = client.post(self.api_url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                
+                if "data" in data:
+                    # OpenAI format
+                    sorted_data = sorted(data["data"], key=lambda x: x["index"])
+                    embeddings = [item["embedding"] for item in sorted_data]
+                    results.extend(embeddings)
+                else:
+                    # Fallback for simple custom servers that just return a list of lists
+                    results.extend(data)
                     
-                    if "data" in data:
-                        # OpenAI format
-                        sorted_data = sorted(data["data"], key=lambda x: x["index"])
-                        embeddings = [item["embedding"] for item in sorted_data]
-                        results.extend(embeddings)
-                    else:
-                        # Fallback for simple custom servers that just return a list of lists
-                        results.extend(data)
-                        
             except Exception as e:
                 logger.error(f"Failed to fetch embeddings from API: {e}")
                 # Return zero vectors as fallback so the pipeline doesn't crash
                 results.extend([[0.0] * EMBEDDING_DIM for _ in batch])
 
         return results
+
 
     def chunk_text(
         self,
