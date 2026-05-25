@@ -204,7 +204,7 @@ async def run_phase4_analysis(
                         analyzed_count, len(ctx.tickers),
                     )
                     try:
-                        from app.cycle.orchestration.cycle_auditor import auditor
+                        from app.services.logging.cycle_auditor import auditor
                         auditor.ticker_result(ctx.cycle_id, ticker, result, elapsed_s=_ticker_elapsed_ms / 1000.0)
                     except Exception as ae:
                         logger.error("Failed to log ticker_result to auditor: %s", ae)
@@ -232,7 +232,7 @@ async def run_phase4_analysis(
                     errors.append(ticker)
                     results.append(fallback_result)
                 try:
-                    from app.cycle.orchestration.cycle_auditor import auditor
+                    from app.services.logging.cycle_auditor import auditor
                     auditor.ticker_result(ctx.cycle_id, ticker, fallback_result, elapsed_s=_ticker_elapsed_ms / 1000.0)
                 except Exception as ae:
                     logger.error("Failed to log ticker_result timeout to auditor: %s", ae)
@@ -259,7 +259,7 @@ async def run_phase4_analysis(
                     errors.append(ticker)
                     results.append(fallback_result)
                 try:
-                    from app.cycle.orchestration.cycle_auditor import auditor
+                    from app.services.logging.cycle_auditor import auditor
                     auditor.ticker_result(ctx.cycle_id, ticker, fallback_result, elapsed_s=_ticker_elapsed_ms / 1000.0)
                 except Exception as ae:
                     logger.error("Failed to log ticker_result crash to auditor: %s", ae)

@@ -17,6 +17,7 @@ def get_latest_cycle_id():
     query = """
         SELECT cycle_id, timestamp
         FROM cycle_audit_log
+        WHERE cycle_id LIKE 'cycle-%%'
         ORDER BY timestamp DESC
         LIMIT 1
     """

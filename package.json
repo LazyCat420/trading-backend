@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "deploy": "bash deploy.sh",
-    "deploy:dry": "bash deploy.sh --dry-run"
+    "deploy:dry": "bash deploy.sh --dry-run",
+    "deploy:all-changed": "bash deploy_changed.sh --changed-only"
   }
 }

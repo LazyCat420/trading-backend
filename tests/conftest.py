@@ -12,7 +12,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 # ── Database Fixtures ──────────────────────────────────────────────────
 
@@ -101,7 +101,7 @@ def patch_get_db(mock_db):
 def mock_llm():
     """Provide a mock VLLMClient with a pre-configured chat() response."""
     client = MagicMock()
-    client.chat = MagicMock(return_value=("mock response", 100, 500))
+    client.chat = AsyncMock(return_value=("mock response", 100, 500))
     client.model = "test-model"
     client.discover_roles = MagicMock(return_value={})
     client.get_least_busy_model = MagicMock(return_value="test-model")
