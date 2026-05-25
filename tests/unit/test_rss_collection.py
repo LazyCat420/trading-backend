@@ -428,6 +428,7 @@ class TestNewsApiRotator:
 
     def test_persist_articles_deduplicates(self):
         """_persist_articles with mock DB should call execute for each article."""
+        import asyncio
         from app.collectors.news_api_rotator import _persist_articles, NewsArticle
 
         mock_db = MagicMock()
@@ -438,16 +439,19 @@ class TestNewsApiRotator:
         articles = [
             NewsArticle(
                 title="Test Article",
-                url="https://example.com/test",
-                summary="Test summary content",
+                url="",
+                summary="Test summary content that is long enough to bypass the 150 character minimum filter in the rotator database persistence function. We make this string extra long so it definitely passes the 150-character limit check.",
                 source="test",
                 published_at=datetime.datetime.now(datetime.UTC),
                 tickers=["AAPL"],
             )
         ]
 
-        with patch("app.collectors.news_api_rotator.get_db", return_value=mock_db):
-            count = _persist_articles(articles)
+        async def run_persist():
+            with patch("app.collectors.news_api_rotator.get_db", return_value=mock_db):
+                return await _persist_articles(articles)
+
+        count = asyncio.run(run_persist())
 
         assert count == 1
         assert mock_db.execute.called

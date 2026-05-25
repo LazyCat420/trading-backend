@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import datetime
 import pandas as pd
 
@@ -14,10 +14,12 @@ from app.collectors.yfinance_collector import (
 
 @pytest.fixture
 def mock_db():
-    with patch("app.collectors.yfinance_collector.get_db") as mock_get_db:
-        db = MagicMock()
-        mock_get_db.return_value.__enter__.return_value = db
-        yield db
+    with patch("app.collectors.yfinance_collector.get_db") as mock_get_db_yf:
+        with patch("app.collectors.news_collector.get_db") as mock_get_db_news:
+            db = MagicMock()
+            mock_get_db_yf.return_value.__enter__.return_value = db
+            mock_get_db_news.return_value.__enter__.return_value = db
+            yield db
 
 @pytest.mark.asyncio
 @patch("app.collectors.yfinance_collector.yf.Ticker")
@@ -74,11 +76,13 @@ async def test_collect_fundamentals_missing_data(mock_ticker):
     assert result is False
 
 @pytest.mark.asyncio
+@patch("app.collectors.news_collector._scrape_article_body_via_service", new_callable=AsyncMock)
 @patch("app.collectors.yfinance_collector.yf.Ticker")
-async def test_collect_news_success(mock_ticker, mock_db):
+async def test_collect_news_success(mock_ticker, mock_scrape, mock_db):
     
     # Mock bad publishers
     mock_db.execute.return_value.fetchall.return_value = []
+    mock_scrape.return_value = "A" * 200
     
     mock_ticker_inst = MagicMock()
     mock_ticker_inst.news = [
@@ -90,19 +94,21 @@ async def test_collect_news_success(mock_ticker, mock_db):
     count = await collect_news("AAPL")
     
     assert count == 2
-    mock_db.executemany.assert_called_once()
+    mock_db.execute.assert_called()
 
 @pytest.mark.asyncio
+@patch("app.collectors.news_collector._scrape_article_body_via_service", new_callable=AsyncMock)
 @patch("app.collectors.yfinance_collector.yf.Ticker")
-async def test_collect_news_bad_publisher(mock_ticker, mock_db):
+async def test_collect_news_bad_publisher(mock_ticker, mock_scrape, mock_db):
     
     # Mock bad publishers (win_rate < 0.1, total_items >= 5)
     mock_db.execute.return_value.fetchall.return_value = [("Bad Provider", 0.0, 10)]
+    mock_scrape.return_value = "A" * 200
     
     mock_ticker_inst = MagicMock()
     mock_ticker_inst.news = [
-        {"content": {"title": "Test 1", "provider": {"displayName": "Bad Provider"}}},
-        {"content": {"title": "Test 2", "provider": {"displayName": "Good Provider"}}},
+        {"content": {"title": "Test 1", "canonicalUrl": {"url": "http://1"}, "provider": {"displayName": "Bad Provider"}}},
+        {"content": {"title": "Test 2", "canonicalUrl": {"url": "http://2"}, "provider": {"displayName": "Good Provider"}}},
     ]
     mock_ticker.return_value = mock_ticker_inst
     

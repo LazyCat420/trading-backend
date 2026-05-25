@@ -75,6 +75,8 @@ async def test_circuit_breaker_race_conditions(mocked_vllm_cb):
         results = await asyncio.gather(*tasks, return_exceptions=True)
         print(f"[DEBUG] Gathering complete. Results size: {len(results)}")
         dispatcher_task.cancel()
+        # Yield control to let the background run_and_release tasks finish processing their errors
+        await asyncio.sleep(0.2)
         
         # All 50 should be RequestError (raised up from the dispatcher)
         for r in results:
@@ -101,6 +103,8 @@ async def test_circuit_breaker_race_conditions(mocked_vllm_cb):
             await asyncio.gather(*tasks, return_exceptions=True)
             print(f"[DEBUG] Batch {batch_idx + 1} gathered.")
             d_task.cancel()
+            # Yield control to let the background run_and_release tasks finish processing their errors
+            await asyncio.sleep(0.2)
             
         # Total batch failures = 3. Circuit should now be open!
         assert ep.consecutive_batch_failures == 0  # Resets to 0 after tripping
