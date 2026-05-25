@@ -264,25 +264,6 @@ async def get_earnings_data_tool(ticker: str) -> str:
         return json.dumps({"error": str(e)})
 
 
-@registry.register(
-    name="get_macro_data",
-    description="Fetch macroeconomic indicators and events.",
-    parameters={
-        "type": "object",
-        "properties": {},
-        "required": [],
-    },
-    tier=0,
-    source="macro",
-)
-async def get_macro_data_tool() -> str:
-    from app.collectors.fred_collector import collect_all
-
-    try:
-        res = await collect_all()
-        return json.dumps(res)
-    except Exception as e:
-        return json.dumps({"error": str(e)})
 
 
 @registry.register(

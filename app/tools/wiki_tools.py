@@ -26,8 +26,43 @@ def _safe_filename(topic: str) -> str:
     return f"{safe_topic}.md"
 
 
-async def write_memory_note(topic: str, content: str) -> str:
+async def write_memory_note(topic: str = "", content: str = "", **kwargs) -> str:
     """Save or update a markdown note in the LLMWiki folder mapping a core concept or ticker."""
+    # Resolve topic from arguments/kwargs
+    if not topic:
+        for k in ["topic", "title", "concept", "name", "key", "ticker", "subject"]:
+            if k in kwargs and kwargs[k]:
+                topic = str(kwargs[k])
+                break
+        if not topic and "ticker" in kwargs:
+            topic = str(kwargs["ticker"])
+
+    # Resolve content from arguments/kwargs
+    if not content:
+        for k in ["content", "note", "text", "body", "val", "value", "message"]:
+            if k in kwargs and kwargs[k]:
+                content = str(kwargs[k])
+                break
+
+    # If topic is missing but content is present, use a default topic
+    if not topic and content:
+        topic = "general_note"
+
+    # If content is still empty, grab the first non-topic string kwarg if one exists
+    if not content and kwargs:
+        str_vals = [v for k, v in kwargs.items() if isinstance(v, str) and k != "topic" and v != topic]
+        if str_vals:
+            content = str_vals[0]
+
+    # Validate presence of both topic and content
+    if not topic or not content:
+        missing = []
+        if not topic:
+            missing.append("topic")
+        if not content:
+            missing.append("content")
+        return f"Error: write_memory_note() missing required arguments: {', '.join(missing)}. Received: topic='{topic}', content='{content}', kwargs={kwargs}"
+
     os.makedirs(WIKI_DIR, exist_ok=True)
     filename = _safe_filename(topic)
     filepath = os.path.join(WIKI_DIR, filename)
@@ -45,8 +80,17 @@ async def write_memory_note(topic: str, content: str) -> str:
         return f"Error writing note '{topic}': {e}"
 
 
-async def read_memory_note(topic: str) -> str:
+async def read_memory_note(topic: str = "", **kwargs) -> str:
     """Read a persistent concept, strategy, or ticker profile from the LLMWiki."""
+    if not topic:
+        for k in ["topic", "title", "concept", "name", "key", "ticker", "subject"]:
+            if k in kwargs and kwargs[k]:
+                topic = str(kwargs[k])
+                break
+
+    if not topic:
+        return "Error: read_memory_note() missing required argument 'topic'."
+
     filename = _safe_filename(topic)
     filepath = os.path.join(WIKI_DIR, filename)
 

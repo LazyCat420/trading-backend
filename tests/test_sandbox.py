@@ -16,6 +16,7 @@ import json
 import subprocess
 import sys
 import os
+import pytest
 
 RUNNER_PATH = os.path.join(
     os.path.dirname(__file__),
@@ -201,3 +202,29 @@ class TestSandboxEdgeCases:
         code = "print('x' * 10000)"
         output = _run_sandbox(code)
         assert len(output) >= 10000
+
+
+class TestExecutePythonTool:
+    """Tests for the execute_python tool wrapper."""
+
+    @pytest.mark.asyncio
+    async def test_execute_python_with_code_param(self):
+        """Should execute code using 'code' parameter."""
+        from app.tools.script_sandbox import execute_python
+        res = await execute_python(code="print(2 + 3)")
+        assert "5" in res
+
+    @pytest.mark.asyncio
+    async def test_execute_python_with_python_param(self):
+        """Should execute code using 'python' fallback parameter."""
+        from app.tools.script_sandbox import execute_python
+        res = await execute_python(python="print(5 * 6)")
+        assert "30" in res
+
+    @pytest.mark.asyncio
+    async def test_execute_python_missing_param(self):
+        """Should return error if both parameters are missing."""
+        from app.tools.script_sandbox import execute_python
+        res = await execute_python()
+        assert "error" in res.lower()
+

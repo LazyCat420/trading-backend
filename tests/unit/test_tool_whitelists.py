@@ -88,7 +88,6 @@ def test_meta_audit_has_performance_tools():
     meta_tools = set(AGENT_TOOL_WHITELISTS.get("meta_audit", []))
     required = {
         "get_performance_metrics",
-        "get_strategy_performance",
         "audit_decision_quality",
         "write_memory_note",
     }

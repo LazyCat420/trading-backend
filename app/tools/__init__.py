@@ -5,8 +5,8 @@ from app.tools.finance_tools import (
     get_technical_indicators,
 )
 from app.tools.wiki_tools import write_memory_note, read_memory_note, search_wiki
-from app.tools.quant_tools import run_quant_equation
 from app.tools.web_tools import search_web, web_search, scrape_url, query_hermes
+from app.tools.quant_tools import execute_momentum_strategy, execute_value_strategy
 
 from app.tools.db_tools import search_internal_database, update_youtube_channel_handle
 from app.tools.system_tools import run_local_command
@@ -15,17 +15,13 @@ from app.tools.browser_tools import (
     run_playwright_script,
 )
 from app.tools.youtube_tools import (
-    youtube_search_handle,
     youtube_test_channel,
 )
 
 # Phase 2: Pipeline Skills as Tools
 from app.tools.pipeline_tools import (
-    audit_data_quality,
     audit_decision_quality,
     check_hallucination,
-    get_strategy_performance,
-    get_autoresearch_report,
 )
 
 # Phase 3: Agent Coordination Tools
@@ -79,7 +75,7 @@ from app.tools.calculator_tools import (
 from app.tools.context_tools import get_cycle_context, get_cycle_context_all
 
 # Phase 5: Sandboxed Python Execution (Quant Scripts)
-from app.tools.script_sandbox import execute_quant_script
+from app.tools.script_sandbox import execute_quant_script, execute_python
 
 # Phase 6: Prism Agent Harness (Onion Layer)
 from app.tools.prism_agent_harness import run_prism_agent
@@ -100,20 +96,15 @@ __all__ = [
     "web_search",
     "scrape_url",
     "query_hermes",
-    "run_quant_equation",
     "search_internal_database",
     "update_youtube_channel_handle",
     "run_local_command",
     "browser_navigate",
     "run_playwright_script",
-    "youtube_search_handle",
     "youtube_test_channel",
     # Phase 2: Pipeline Tools
-    "audit_data_quality",
     "audit_decision_quality",
     "check_hallucination",
-    "get_strategy_performance",
-    "get_autoresearch_report",
     # Phase 3: Coordination Tools
     "post_finding",
     "read_team_findings",
@@ -128,6 +119,9 @@ __all__ = [
     "sell_stock",
     # Phase 5b: Sandboxed Quant Execution
     "execute_quant_script",
+    "execute_python",
+    "execute_momentum_strategy",
+    "execute_value_strategy",
     # Phase 6: Deterministic Financial Calculators
     "calculate_position_size",
     "calculate_stop_loss",

@@ -34,7 +34,7 @@ UNIVERSAL_TOOLS = [
     # Data Collection (Tier 0)
     "get_market_data",
     "get_technical_indicators",
-    "run_quant_equation",
+    "execute_python",
     "get_options_flow",
     "get_finnhub_news",
     "query_hermes",
@@ -43,10 +43,7 @@ UNIVERSAL_TOOLS = [
     "read_memory_note",
     "search_wiki",
     # Pipeline Skills (Tier 1) — agents can self-audit during debates
-    "audit_data_quality",
     "check_hallucination",
-    "get_strategy_performance",
-    "get_autoresearch_report",
     # Agent Coordination — inter-agent communication during debates
     "post_finding",
     "read_team_findings",

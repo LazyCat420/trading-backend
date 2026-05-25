@@ -174,3 +174,72 @@ async def run_python_script(
 ) -> str:
     """Legacy wrapper — delegates to execute_quant_script."""
     return await execute_quant_script(code, data, timeout_seconds)
+
+
+class ExecutePythonInput(BaseModel):
+    """Input model for the execute_python tool."""
+
+    code: str | None = Field(
+        None,
+        description="The Python code block to execute.",
+    )
+    python: str | None = Field(
+        None,
+        description="Fallback parameter name for the Python code block to execute.",
+    )
+    data: dict = Field(
+        default_factory=dict,
+        description="Optional context data dict injected as the DATA variable.",
+    )
+    timeout_seconds: int = Field(
+        10,
+        description="Maximum execution time in seconds.",
+        ge=1,
+        le=30,
+    )
+
+
+@registry.register(
+    name="execute_python",
+    description=(
+        "Execute Python code blocks in a secure restricted sandbox. "
+        "Allows standard calculations, data transformations, and math processing. "
+        "Returns the output from print statements."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": "The Python code block to execute.",
+            },
+            "python": {
+                "type": "string",
+                "description": "Fallback parameter name for the Python code block.",
+            },
+            "data": {
+                "type": "object",
+                "description": "Optional context data dict injected as the DATA variable.",
+            },
+            "timeout_seconds": {
+                "type": "integer",
+                "description": "Max execution time in seconds (1-30).",
+            },
+        },
+    },
+    permission=PermissionLevel.WRITE,
+    input_model=ExecutePythonInput,
+    tags=["quant", "python", "sandbox", "execute"],
+)
+async def execute_python(
+    code: str | None = None,
+    python: str | None = None,
+    data: dict | None = None,
+    timeout_seconds: int = 10,
+) -> str:
+    """Execute Python code using the RestrictedPython sandbox."""
+    actual_code = code or python
+    if not actual_code:
+        return json.dumps({"error": "Missing required parameter: 'code' or 'python'."})
+    return await execute_quant_script(actual_code, data, timeout_seconds)
+

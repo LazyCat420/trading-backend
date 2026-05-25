@@ -53,45 +53,6 @@ def _eval_expr(node):
     raise ValueError(f"Unsupported mathematical expression logic: {type(node)}")
 
 
-async def run_quant_equation(equation: str) -> str:
-    """Safely execute a mathematical equation or quantitative model (e.g., DCF calculation steps, PEG ratio validation)."""
-    try:
-        # Prevent overly complex/dangerous exec
-        if len(equation) > 200:
-            return "Error: Equation too long. Break it down."
-
-        tree = ast.parse(equation, mode="eval")
-        result = _eval_expr(tree.body)
-
-        # Format the result gracefully
-        if isinstance(result, float):
-            result = round(result, 4)
-
-        logger.info(f"[QUANT] Evaluated: {equation} -> {result}")
-        return f"Equation Result: {result}"
-
-    except Exception as e:
-        logger.error(f"[QUANT] Equation execution failed: {e}")
-        return "Equation Error: Invalid math format. Example allowed: '((10.5 / 2.1) ** 2) * log(10)'"
-
-
-registry.register(
-    func=run_quant_equation,
-    name="run_quant_equation",
-    description="Run a specific quantitative/mathematical equation. Useful for verifying margins, P/E variants, or backing up claims with rigid calculations.",
-    parameters={
-        "type": "object",
-        "properties": {
-            "equation": {
-                "type": "string",
-                "description": "The math expression (e.g. '(2.45 - 1.1) / 5.0' or '15.4 * log(2)').",
-            }
-        },
-        "required": ["equation"],
-    },
-    tier=0,
-    source="computed",
-)
 
 @registry.register(
     name="execute_momentum_strategy",

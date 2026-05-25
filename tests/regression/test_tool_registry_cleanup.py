@@ -142,7 +142,7 @@ KEPT_TOOLS = [
     "scrape_url",
     "get_market_data",
     "search_trading_skills",
-    "run_quant_equation",
+    "execute_python",
 ]
 
 

@@ -146,6 +146,7 @@ def test_quant_research_agent_whitelist():
     # Must have memory tools
     assert "write_memory_note" in wl
     assert "read_memory_note" in wl
+    assert "execute_python" in wl
 
     # Must NOT have destructive trading tools
     assert "buy_stock" not in wl
@@ -165,7 +166,7 @@ def test_synthesizer_whitelist_strategies():
 
     assert "execute_momentum_strategy" in wl
     assert "execute_value_strategy" in wl
-    assert "run_quant_equation" in wl
+    assert "execute_python" in wl
 
     # Must still have core context tools
     assert "get_cycle_context" in wl

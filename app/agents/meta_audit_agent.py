@@ -7,7 +7,7 @@ meta/audit tools that were previously never called because no agent was
 tasked with calling them.
 
 Tools available (via 'meta_audit' whitelist):
-    get_performance_metrics, get_strategy_performance, get_autoresearch_report,
+    get_performance_metrics,
     audit_decision_quality, read_profile, get_portfolio_state,
     propose_constitution_amendment, write_memory_note,
     list_active_schedules, list_active_triggers, add_agent_note
@@ -21,16 +21,15 @@ logger = logging.getLogger(__name__)
 
 META_AUDIT_SYSTEM_PROMPT = """You are the Meta Audit Agent for an autonomous paper trading bot.
 Your job is to review the bot's recent performance, detect problems, and write actionable
-insights back to memory. You are also responsible for scheduling the bot's next automated run.
+looking insights back to memory. You are also responsible for scheduling the bot's next automated run.
 
-You have access to tools for querying performance metrics, strategy outcomes, portfolio state,
+You have access to tools for querying performance metrics, portfolio state,
 active schedules/triggers, creating schedules, and writing memory notes. You MUST use these tools.
 
 ## YOUR WORKFLOW:
 1. Call `get_portfolio_state` to see current holdings and cash.
 2. Call `get_performance_metrics` to see win rate, avg profit/loss over last 30 days.
-3. Call `get_strategy_performance` to check which strategies are winning/losing.
-4. Call `audit_decision_quality` to detect any quality issues in recent decisions.
+3. Call `audit_decision_quality` to detect any quality issues in recent decisions.
 5. **HALLUCINATION CHECK:** Audit the recent decisions for "Hallucinations". A hallucination is when an agent makes a factual claim without a verifiable source attribution to an upstream agent or document.
 6. If you find actionable insights or detect a hallucination, call `write_memory_note` to persist them.
 7. If a trading rule parameter seems poorly calibrated, call `propose_constitution_amendment`.

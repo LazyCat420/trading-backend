@@ -68,7 +68,6 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "get_portfolio_state",
         "get_position_pnl",
         "get_options_flow",
-        "audit_data_quality",
     ],
     "fund_flow": [
         "get_sec_filings",
@@ -97,14 +96,12 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "get_options_flow",
         "get_insider_trades",
         "get_earnings_data",
-        "get_macro_data",
         "get_congress_trades",
         "search_internal_database",
         "search_trading_skills",
         "request_data_collection",
     ],
     "verifier": [
-        "audit_data_quality",
         "check_hallucination",
         "search_web",
         "get_market_data",
@@ -115,7 +112,7 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "get_cycle_context_all",
         "execute_momentum_strategy",
         "execute_value_strategy",
-        "run_quant_equation",
+        "execute_python",
     ],
     # ── Pre-Trade Execution Agent ──
     "pre_trade": [
@@ -135,8 +132,6 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
     # ── Meta Audit Agent ──
     "meta_audit": [
         "get_performance_metrics",
-        "get_strategy_performance",
-        "get_autoresearch_report",
         "audit_decision_quality",
         "read_profile",
         "get_portfolio_state",
@@ -154,6 +149,7 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "search_wiki",
         "write_memory_note",
         "read_memory_note",
+        "execute_python",
     ],
     # ── Portfolio Sizing Agent ──
     "portfolio_allocator": [
