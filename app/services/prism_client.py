@@ -378,7 +378,7 @@ class PrismClient:
                 "title": title,
                 "systemPrompt": system_prompt[:15000],
                 "settings": {
-                    "provider": "vllm",
+                    "provider": provider,
                     "model": model,
                 },
             },
@@ -419,6 +419,7 @@ class PrismClient:
         tools: list[dict] | None = None,
         is_qwen_model: bool = False,
         agentic_mode: bool = True,
+        provider: str = "vllm",
     ) -> tuple[dict, str, dict]:
         """
         Returns (payload, url, headers) formatted for Prism /agent streaming.
@@ -442,7 +443,7 @@ class PrismClient:
             conversation_id = str(uuid.uuid4())
 
         payload: dict[str, Any] = {
-            "provider": "vllm",
+            "provider": provider,
             "model": model,
             "messages": messages,
             "maxTokens": max_tokens,
@@ -458,7 +459,7 @@ class PrismClient:
                 "title": title,
                 "systemPrompt": system_prompt[:15000],
                 "settings": {
-                    "provider": "vllm",
+                    "provider": provider,
                     "model": model,
                 },
             },

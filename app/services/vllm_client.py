@@ -2553,6 +2553,7 @@ class VLLMClient:
 
         if prism_is_healthy:
             # Route through Prism proxy for user chat
+            provider = self.resolve_provider_for_model(effective_model)
             payload, target_url, headers = self.prism_client.get_stream_payload_and_url(
                 model=effective_model,
                 messages=messages,
@@ -2564,6 +2565,7 @@ class VLLMClient:
                 enable_thinking=enable_thinking,
                 tools=tools,
                 is_qwen_model=_is_qwen_model(effective_model),
+                provider=provider,
             )
         else:
             if self.prism_client.enabled and not bypass_prism:
