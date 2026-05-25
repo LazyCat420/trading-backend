@@ -76,7 +76,7 @@ async def run_prism_agent(
     tools_override: list[dict] | None = None,
     max_tokens: int = 2048,
     temperature: float = 0.3,
-    timeout_seconds: int = 120,
+    timeout_seconds: int = 300,
 ) -> dict[str, Any]:
     """Run an agent via Prism Gateway's /agent endpoint.
 
@@ -203,6 +203,27 @@ async def run_prism_agent(
         )
         conversation_id = payload.get("conversationId", "")
 
+        # All base/analytical agents require valid JSON outputs.
+        # Fallback to local if the response does not parse into a valid JSON object.
+        from app.utils.text_utils import parse_json_response
+        parsed = parse_json_response(final_text)
+        if not parsed:
+            logger.warning(
+                "[PrismHarness] %s returned invalid/empty JSON response from Prism — falling back to local: %s",
+                agent_name,
+                repr(final_text[:200])
+            )
+            return await _fallback_to_local(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                ticker=ticker,
+                agent_name=agent_name,
+                cycle_id=cycle_id,
+                bot_id=bot_id,
+                priority=priority,
+                tools_override=tools_override,
+            )
+
         logger.info(
             "[PrismHarness] %s completed via Prism in %dms (%d tokens)",
             agent_name,
@@ -237,10 +258,9 @@ async def run_prism_agent(
         )
 
     except Exception as e:
-        logger.error(
-            "[PrismHarness] %s failed via Prism (%s) — falling back to local",
+        logger.exception(
+            "[PrismHarness] %s failed via Prism — falling back to local",
             agent_name,
-            e,
         )
         return await _fallback_to_local(
             system_prompt=system_prompt,
@@ -296,12 +316,15 @@ async def _fallback_to_local(
 ) -> dict[str, Any]:
     """Fall back to the local executor.py when Prism is unavailable."""
     from app.tools.executor import run_tool_agent
+    from app.agents.tool_whitelists import get_agent_budget_turns
 
     logger.info(
         "[PrismHarness] Using local executor fallback for %s (ticker=%s)",
         agent_name,
         ticker,
     )
+
+    max_loops = get_agent_budget_turns(agent_name, enable_tools=True)
 
     result = await run_tool_agent(
         system_prompt=system_prompt,
@@ -313,6 +336,7 @@ async def _fallback_to_local(
         priority=priority,
         tools_override=tools_override,
         bypass_prism=True,
+        max_loops=max_loops,
     )
 
     # Normalize to PrismAgentResult shape

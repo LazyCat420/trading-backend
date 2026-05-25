@@ -1,0 +1,74 @@
+/home/lazycat/github/projects/sun/trading-service/.venv/lib/python3.12/site-packages/pydantic/main.py:263: UserWarning: API_SERVER_KEY is set to the default insecure value!
+  validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+=== AUDIT DATABASE START ===
+
+--- POSITIONS ---
+Bot: lazy-trader-v4 | Ticker: TMO | Qty: 5.575509986451703 | AvgPrice: 448.2799987792969 | OpenedAt: 2026-05-23 04:11:01.151447
+Bot: lazy-trader-v4 | Ticker: AERO | Qty: 160.31538343631823 | AvgPrice: 16.010000228881836 | OpenedAt: 2026-05-23 00:57:11.742995
+Bot: lazy-trader-v4 | Ticker: FDS | Qty: 11.828116976415428 | AvgPrice: 223.67999267578125 | OpenedAt: 2026-05-22 21:39:39.220756
+Bot: lazy-trader-v4 | Ticker: CDNA | Qty: 126.53466073486359 | AvgPrice: 21.6299991607666 | OpenedAt: 2026-05-22 21:38:39.158877
+Bot: lazy-trader-v4 | Ticker: SHLS | Qty: 797.4322124075304 | AvgPrice: 9.909999847412111 | OpenedAt: 2026-05-22 21:37:39.101878
+Bot: lazy-trader-v4 | Ticker: LITE | Qty: 5.930433540613375 | AvgPrice: 946.9000244140626 | OpenedAt: 2026-05-22 21:34:38.874099
+Bot: test | Ticker: AAPL | Qty: 30.48986693760738 | AvgPrice: 298.9700012207031 | OpenedAt: 2026-05-20 05:15:49.105890
+
+--- RECENT ORDERS (Last 10) ---
+Bot: lazy-trader-v4 | Ticker: LRMR | Side: SELL | Qty: 939.8600518977067 | Price: 3.450000047683716 | Signal: pipeline | CreatedAt: 2026-05-25 08:38:12.810491 | FilledAt: 2026-05-25 08:38:12.810491 | PnL: 0.0
+Bot: lazy-trader-v4 | Ticker: ADP | Side: SELL | Qty: 11.488390505832413 | Price: 225.30999755859375 | Signal: pipeline | CreatedAt: 2026-05-25 08:38:12.133563 | FilledAt: 2026-05-25 08:38:12.133563 | PnL: 60.08423326180385
+Bot: lazy-trader-v4 | Ticker: AAPL | Side: SELL | Qty: 22.688368759480067 | Price: 308.82000732421875 | Signal: pipeline | CreatedAt: 2026-05-25 01:48:06.484076 | FilledAt: 2026-05-25 01:48:06.484076 | PnL: 0.0
+Bot: lazy-trader-v4 | Ticker: AAPL | Side: BUY | Qty: 22.688368759480067 | Price: 308.82000732421875 | Signal: pipeline | CreatedAt: 2026-05-25 01:48:06.293172 | FilledAt: 2026-05-25 01:48:06.293172 | PnL: None
+Bot: lazy-trader-v4 | Ticker: AAPL | Side: SELL | Qty: 22.688368759480067 | Price: 308.82000732421875 | Signal: pipeline | CreatedAt: 2026-05-25 01:42:59.865043 | FilledAt: 2026-05-25 01:42:59.865043 | PnL: 0.0
+Bot: lazy-trader-v4 | Ticker: AAPL | Side: BUY | Qty: 22.688368759480067 | Price: 308.82000732421875 | Signal: pipeline | CreatedAt: 2026-05-25 01:42:59.663250 | FilledAt: 2026-05-25 01:42:59.663250 | PnL: None
+Bot: lazy-trader-v4 | Ticker: AAPL | Side: SELL | Qty: 22.688368759480067 | Price: 308.82000732421875 | Signal: pipeline | CreatedAt: 2026-05-25 01:27:46.834651 | FilledAt: 2026-05-25 01:27:46.834651 | PnL: 0.0
+Bot: lazy-trader-v4 | Ticker: AAPL | Side: BUY | Qty: 22.688368759480067 | Price: 308.82000732421875 | Signal: pipeline | CreatedAt: 2026-05-25 01:27:46.657412 | FilledAt: 2026-05-25 01:27:46.657412 | PnL: None
+Bot: lazy-trader-v4 | Ticker: AAPL | Side: SELL | Qty: 22.688368759480067 | Price: 308.82000732421875 | Signal: pipeline | CreatedAt: 2026-05-25 01:23:46.926463 | FilledAt: 2026-05-25 01:23:46.926463 | PnL: 0.0
+Bot: lazy-trader-v4 | Ticker: AAPL | Side: BUY | Qty: 22.688368759480067 | Price: 308.82000732421875 | Signal: pipeline | CreatedAt: 2026-05-25 01:23:46.710643 | FilledAt: 2026-05-25 01:23:46.710643 | PnL: None
+
+--- RECENT EXECUTION ERRORS (Last 10) ---
+Cycle: cycle-1779692172 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 07:36:21.715089
+Cycle: cycle-1779693706 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 07:32:32.458252
+Cycle: cycle-1779693693 | Phase: error | Ticker: system | Type: fatal_pipeline_crash | Msg: Analysis produced zero results | CreatedAt: 2026-05-25 07:21:35.647077
+Cycle: cycle-1779693424 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 07:17:05.600108
+Cycle: cycle-1779691201 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 06:40:09.539779
+Cycle: cycle-1779691196 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 06:40:01.703809
+Cycle: cycle-1779691188 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 06:39:55.918653
+Cycle: cycle-1779690863 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 06:39:46.858213
+Cycle: cycle-1779689445 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 06:12:36.964589
+Cycle: cycle-1779688897 | Phase: stopped | Ticker: system | Type: cycle_cancelled | Msg: Task was cancelled (e.g. by user stop or timeout) | CreatedAt: 2026-05-25 06:10:41.999984
+
+--- RECENT AUDIT LOGS FOR CRWV ---
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:37:20.867066+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: CRWV | Severity: info | Msg: CRWV: BUY @ 65% (362.4s) — OK | Data: {"action":"BUY","issues":[],"elapsed_s":362.39,"escalated":false,"has_error":false,"confidence":65,"config_used":"v2_cognition","total_tokens":11730}
+Cycle: cycle-1779606634 | Time: 2026-05-24 07:47:38.341920+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: CRWV | Severity: info | Msg: CRWV: SELL @ 0% (405.3s) — OK | Data: {"action":"SELL","issues":[],"elapsed_s":405.29,"escalated":false,"has_error":false,"confidence":0,"config_used":"v2_cognition","total_tokens":52501}
+Cycle: cycle-1779513355 | Time: 2026-05-23 05:28:27.546308+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: CRWV | Severity: info | Msg: CRWV: SELL @ 0% (73.3s) — OK | Data: {"action":"SELL","issues":[],"elapsed_s":73.3,"escalated":true,"has_error":false,"confidence":0,"config_used":"v2_cognition","total_tokens":5711}
+Cycle: cycle-1779425270 | Time: 2026-05-22 05:11:05.198708+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: CRWV | Severity: info | Msg: CRWV: BUY @ 75% (405.0s) — OK | Data: {"action":"BUY","issues":[],"elapsed_s":404.96,"escalated":false,"has_error":false,"confidence":75,"config_used":"v2_cognition","total_tokens":11432}
+
+--- RECENT GENERAL AUDIT LOGS (Last 30) ---
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:43:55.167213+00:00 | AuditType: phase_exit | Event: None | Phase: trading | Ticker:  | Severity: info | Msg: Exiting phase 'trading': 2 ok, 0 errors (100% success) in 0.0s
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:38:08.968408+00:00 | AuditType: phase_entry | Event: None | Phase: trading | Ticker:  | Severity: info | Msg: Entering phase 'trading' with 23 tickers
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:38:08.949753+00:00 | AuditType: phase_exit | Event: None | Phase: analyzing | Ticker:  | Severity: info | Msg: Exiting phase 'analyzing': 23 ok, 0 errors (100% success) in 0.0s
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:38:08.916491+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: DOCN | Severity: info | Msg: DOCN: SELL @ 95% (344.0s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:37:41.218287+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: OKLO | Severity: info | Msg: OKLO: BUY @ 65% (366.4s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:37:20.867066+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: CRWV | Severity: info | Msg: CRWV: BUY @ 65% (362.4s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:37:02.273738+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: DASH | Severity: warning | Msg: DASH: HOLD @ 0% (600.0s) — ISSUES: Empty rationale; Error in result: LLM Timeout after 600s
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:32:24.877185+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: SANM | Severity: info | Msg: SANM: SELL @ 85% (382.0s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:31:34.832986+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: NRC | Severity: info | Msg: NRC: BUY @ 72% (378.1s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:31:18.453881+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: PNC | Severity: info | Msg: PNC: BUY @ 72% (375.9s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:27:02.253404+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: HIG | Severity: info | Msg: HIG: BUY @ 72% (396.4s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:26:02.899076+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: NBIS | Severity: info | Msg: NBIS: SELL @ 85% (391.7s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:25:16.718205+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: CMPX | Severity: info | Msg: CMPX: BUY @ 65% (388.0s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:25:02.557207+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: ARCB | Severity: info | Msg: ARCB: BUY @ 72% (395.8s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:20:25.872026+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: IP | Severity: info | Msg: IP: BUY @ 65% (395.2s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:19:31.218306+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: MU | Severity: info | Msg: MU: SELL @ 75% (377.2s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:18:48.720051+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: COGT | Severity: info | Msg: COGT: BUY @ 65% (366.7s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:18:26.694555+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: PACS | Severity: info | Msg: PACS: BUY @ 72% (362.5s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:13:50.606829+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: CDNA | Severity: info | Msg: CDNA: HOLD @ 65% (421.3s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:13:14.024907+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: LRMR | Severity: info | Msg: LRMR: SELL @ 75% (391.9s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:12:42.019735+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: ADP | Severity: info | Msg: ADP: SELL @ 78% (379.7s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:12:24.197163+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: SHLS | Severity: info | Msg: SHLS: HOLD @ 65% (356.7s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:06:49.336668+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: TMO | Severity: info | Msg: TMO: HOLD @ 75% (414.6s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:06:42.086484+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: LITE | Severity: info | Msg: LITE: HOLD @ 72% (407.4s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:06:27.491653+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: FDS | Severity: info | Msg: FDS: HOLD @ 75% (392.8s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:06:22.311859+00:00 | AuditType: ticker_result | Event: None | Phase: analyzing | Ticker: AERO | Severity: info | Msg: AERO: HOLD @ 72% (387.6s) — OK
+Cycle: cycle-1779695975 | Time: 2026-05-25 08:02:48.135464+00:00 | AuditType: phase_exit | Event: None | Phase: collecting | Ticker:  | Severity: info | Msg: Exiting phase 'collecting': 30 ok, 0 errors (100% success) in 0.0s
+Cycle: cycle-1779695975 | Time: 2026-05-25 07:59:36.052901+00:00 | AuditType: phase_entry | Event: None | Phase: analyzing | Ticker:  | Severity: info | Msg: Entering phase 'analyzing' with 30 tickers
+Cycle: cycle-1779695975 | Time: 2026-05-25 07:59:36.009606+00:00 | AuditType: phase_entry | Event: None | Phase: collecting | Ticker:  | Severity: info | Msg: Entering phase 'collecting' with 30 tickers
+Cycle: cycle-1779695975 | Time: 2026-05-25 07:59:35.993279+00:00 | AuditType: phase_exit | Event: None | Phase: starting | Ticker:  | Severity: info | Msg: Exiting phase 'starting': 0 ok, 0 errors (0% success) in 0.0s

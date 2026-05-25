@@ -1,0 +1,31 @@
+/home/lazycat/github/projects/sun/trading-service/.venv/lib/python3.12/site-packages/pydantic/main.py:263: UserWarning: API_SERVER_KEY is set to the default insecure value!
+  validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+=== CHECKING LLM AUDIT LOGS FOR CYCLE cycle-1779695975 ===
+Total audit logs for cycle: 112
+Distinct agent_steps:
+  bear_fundamental_t2_agent: 15 rows
+  bear_macro_sentiment_t2_agent: 14 rows
+  bear_macro_sentiment_t4_agent: 2 rows
+  bear_technical_t2_agent: 12 rows
+  bull_fundamental_t1_agent: 23 rows
+  bull_macro_sentiment_t1_agent: 19 rows
+  bull_macro_sentiment_t3_agent: 3 rows
+  bull_technical_t1_agent: 23 rows
+  sentiment_agent: 1 rows
+
+Sample rows:
+Ticker: AERO | Step: bull_technical_t1_agent | Model: Qwen/Qwen3.5-122B-A10B-FP8
+Raw Response: {
+  "action": "BUY",
+  "claims": [
+    "The stock is trading at $16.01, which is above both the 20-d...
+Ticker: AERO | Step: bull_fundamental_t1_agent | Model: Qwen/Qwen3.5-122B-A10B-FP8
+Raw Response: {
+  "action": "BUY",
+  "claims": [
+    "AERO trades at a deeply undervalued P/E of 6.82 [structured:...
+Ticker: LITE | Step: bull_technical_t1_agent | Model: Qwen/Qwen3.5-122B-A10B-FP8
+Raw Response: {
+  "action": "BUY",
+  "claims": [
+    "The stock is trading at $946.90, which is significantly abov...

@@ -179,109 +179,109 @@ async def execute_decisions(
 
         if action == "BUY":
             alloc_decision = allocations_map.get(ticker)
-            if alloc_decision:
-                if alloc_decision.get("decision") == "VETO":
+            if alloc_decision and alloc_decision.get("decision") == "VETO":
+                logger.warning(
+                    "[PIPELINE]   [%s] BUY VETOED by Portfolio Sizing Agent: %s",
+                    ticker,
+                    alloc_decision.get("veto_reason", "no reason"),
+                )
+                skipped.append({
+                    "ticker": ticker,
+                    "reason": f"PORTFOLIO_ALLOCATOR VETO: {alloc_decision.get('veto_reason', 'risk check failed')}",
+                })
+                counts["blocked"] += 1
+                continue
+
+            # ── Portfolio Gate: enforce position limits before BUY ──
+            gate = check_portfolio_gate(ticker, action, bot_id, confidence)
+            if gate["blocked"]:
+                logger.warning(
+                    "[PIPELINE]   [%s] BUY BLOCKED by portfolio gate: %s",
+                    ticker,
+                    gate["reason"],
+                )
+                skipped.append({"ticker": ticker, "reason": f"GATE: {gate['reason']}"})
+                counts["blocked"] += 1
+                continue
+
+            if gate["warnings"]:
+                for w in gate["warnings"]:
+                    logger.info("[PIPELINE]   [%s] Gate warning: %s", ticker, w)
+
+            # ── Pre-Trade Agent: run calculator tool chain before buying ──
+            pre_trade_decision = None
+            try:
+                from app.agents.pre_trade_agent import run_pre_trade
+
+                user_prompt_sizing = d.get("rationale", "")
+                if alloc_decision and alloc_decision.get("adjusted_size_pct", 0) > 0:
+                    user_prompt_sizing += f"\nNote: The Portfolio Sizing Agent allocated {alloc_decision.get('adjusted_size_pct')}% of total portfolio value for this trade."
+
+                pre_trade_decision = await asyncio.wait_for(
+                    run_pre_trade(
+                        ticker=ticker,
+                        confidence=confidence,
+                        cycle_id=cycle_id,
+                        bot_id=bot_id,
+                        rationale=user_prompt_sizing,
+                    ),
+                    timeout=300.0,  # Hard timeout for pre-trade agent (increased to 300s)
+                )
+
+                if pre_trade_decision and pre_trade_decision.get("decision") == "VETO":
                     logger.warning(
-                        "[PIPELINE]   [%s] BUY VETOED by Portfolio Sizing Agent: %s",
+                        "[PIPELINE]   [%s] BUY VETOED by pre-trade agent: %s",
                         ticker,
-                        alloc_decision.get("veto_reason", "no reason"),
+                        pre_trade_decision.get("veto_reason", "no reason"),
                     )
                     skipped.append({
                         "ticker": ticker,
-                        "reason": f"PORTFOLIO_ALLOCATOR VETO: {alloc_decision.get('veto_reason', 'risk check failed')}",
+                        "reason": f"PRE_TRADE VETO: {pre_trade_decision.get('veto_reason', 'risk check failed')}",
                     })
                     counts["blocked"] += 1
                     continue
-                else:
-                    adjusted_pct = alloc_decision.get("adjusted_size_pct", 0)
-                    if adjusted_pct > 0:
-                        from app.trading.paper_trader import _get_current_price
-                        total_portfolio_val = portfolio.get("cash", 0)
-                        for p in portfolio.get("positions", []):
-                            price, _ = _get_current_price(p["ticker"])
-                            total_portfolio_val += p["qty"] * (price or 0.0)
-                        
-                        total_cost = total_portfolio_val * (adjusted_pct / 100.0)
-                        cash_available = portfolio.get("cash", 0)
-                        size_pct = (total_cost / cash_available) if cash_available > 0 else 0.02
-                        size_pct = max(0.02, min(size_pct, 0.15))  # Clamp to 2%-15%
-                        logger.info(
-                            "[PIPELINE]   [%s] Portfolio Sizing Agent APPROVED: %.1f%% of portfolio ($%.2f), equivalent to %.1f%% of cash",
-                            ticker,
-                            adjusted_pct,
-                            total_cost,
-                            size_pct * 100.0,
-                        )
-                    else:
-                        size_pct = _get_size_pct(confidence)
-            else:
-                # ── Portfolio Gate: enforce position limits before BUY ──
-                gate = check_portfolio_gate(ticker, action, bot_id, confidence)
-                if gate["blocked"]:
-                    logger.warning(
-                        "[PIPELINE]   [%s] BUY BLOCKED by portfolio gate: %s",
-                        ticker,
-                        gate["reason"],
-                    )
-                    skipped.append({"ticker": ticker, "reason": f"GATE: {gate['reason']}"})
-                    counts["blocked"] += 1
-                    continue
 
-                if gate["warnings"]:
-                    for w in gate["warnings"]:
-                        logger.info("[PIPELINE]   [%s] Gate warning: %s", ticker, w)
-
-                # ── Pre-Trade Agent: run calculator tool chain before buying ──
+            except asyncio.TimeoutError:
+                logger.warning("[PIPELINE]   [%s] Pre-trade agent timed out, falling back to Allocator/Kelly sizing", ticker)
                 pre_trade_decision = None
-                try:
-                    from app.agents.pre_trade_agent import run_pre_trade
+            except Exception as pt_err:
+                logger.warning("[PIPELINE]   [%s] Pre-trade agent failed (%s), falling back to Allocator/Kelly sizing", ticker, pt_err)
+                pre_trade_decision = None
 
-                    pre_trade_decision = await asyncio.wait_for(
-                        run_pre_trade(
-                            ticker=ticker,
-                            confidence=confidence,
-                            cycle_id=cycle_id,
-                            bot_id=bot_id,
-                            rationale=d.get("rationale", ""),
-                        ),
-                        timeout=60.0,  # Hard timeout for pre-trade agent
-                    )
-
-                    if pre_trade_decision and pre_trade_decision.get("decision") == "VETO":
-                        logger.warning(
-                            "[PIPELINE]   [%s] BUY VETOED by pre-trade agent: %s",
-                            ticker,
-                            pre_trade_decision.get("veto_reason", "no reason"),
-                        )
-                        skipped.append({
-                            "ticker": ticker,
-                            "reason": f"PRE_TRADE VETO: {pre_trade_decision.get('veto_reason', 'risk check failed')}",
-                        })
-                        counts["blocked"] += 1
-                        continue
-
-                except asyncio.TimeoutError:
-                    logger.warning("[PIPELINE]   [%s] Pre-trade agent timed out, falling back to Kelly sizing", ticker)
-                    pre_trade_decision = None
-                except Exception as pt_err:
-                    logger.warning("[PIPELINE]   [%s] Pre-trade agent failed (%s), falling back to Kelly sizing", ticker, pt_err)
-                    pre_trade_decision = None
-
-                # Use pre-trade agent's position size if available, otherwise fall back to Kelly
-                if pre_trade_decision and pre_trade_decision.get("decision") == "APPROVE":
-                    total_cost = pre_trade_decision.get("total_cost", 0)
-                    cash_available = portfolio.get("cash", 0)
-                    size_pct = (total_cost / cash_available) if cash_available > 0 else 0.02
-                    size_pct = max(0.02, min(size_pct, 0.15))  # Clamp to 2%-15%
-                    logger.info(
-                        "[PIPELINE]   [%s] Pre-trade APPROVED: %d shares, %.1f%% of cash, R:R=%.2f",
-                        ticker,
-                        pre_trade_decision.get("shares", 0),
-                        size_pct * 100,
-                        pre_trade_decision.get("risk_reward_ratio", 0),
-                    )
-                else:
-                    size_pct = _get_size_pct(confidence)
+            # Sizing logic selection
+            if alloc_decision and alloc_decision.get("adjusted_size_pct", 0) > 0:
+                adjusted_pct = alloc_decision.get("adjusted_size_pct", 0)
+                from app.trading.paper_trader import _get_current_price
+                total_portfolio_val = portfolio.get("cash", 0)
+                for p in portfolio.get("positions", []):
+                    price, _ = _get_current_price(p["ticker"])
+                    total_portfolio_val += p["qty"] * (price or 0.0)
+                
+                total_cost = total_portfolio_val * (adjusted_pct / 100.0)
+                cash_available = portfolio.get("cash", 0)
+                size_pct = (total_cost / cash_available) if cash_available > 0 else 0.02
+                size_pct = max(0.02, min(size_pct, 0.15))  # Clamp to 2%-15%
+                logger.info(
+                    "[PIPELINE]   [%s] Using size approved by Portfolio Sizing Agent: %.1f%% of portfolio ($%.2f), equivalent to %.1f%% of cash",
+                    ticker,
+                    adjusted_pct,
+                    total_cost,
+                    size_pct * 100.0,
+                )
+            elif pre_trade_decision and pre_trade_decision.get("decision") == "APPROVE":
+                total_cost = pre_trade_decision.get("total_cost", 0)
+                cash_available = portfolio.get("cash", 0)
+                size_pct = (total_cost / cash_available) if cash_available > 0 else 0.02
+                size_pct = max(0.02, min(size_pct, 0.15))  # Clamp to 2%-15%
+                logger.info(
+                    "[PIPELINE]   [%s] Pre-trade APPROVED: %d shares, %.1f%% of cash, R:R=%.2f",
+                    ticker,
+                    pre_trade_decision.get("shares", 0),
+                    size_pct * 100,
+                    pre_trade_decision.get("risk_reward_ratio", 0),
+                )
+            else:
+                size_pct = _get_size_pct(confidence)
 
             logger.info(
                 "[PIPELINE]   [%s] EXECUTING BUY @ %d%% conf, %.0f%% of cash ($%.2f)",
