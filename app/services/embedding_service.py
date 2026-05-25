@@ -113,8 +113,41 @@ class EmbeddingService:
                     
             except Exception as e:
                 logger.error(f"Failed to fetch embeddings from API: {e}")
-                # Return zero vectors as fallback so the pipeline doesn't crash
-                results.extend([[0.0] * EMBEDDING_DIM for _ in batch])
+                # Try fallback to Prism
+                try:
+                    logger.info("Attempting fallback to Prism embedding gateway...")
+                    fallback_embeddings = []
+                    from app.config import settings
+                    for text in batch:
+                        # Call Prism's /embed endpoint
+                        url = f"{settings.PRISM_URL}/embed"
+                        payload = {
+                            "provider": "lm-studio",
+                            "text": text
+                        }
+                        headers = {
+                            "x-project": settings.PRISM_PROJECT,
+                            "x-username": settings.PRISM_USERNAME,
+                            "Content-Type": "application/json"
+                        }
+                        resp = client.post(url, json=payload, headers=headers)
+                        resp.raise_for_status()
+                        res_data = resp.json()
+                        emb = res_data["embedding"]
+                        
+                        # Adjust dimension to EMBEDDING_DIM (384)
+                        if len(emb) > EMBEDDING_DIM:
+                            emb = emb[:EMBEDDING_DIM]
+                        elif len(emb) < EMBEDDING_DIM:
+                            emb = emb + [0.0] * (EMBEDDING_DIM - len(emb))
+                        fallback_embeddings.append(emb)
+                        
+                    results.extend(fallback_embeddings)
+                    logger.info(f"Successfully retrieved fallback embeddings from Prism for batch of size {len(batch)}.")
+                except Exception as fallback_err:
+                    logger.critical(f"Prism embedding fallback also failed: {fallback_err}")
+                    # Return zero vectors as fallback so the pipeline doesn't crash
+                    results.extend([[0.0] * EMBEDDING_DIM for _ in batch])
 
         return results
 

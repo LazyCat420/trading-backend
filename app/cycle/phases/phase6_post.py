@@ -201,7 +201,7 @@ async def run_phase6_post(
     # 2. Purge Pass — bounded housekeeping (no more fire-and-forget zombies)
     # All background tasks are gathered with a strict timeout so they can't
     # leak and keep the event loop alive for hours after the cycle ends.
-    _HOUSEKEEPING_TIMEOUT = 120  # seconds — hard cap on all post-cycle work
+    _HOUSEKEEPING_TIMEOUT = 300  # seconds — hard cap on all post-cycle work
 
     if ctx.analyze:
         async def _bg_purge():
