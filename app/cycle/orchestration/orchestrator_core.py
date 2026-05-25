@@ -7,7 +7,7 @@ from typing import Any
 
 from app.config import settings
 from app.cycle.orchestration.state_manager import PipelineStateDB
-from app.cycle.orchestration.cycle_auditor import CycleAuditor
+from app.services.logging.cycle_auditor import CycleAuditor
 
 from app.cycle.phases.phase1_health import run_phase1_health
 from app.cycle.phases.phase2_collection import run_phase2_collection
@@ -350,7 +350,7 @@ class OrchestratorCoreMixin:
             # ── Trigger AutoResearch (BOUNDED — was fire-and-forget, caused zombie loops) ──
             _AUTORESEARCH_TIMEOUT = 120  # seconds — hard cap
             try:
-                from app.pipeline.analysis.autoresearch import run_autoresearch
+                from app.services.logging import run_autoresearch
 
                 cls._autoresearch_task = asyncio.create_task(
                     run_autoresearch(ctx.cycle_id, dict(cls._cycle_summary))

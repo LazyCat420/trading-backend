@@ -1,1 +1,1 @@
-[AAPL] [HIGH] RSI(14) > 78 + P/E > 37 + price near 52-wk high = strict SELL signal, overriding RISK_ON macro regime.
+[AAPL] [HIGH] RSI(14) > 78 + price near 52w high = reliable SELL signal (95% confidence). Violation of RSI < 65 buy rule confirmed overbought condition, triggering exit before pullback.

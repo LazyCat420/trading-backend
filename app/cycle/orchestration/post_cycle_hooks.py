@@ -217,7 +217,7 @@ async def run_post_cycle_hooks(
 
     # ── Decoupled Async Eval Engine: process traces immediately (BOUNDED) ──
     try:
-        from app.autoresearch.eval_worker import run_eval_worker
+        from app.services.logging import run_eval_worker
         # Bounded eval — no more fire-and-forget zombie tasks
         await asyncio.wait_for(run_eval_worker(limit=10), timeout=30)
     except asyncio.TimeoutError:

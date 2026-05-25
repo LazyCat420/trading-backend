@@ -52,8 +52,8 @@ class TestDecisionScoringFormula:
 
     def test_zero_decisions_returns_zero(self):
         """No decisions at all should score 0 with a critical issue."""
-        with patch("app.pipeline.analysis.autoresearch.get_db", _mock_get_db_factory()):
-            from app.pipeline.analysis.autoresearch import _audit_decisions
+        with patch("app.services.logging.autoresearch.get_db", _mock_get_db_factory()):
+            from app.services.logging.autoresearch import _audit_decisions
             result = _audit_decisions("test_cycle", self._make_summary(0, 0, 0))
 
         assert result["score"] == 0
@@ -65,8 +65,8 @@ class TestDecisionScoringFormula:
         confs = [(60,), (70,), (45,)]
         outcomes = [("BUY", 70, 2.5, "WIN")]  # Only 1 trade — cold start
 
-        with patch("app.pipeline.analysis.autoresearch.get_db", _mock_get_db_factory(confs, outcomes)):
-            from app.pipeline.analysis.autoresearch import _audit_decisions
+        with patch("app.services.logging.autoresearch.get_db", _mock_get_db_factory(confs, outcomes)):
+            from app.services.logging.autoresearch import _audit_decisions
             result = _audit_decisions("test_cycle", self._make_summary(2, 1, 8))
 
         assert result["score"] >= 0.4, f"Cold start score {result['score']} too low"
@@ -78,8 +78,8 @@ class TestDecisionScoringFormula:
         confs = [(50,), (45,), (55,)]
         outcomes = []  # No resolved trades
 
-        with patch("app.pipeline.analysis.autoresearch.get_db", _mock_get_db_factory(confs, outcomes)):
-            from app.pipeline.analysis.autoresearch import _audit_decisions
+        with patch("app.services.logging.autoresearch.get_db", _mock_get_db_factory(confs, outcomes)):
+            from app.services.logging.autoresearch import _audit_decisions
             result = _audit_decisions("test_cycle", self._make_summary(0, 0, 10))
 
         assert result["score"] >= 0.3, f"All-HOLD score {result['score']} is too punishing"
@@ -97,8 +97,8 @@ class TestDecisionScoringFormula:
             ("BUY", 60, -1.5, "LOSS"),
         ]
 
-        with patch("app.pipeline.analysis.autoresearch.get_db", _mock_get_db_factory(confs, outcomes)):
-            from app.pipeline.analysis.autoresearch import _audit_decisions
+        with patch("app.services.logging.autoresearch.get_db", _mock_get_db_factory(confs, outcomes)):
+            from app.services.logging.autoresearch import _audit_decisions
             result = _audit_decisions("test_cycle", self._make_summary(5, 0, 6))
 
         assert result["score"] >= 0.55, f"60% win rate scored {result['score']}, should be >= 0.55"
@@ -118,8 +118,8 @@ class TestDecisionScoringFormula:
             ("BUY", 60, -1.5, "LOSS"),
         ]
 
-        with patch("app.pipeline.analysis.autoresearch.get_db", _mock_get_db_factory(confs, outcomes)):
-            from app.pipeline.analysis.autoresearch import _audit_decisions
+        with patch("app.services.logging.autoresearch.get_db", _mock_get_db_factory(confs, outcomes)):
+            from app.services.logging.autoresearch import _audit_decisions
             result = _audit_decisions("test_cycle", self._make_summary(5, 0, 6))
 
         assert result["score"] < 0.4, f"20% win rate scored {result['score']}, should be < 0.4"
@@ -127,8 +127,8 @@ class TestDecisionScoringFormula:
 
     def test_outcome_stats_always_present(self):
         """The result dict should always include outcome_stats key."""
-        with patch("app.pipeline.analysis.autoresearch.get_db", _mock_get_db_factory()):
-            from app.pipeline.analysis.autoresearch import _audit_decisions
+        with patch("app.services.logging.autoresearch.get_db", _mock_get_db_factory()):
+            from app.services.logging.autoresearch import _audit_decisions
             result = _audit_decisions("test_cycle", self._make_summary(1, 0, 5))
 
         assert "outcome_stats" in result
@@ -142,8 +142,8 @@ class TestDecisionScoringFormula:
             conn.execute.side_effect = Exception("Connection refused")
             yield conn
 
-        with patch("app.pipeline.analysis.autoresearch.get_db", broken_db):
-            from app.pipeline.analysis.autoresearch import _audit_decisions
+        with patch("app.services.logging.autoresearch.get_db", broken_db):
+            from app.services.logging.autoresearch import _audit_decisions
             result = _audit_decisions("test_cycle", self._make_summary(2, 1, 8))
 
         assert result["score"] == 0.5
@@ -175,7 +175,7 @@ class TestScoringIntegration:
             """
         ).fetchone()[0]
 
-        from app.pipeline.analysis.autoresearch import _audit_decisions
+        from app.services.logging.autoresearch import _audit_decisions
         result = _audit_decisions("integration_test", {"buy_count": 1, "sell_count": 0, "hold_count": 5})
 
         stats = result.get("outcome_stats", {})
@@ -202,7 +202,7 @@ class TestScoringIntegration:
         manual_wins = sum(1 for r in rows if r[0] == "WIN")
         manual_rate = manual_wins / len(rows)
 
-        from app.pipeline.analysis.autoresearch import _audit_decisions
+        from app.services.logging.autoresearch import _audit_decisions
         result = _audit_decisions("integration_test", {"buy_count": 1, "sell_count": 0, "hold_count": 5})
         computed_rate = result.get("outcome_stats", {}).get("win_rate", -1)
 

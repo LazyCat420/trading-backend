@@ -13,7 +13,7 @@ None → 0.0, and added defensive `or 0.0` coalescing in eval_worker.py.
 This test ensures the model never regresses back to rejecting None values.
 """
 
-from app.autoresearch.eval_engine import TraceRecord, evaluate_trace, classify_failure
+from app.services.logging import TraceRecord, evaluate_trace, classify_failure
 
 
 # ── Helpers ──────────────────────────────────────────────────────────

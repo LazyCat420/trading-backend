@@ -511,7 +511,7 @@ async def test_p6_orchestrator_phases_called_in_order():
             side_effect=lambda *a, **k: call_order.append("phase6"),
         ))
         stack.enter_context(patch(
-            "app.pipeline.analysis.autoresearch.run_autoresearch", new_callable=AsyncMock,
+            "app.services.logging.run_autoresearch", new_callable=AsyncMock,
         ))
         stack.enter_context(patch(
             "app.cycle.orchestration.state_manager.PipelineStateDB.clear_checkpoint",
@@ -569,7 +569,7 @@ async def test_p6_skip_phases_when_flags_false():
             side_effect=lambda *a, **k: call_order.append("phase6"),
         ))
         stack.enter_context(patch(
-            "app.pipeline.analysis.autoresearch.run_autoresearch", new_callable=AsyncMock,
+            "app.services.logging.run_autoresearch", new_callable=AsyncMock,
         ))
         stack.enter_context(patch(
             "app.cycle.orchestration.state_manager.PipelineStateDB.clear_checkpoint",

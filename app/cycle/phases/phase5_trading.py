@@ -3,7 +3,7 @@ import traceback
 from typing import Callable, Any
 
 from app.cycle.orchestration.state_manager import PipelineStateDB
-from app.cycle.orchestration.cycle_auditor import CycleAuditor
+from app.services.logging.cycle_auditor import CycleAuditor
 
 logger = logging.getLogger(__name__)
 

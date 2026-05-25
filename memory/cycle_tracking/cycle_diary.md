@@ -185,3 +185,7 @@
 - **Action:** SELL @ 95%
 - **Rationale:** Despite the 'RISK_ON' macro regime, the trading constitution strictly mandates a SELL if RSI > 70, and the current RSI(14) is 78.61 [technical_data]. Additionally, the P/E ratio of 37.43 [fundamental_...
 
+## 2026-05-25 21:26:57 - AAPL
+- **Action:** SELL @ 95%
+- **Rationale:** The trading bot must execute a SELL action because the asset violates the core BUY requirement of RSI < 65, with the provided evidence showing 'RSI(14): 78.61' [technical_data]. Additionally, the pric...
+

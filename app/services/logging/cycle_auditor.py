@@ -1,21 +1,6 @@
 """
 Cycle Auditor — Inline pipeline diagnostics for real-time cycle debugging.
-
-Emits structured audit events to the cycle_audit_log PostgreSQL table at
-critical transition points in the orchestrator. Each event includes:
-- audit_type: what checkpoint this is (phase_entry, ticker_result, etc.)
-- severity: info/warning/critical
-- structured data payload
-
-This module is designed to be zero-impact on the pipeline — all writes
-are fire-and-forget with exception suppression.
-
-Usage in orchestrator_v1.py:
-    from app.cycle.orchestration.cycle_auditor import auditor
-    auditor.phase_entry(cycle_id, "analyzing", ticker_count=15)
-    auditor.ticker_result(cycle_id, "AAPL", result, elapsed_s=12.3)
-    auditor.phase_exit(cycle_id, "analyzing", results_count=14, errors_count=1)
-    auditor.llm_response(cycle_id, "AAPL", "debate_meta", raw_response)
+Moved to app/services/logging/cycle_auditor.py as part of logging consolidation.
 """
 
 import json

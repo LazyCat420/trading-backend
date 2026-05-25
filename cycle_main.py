@@ -195,7 +195,7 @@ async def poll_system_commands(shutdown: asyncio.Event):
                             SchedulerService.refresh_job(payload.get("job_id"))
                             result = {"status": "schedule_refreshed"}
                         elif cmd_type == "AUTORESEARCH":
-                            from app.pipeline.analysis.autoresearch import run_autoresearch
+                            from app.services.logging import run_autoresearch
                             asyncio.create_task(run_autoresearch(payload.get("cycle_id"), payload.get("cycle_summary")))
                             result = {"status": "autoresearch_started"}
                         elif cmd_type == "DEPLOY_FIX":
@@ -351,8 +351,15 @@ def main():
     tickers = [t.strip() for t in args.tickers.split(",")] if args.tickers else None
 
     if args.once:
-        result = asyncio.run(run_single_cycle(tickers=tickers))
-        print(f"Result: {result}")
+        from app.services.boot_service import BootService
+        try:
+            result = asyncio.run(run_single_cycle(tickers=tickers))
+            print(f"Result: {result}")
+        finally:
+            try:
+                asyncio.run(BootService.shutdown())
+            except Exception as shutdown_err:
+                print(f"Error during shutdown: {shutdown_err}")
     else:
         async def _run_all():
             shutdown = asyncio.Event()

@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 95,
+  "rationale": "The trading bot must execute a SELL action because the asset violates the core BUY requirement of RSI < 65, with the provided evidence showing 'RSI(14): 78.61' [technical_data]. Additionally, the price is dangerously close to the 'week_52_high: 311.4' [fundamental_data], creating a high probability of a pullback. While the 'pe_ratio: 37.43' [fundamental_data] suggests rich valuation, the primary trigger is the technical overbought condition which mandates a sell per the system rules. This thesis",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

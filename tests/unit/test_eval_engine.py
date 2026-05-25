@@ -1,5 +1,5 @@
 import pytest
-from app.autoresearch.eval_engine import evaluate_trace, classify_failure, TraceRecord
+from app.services.logging import evaluate_trace, classify_failure, TraceRecord
 
 def test_evaluate_trace_perfect():
     trace = TraceRecord(
