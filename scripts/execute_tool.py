@@ -3,7 +3,8 @@ import os
 import json
 import asyncio
 
-# Set up paths for importing app and shared client codebase
+# Flag that this is a short-lived tool process to optimize database pool size
+os.environ["IS_TOOL_PROCESS"] = "true"
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir) # /home/lazycat/github/rods-project/sun/trading-service
 shared_code = os.path.abspath(os.path.join(project_root, "..", "trading-client"))

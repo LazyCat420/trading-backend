@@ -9,7 +9,12 @@ import operator
 import math
 import logging
 
+from pydantic import BaseModel, Field
 from app.tools.registry import registry
+
+
+class TickerInput(BaseModel):
+    ticker: str = Field(description="The stock ticker symbol (e.g. AAPL)")
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +108,7 @@ registry.register(
     },
     tier=0,
     source="computed",
+    input_model=TickerInput,
 )
 async def execute_momentum_strategy(ticker: str) -> str:
     from app.db.connection import get_db
@@ -173,6 +179,7 @@ async def execute_momentum_strategy(ticker: str) -> str:
     },
     tier=0,
     source="computed",
+    input_model=TickerInput,
 )
 async def execute_value_strategy(ticker: str) -> str:
     from app.db.connection import get_db

@@ -244,10 +244,20 @@ def _ensure_pool() -> ConnectionPool:
                 except Exception as e:
                     logger.warning(f"[DB] Failed to register pgvector: {e}")
 
+            import sys
+            is_tool = (
+                os.getenv("IS_TOOL_PROCESS") == "true"
+                or any("execute_tool.py" in arg for arg in sys.argv)
+            )
+            min_sz = 1 if is_tool else 10
+            max_sz = 2 if is_tool else 50
+            if is_tool:
+                logger.info(f"[DB] Tool process detected. Scaling down ConnectionPool to size min={min_sz}, max={max_sz}")
+
             _pool = ConnectionPool(
                 conninfo=db_url,
-                min_size=10,
-                max_size=50,
+                min_size=min_sz,
+                max_size=max_sz,
                 kwargs={"autocommit": True},
                 configure=_configure_connection,
             )

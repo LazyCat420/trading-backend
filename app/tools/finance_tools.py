@@ -1,6 +1,11 @@
+from pydantic import BaseModel, Field
 from app.tools.registry import registry
 from app.db.connection import get_db
 from app.utils.text_utils import format_db_section, fmt_usd
+
+
+class TickerInput(BaseModel):
+    ticker: str = Field(description="The stock ticker symbol (e.g. AAPL)")
 
 
 @registry.register(
@@ -18,6 +23,7 @@ from app.utils.text_utils import format_db_section, fmt_usd
     },
     tier=0,
     source="data_rotator",
+    input_model=TickerInput,
 )
 async def get_market_data(ticker: str) -> str:
     from app.collectors.data_rotator import (
@@ -104,6 +110,7 @@ async def get_market_data(ticker: str) -> str:
     },
     tier=0,
     source="finnhub",
+    input_model=TickerInput,
 )
 async def get_finnhub_news(ticker: str) -> str:
     from app.collectors.news_collector import collect_finnhub_news
@@ -141,6 +148,7 @@ async def get_finnhub_news(ticker: str) -> str:
     },
     tier=0,
     source="computed",
+    input_model=TickerInput,
 )
 async def get_technical_indicators(ticker: str) -> str:
     from app.processors.technical_processor import get_signals
