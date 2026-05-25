@@ -97,57 +97,157 @@ async def fetch_fundamentals_dict(ticker: str) -> dict | None:
         return None
 
 
+async def collect_fundamentals_finnhub(ticker: str) -> bool:
+    """
+    Fetch fundamentals snapshot from Finnhub as a tertiary fallback.
+    Returns True if data was written.
+    """
+    import os
+    from app.config.config import settings
+    
+    api_key = settings.FINNHUB_API_KEY or os.environ.get("FINNHUB_API_KEY", "")
+    if not api_key:
+        logger.info(f"[finnhub] API key not set, skipping fundamentals fallback for {ticker}")
+        return False
+
+    try:
+        import finnhub
+        client = finnhub.Client(api_key=api_key)
+        
+        # Run Finnhub client API calls in threads since they are blocking I/O calls
+        profile = await asyncio.to_thread(client.company_profile2, symbol=ticker)
+        financials = await asyncio.to_thread(client.company_basic_financials, ticker, 'all')
+        
+        if not profile and not financials:
+            logger.info(f"[finnhub] No profile/financials data returned for {ticker}")
+            return False
+            
+        metric = financials.get("metric", {}) if financials else {}
+        
+        today = datetime.date.today()
+        # Market Cap from profile is in Millions, convert to dollars
+        mkt_cap_m = profile.get("marketCapitalization")
+        mkt_cap = float(mkt_cap_m) * 1_000_000 if mkt_cap_m else None
+        
+        pe = metric.get("peNormalizedTTM") or metric.get("peExclExtraTTM")
+        beta = metric.get("beta") or profile.get("beta")
+        
+        # Map fields to fundamentals table structure
+        with get_db() as db:
+            db.execute(
+                """
+                INSERT INTO fundamentals (
+                    ticker, snapshot_date, source, market_cap, pe_ratio, forward_pe, peg_ratio,
+                    price_to_book, price_to_sales, ev_to_ebitda, profit_margin,
+                    roe, roa, revenue, revenue_growth, net_income,
+                    debt_to_equity, current_ratio, beta,
+                    week_52_high, week_52_low, short_float_pct
+                ) VALUES (%s, %s, 'finnhub', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (ticker, snapshot_date) DO NOTHING
+                """,
+                [
+                    ticker.upper(),
+                    today,
+                    mkt_cap,
+                    pe,
+                    None,
+                    None,
+                    metric.get("bookValuePerShareAnnual"), # pb proxy
+                    metric.get("psTTM"),
+                    None,
+                    metric.get("netProfitMarginTTM"),
+                    metric.get("roeTTM"),
+                    metric.get("roaTTM"),
+                    None,
+                    None,
+                    None,
+                    metric.get("debtEquityTTM"),
+                    metric.get("currentRatioAnnual"),
+                    beta,
+                    metric.get("52WeekHigh"),
+                    metric.get("52WeekLow"),
+                    None,
+                ],
+            )
+        logger.info(f"[finnhub] Successfully stored fundamentals fallback for {ticker}")
+        return True
+    except Exception as e:
+        logger.info(f"[finnhub] Error fetching fundamentals fallback for {ticker}: {e}")
+        return False
+
+
 async def collect_fundamentals(ticker: str) -> bool:
     """
     Fetch fundamentals snapshot and upsert into fundamentals table.
     Returns True if data was written.
     """
+    # 1. Try yfinance
     info = await fetch_fundamentals_dict(ticker)
-    if not info:
-        return False
-
-    today = datetime.date.today()
-    with get_db() as db:
-        db.execute(
-            """
-            INSERT INTO fundamentals (
-                ticker, snapshot_date, market_cap, pe_ratio, forward_pe, peg_ratio,
-                price_to_book, price_to_sales, ev_to_ebitda, profit_margin,
-                roe, roa, revenue, revenue_growth, net_income,
-                debt_to_equity, current_ratio, beta,
-                week_52_high, week_52_low, short_float_pct
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (ticker, snapshot_date) DO NOTHING
-        """,
-            [
-                ticker,
-                today,
-                info.get("marketCap"),
-                info.get("trailingPE"),
-                info.get("forwardPE"),
-                info.get("pegRatio"),
-                info.get("priceToBook"),
-                info.get("priceToSalesTrailing12Months"),
-                info.get("enterpriseToEbitda"),
-                info.get("profitMargins"),
-                info.get("returnOnEquity"),
-                info.get("returnOnAssets"),
-                info.get("totalRevenue"),
-                info.get("revenueGrowth"),
-                info.get("netIncomeToCommon"),
-                info.get("debtToEquity"),
-                info.get("currentRatio"),
-                info.get("beta"),
-                info.get("fiftyTwoWeekHigh"),
-                info.get("fiftyTwoWeekLow"),
-                info.get("shortPercentOfFloat"),
-            ],
+    if info and info.get("marketCap"):
+        today = datetime.date.today()
+        with get_db() as db:
+            db.execute(
+                """
+                INSERT INTO fundamentals (
+                    ticker, snapshot_date, source, market_cap, pe_ratio, forward_pe, peg_ratio,
+                    price_to_book, price_to_sales, ev_to_ebitda, profit_margin,
+                    roe, roa, revenue, revenue_growth, net_income,
+                    debt_to_equity, current_ratio, beta,
+                    week_52_high, week_52_low, short_float_pct
+                ) VALUES (%s, %s, 'yfinance', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (ticker, snapshot_date) DO NOTHING
+            """,
+                [
+                    ticker,
+                    today,
+                    info.get("marketCap"),
+                    info.get("trailingPE"),
+                    info.get("forwardPE"),
+                    info.get("pegRatio"),
+                    info.get("priceToBook"),
+                    info.get("priceToSalesTrailing12Months"),
+                    info.get("enterpriseToEbitda"),
+                    info.get("profitMargins"),
+                    info.get("returnOnEquity"),
+                    info.get("returnOnAssets"),
+                    info.get("totalRevenue"),
+                    info.get("revenueGrowth"),
+                    info.get("netIncomeToCommon"),
+                    info.get("debtToEquity"),
+                    info.get("currentRatio"),
+                    info.get("beta"),
+                    info.get("fiftyTwoWeekHigh"),
+                    info.get("fiftyTwoWeekLow"),
+                    info.get("shortPercentOfFloat"),
+                ],
+            )
+        logger.info(
+            f"[yfinance] {ticker}: fundamentals written (mkt_cap={info.get('marketCap')})"
         )
+        return True
 
-    logger.info(
-        f"[yfinance] {ticker}: fundamentals written (mkt_cap={info.get('marketCap')})"
-    )
-    return True
+    logger.info(f"[yfinance] Failed to collect fundamentals for {ticker}, trying fallbacks...")
+
+    # 2. Try FMP Fallback
+    try:
+        from app.collectors.fmp_collector import collect_fundamentals as collect_fmp
+        fmp_ok = await collect_fmp(ticker)
+        if fmp_ok:
+            logger.info(f"[fundamentals] Fallback to FMP succeeded for {ticker}")
+            return True
+    except Exception as e:
+        logger.warning(f"[fundamentals] Fallback to FMP failed for {ticker}: {e}")
+
+    # 3. Try Finnhub Fallback
+    try:
+        finnhub_ok = await collect_fundamentals_finnhub(ticker)
+        if finnhub_ok:
+            logger.info(f"[fundamentals] Fallback to Finnhub succeeded for {ticker}")
+            return True
+    except Exception as e:
+        logger.warning(f"[fundamentals] Fallback to Finnhub failed for {ticker}: {e}")
+
+    return False
 
 
 async def collect_financials(ticker: str) -> int:

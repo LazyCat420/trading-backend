@@ -32,6 +32,9 @@ class EvidencePacket(BaseModel):
     tool_cache: dict = Field(default_factory=dict)
     freshness_summary: Optional[FreshnessSummary] = None
     source_quality_summary: Optional[SourceQuality] = None
+    company_story: Optional[str] = None
+    key_themes: Optional[List[dict]] = Field(default_factory=list)
+    pillar_profiles: Optional[dict] = None
 
     class Config:
         frozen = True

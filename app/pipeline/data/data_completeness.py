@@ -368,6 +368,13 @@ async def check_and_fill(ticker: str, emit=None, enqueue_only: bool = False) -> 
             logger.warning("[DATA CHECK] Failed checking for unsummarized data for %s: %s", ticker, e)
 
     if needs_jit_processing:
+        # Pre-process raw text with Smart Janitor JIT
+        try:
+            from app.pipeline.data.data_perticker_collection import run_smart_janitor_on_ticker_data
+            await run_smart_janitor_on_ticker_data(ticker)
+        except Exception as e:
+            logger.warning("[DATA CHECK] JIT Smart Janitor failed for %s: %s", ticker, e)
+
         # Run per-ticker deduplication, summarization, and consensus JIT
         try:
             from app.processors.deduplicator import deduplicate_news
@@ -387,6 +394,12 @@ async def check_and_fill(ticker: str, emit=None, enqueue_only: bool = False) -> 
             await run_consensus_engine(emit=emit, ticker=ticker)
         except Exception as e:
             logger.warning("[DATA CHECK] JIT consensus failed for %s: %s", ticker, e)
+
+        try:
+            from app.processors.narrative_curator import update_company_narrative
+            await update_company_narrative(ticker=ticker)
+        except Exception as e:
+            logger.warning("[DATA CHECK] JIT narrative curation failed for %s: %s", ticker, e)
 
     return report
 

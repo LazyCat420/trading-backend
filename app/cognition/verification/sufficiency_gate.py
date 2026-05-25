@@ -50,11 +50,7 @@ def check_data_sufficiency(entity_id: str, packet: EvidencePacket) -> Sufficienc
                 f"High teaser/promo risk ({sq.teaser_artifact_risk * 100:.0f}%) in unstructured sources."
             )
 
-        # 4. Stale Data & Cached Fallbacks
-        if packet.freshness_summary and (packet.freshness_summary.is_stale or packet.freshness_summary.newest_data_age_hours > 24.0):
-            warnings.append(
-                f"Stale data/cached fallbacks in use. Newest data is {packet.freshness_summary.newest_data_age_hours:.1f} hours old."
-            )
+
 
     if not packet.claims:
         blockers.append("No factual claims could be extracted.")

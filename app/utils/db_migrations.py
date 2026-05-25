@@ -53,12 +53,14 @@ def ensure_summary_columns(db=None):
             "ALTER TABLE reddit_posts ADD COLUMN IF NOT EXISTS quality_status VARCHAR",
             "ALTER TABLE reddit_posts ADD COLUMN IF NOT EXISTS quality_reason VARCHAR",
             "ALTER TABLE reddit_posts ADD COLUMN IF NOT EXISTS quality_score INTEGER",
+            "ALTER TABLE reddit_posts ADD COLUMN IF NOT EXISTS qualitative_draft JSONB",
             # News (base + quality columns from summarizer)
             "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS llm_summary VARCHAR",
             "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS summarized_at TIMESTAMP",
             "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS quality_status VARCHAR",
             "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS quality_reason VARCHAR",
             "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS quality_score INTEGER",
+            "ALTER TABLE news_articles ADD COLUMN IF NOT EXISTS qualitative_draft JSONB",
             # AutoResearch V2
             """CREATE TABLE IF NOT EXISTS cycle_summaries (
                 ticker VARCHAR,
@@ -80,6 +82,12 @@ def ensure_summary_columns(db=None):
                 winner VARCHAR,
                 final_confidence INTEGER,
                 UNIQUE (ticker, cycle_id)
+            )""",
+            """CREATE TABLE IF NOT EXISTS company_narratives (
+                ticker VARCHAR PRIMARY KEY,
+                story_summary TEXT NOT NULL,
+                key_themes JSONB NOT NULL,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )""",
         ]
         for sql in migrations:

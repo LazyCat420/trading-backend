@@ -1,0 +1,12 @@
+risk_score:
+  inputs:
+    - vol_norm
+    - dd_norm
+    - beta_norm
+  formula: "0.4 * (1.0 - vol_norm) + 0.4 * (1.0 - dd_norm) + 0.2 * (1.0 - beta_norm)"
+  mapping:
+    type: linear
+    to_scale: [1, 10]
+  constraints:
+    monotonic:
+      decreasing: ["vol_norm", "dd_norm", "beta_norm"]

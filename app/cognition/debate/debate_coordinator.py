@@ -253,6 +253,8 @@ USER_TEMPLATE = """## Entity: {entity_id}
 
 {portfolio_dashboard}
 
+{company_narrative}
+
 ## Structured Facts:
 {structured_facts}
 
@@ -337,10 +339,56 @@ async def _run_biased_agent(
                 [format_source_ref_for_prompt(s) for s in packet.source_summaries[:15]]
             )
 
+        company_narrative_str = "## Company Narrative & Evolving Themes:\nNo persistent narrative available."
+        if getattr(packet, "company_story", None):
+            narrative_lines = [
+                "## Company Narrative & Evolving Themes:",
+                f"[Story Summary]\n{packet.company_story}",
+            ]
+            if getattr(packet, "key_themes", None):
+                narrative_lines.append("\n[Active & Historical Themes]")
+                for theme in packet.key_themes:
+                    theme_name = theme.get("theme", "Unknown")
+                    cat = theme.get("category", "unknown")
+                    status = theme.get("status", "unknown")
+                    impact = theme.get("impact", "unknown")
+                    rel_label = theme.get("market_relevance_label", "unknown")
+                    sev_summary = theme.get("qualitative_severity_summary", "")
+                    summary = theme.get("summary", "")
+                    
+                    narrative_lines.append(
+                        f"- {theme_name} (Category: {cat}, Status: {status}, Impact: {impact}, Relevance: {rel_label})\n"
+                        f"  Theme summary: {summary}\n"
+                        f"  Contextual Relevance/Severity: {sev_summary}"
+                    )
+            
+            if getattr(packet, "pillar_profiles", None) and "pillars" in packet.pillar_profiles:
+                narrative_lines.append("\n## Structured Quantitative & Qualitative Pillar Profiles:")
+                for pk, p_data in packet.pillar_profiles["pillars"].items():
+                    p_name = pk.upper()
+                    base_s = p_data.get("base_score", 5.0)
+                    adj_s = p_data.get("adjusted_score", base_s)
+                    label = p_data.get("profile_label", "Unknown")
+                    drivers = p_data.get("active_drivers", [])
+                    vetoes = p_data.get("veto_flags", [])
+                    rat = p_data.get("adjustment_rationale", "")
+                    
+                    narrative_lines.append(f"\n### {p_name} PILLAR (Base Score: {base_s:.1f} | Adjusted: {adj_s:.1f})")
+                    narrative_lines.append(f"  Profile Label: {label}")
+                    if drivers:
+                        narrative_lines.append(f"  Active Drivers: {', '.join(drivers)}")
+                    if vetoes:
+                        narrative_lines.append(f"  VETO FLAGS: {', '.join(vetoes)}")
+                    if rat:
+                        narrative_lines.append(f"  Adjustment Rationale: {rat}")
+
+            company_narrative_str = "\n".join(narrative_lines)
+
         user_prompt = USER_TEMPLATE.format(
             entity_id=entity_id,
             position_block=position_block,
             portfolio_dashboard=portfolio_dashboard,
+            company_narrative=company_narrative_str,
             structured_facts=_build_evidence_header(packet),
             unstructured_context=unstructured_context,
             claims_text=claims_text,

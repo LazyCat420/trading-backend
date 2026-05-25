@@ -35,7 +35,33 @@ def deduplicate_news(ticker: str | None = None) -> tuple[int, list[str]]:
         else:
             before = db.execute("SELECT COUNT(*) FROM news_articles").fetchone()[0]
 
-        # 1. Exact title dedup first (fastest, cheapest)
+        # 1. Exact URL dedup (fast, cheap)
+        if ticker:
+            db.execute("""
+                DELETE FROM news_articles 
+                WHERE ticker = %s AND url IS NOT NULL AND url != '' AND id NOT IN (
+                    SELECT id FROM (
+                        SELECT id,
+                        ROW_NUMBER() OVER(PARTITION BY ticker, LOWER(TRIM(url)) ORDER BY published_at DESC) as rn
+                        FROM news_articles
+                        WHERE ticker = %s AND url IS NOT NULL AND url != ''
+                    ) t WHERE t.rn = 1
+                )
+            """, [ticker, ticker])
+        else:
+            db.execute("""
+                DELETE FROM news_articles 
+                WHERE url IS NOT NULL AND url != '' AND id NOT IN (
+                    SELECT id FROM (
+                        SELECT id,
+                        ROW_NUMBER() OVER(PARTITION BY ticker, LOWER(TRIM(url)) ORDER BY published_at DESC) as rn
+                        FROM news_articles
+                        WHERE url IS NOT NULL AND url != ''
+                    ) t WHERE t.rn = 1
+                )
+            """)
+
+        # 2. Exact title dedup (fastest, cheapest)
         if ticker:
             db.execute("""
                 DELETE FROM news_articles 

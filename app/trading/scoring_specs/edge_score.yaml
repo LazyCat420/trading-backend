@@ -1,0 +1,12 @@
+edge_score:
+  inputs:
+    - ev_norm
+    - rr_norm
+    - kelly_norm
+  formula: "0.333333 * ev_norm + 0.333333 * rr_norm + 0.333334 * kelly_norm"
+  mapping:
+    type: linear
+    to_scale: [1, 10]
+  constraints:
+    monotonic:
+      increasing: ["ev_norm", "rr_norm", "kelly_norm"]

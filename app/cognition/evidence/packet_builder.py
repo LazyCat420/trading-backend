@@ -31,8 +31,50 @@ from ..contracts.evidence import EvidencePacket
 
 # Import real queries
 from app.db.connection import get_db
+from app.trading.scoring_engine import build_hierarchical_pillar_profiles
+from app.services.prism_agent_caller import call_prism_agent
+from app.services.vllm_client import Priority
 
 logger = logging.getLogger(__name__)
+
+PILLAR_ADJUSTER_SYSTEM_PROMPT = """You are a quantitative analyst and qualitative risk manager for a hedge fund.
+Your task is to review the quantitative "Pillar Profiles" of a stock ticker and qualitatively adjust their scores based on the company's "Story & Narrative".
+
+You are given:
+- The stock ticker.
+- The base scores, active outlier drivers, and veto flags computed deterministically for three pillars: Edge, Risk, and Regime Fit.
+- The company's persistent narrative summary and active story themes (e.g. CEO transitions, expansions, lawsuits).
+
+Your job is to:
+- Review each pillar's base score and decide if the qualitative narrative warrants adjusting it.
+- You can adjust each score up or down by a MAXIMUM of 2.0 points (e.g., from 6.0 to 8.0, or from 5.0 to 3.0).
+- If the company has high debt or low cash runway in its narrative, penalize any capital-intensive expansion theme by lowering the Edge score or the Risk score.
+- For each pillar, write:
+  1. The "adjusted_score" (clamped between 1.0 and 10.0).
+  2. The "adjustment_rationale" explaining why the score was adjusted or left unchanged, citing specific qualitative themes and financial context.
+  3. A refined "profile_label" capturing the combined quant + qual setup.
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "pillars": {
+    "edge": {
+      "adjusted_score": float,
+      "profile_label": "string",
+      "adjustment_rationale": "string"
+    },
+    "risk": {
+      "adjusted_score": float,
+      "profile_label": "string",
+      "adjustment_rationale": "string"
+    },
+    "regime": {
+      "adjusted_score": float,
+      "profile_label": "string",
+      "adjustment_rationale": "string"
+    }
+  }
+}
+Ensure the output is strictly valid JSON without any markdown formatting around it."""
 
 
 async def build_evidence_packet(
@@ -253,9 +295,23 @@ async def build_evidence_packet(
             except Exception as e:
                 logger.warning(f"[PACKET] Failed to fetch youtube for {ticker}: {e}")
 
-        return documents, fund_dict, tech_dict
+            # -- 1.3 Company Story / Narrative
+            story_summary = None
+            key_themes = []
+            try:
+                narrative_row = db.execute(
+                    "SELECT story_summary, key_themes FROM company_narratives WHERE ticker = %s",
+                    [ticker],
+                ).fetchone()
+                if narrative_row:
+                    story_summary = narrative_row[0]
+                    key_themes = narrative_row[1] if isinstance(narrative_row[1], list) else json.loads(narrative_row[1] or "[]")
+            except Exception as e:
+                logger.warning(f"[PACKET] Failed to fetch company narrative for {ticker}: {e}")
 
-    documents, fund_dict, tech_dict = await asyncio.to_thread(_fetch_db_docs)
+        return documents, fund_dict, tech_dict, story_summary, key_themes
+
+    documents, fund_dict, tech_dict, story_summary, key_themes = await asyncio.to_thread(_fetch_db_docs)
 
     # 2. Extract Claims
     claims = []
@@ -290,11 +346,13 @@ async def build_evidence_packet(
         if d.source_type == "structured"
     ):
         missing_fields.append("price")
-    if not any(
-        d.metadata.get("fact_type") == "pe_ratio"
+
+    has_fundamentals = any(
+        d.metadata.get("fact_type") in ("market_cap", "forward_pe", "profit_margin")
         for d in documents
         if d.source_type == "structured"
-    ):
+    )
+    if not has_fundamentals:
         missing_fields.append("pe_ratio")
 
     # 6. Score Sources
@@ -372,6 +430,52 @@ async def build_evidence_packet(
             }
         )
 
+    # ── Compute and adjust Hierarchical Pillar Profiles ──
+    profiles = build_hierarchical_pillar_profiles(ticker)
+    
+    # Initialize adjusted scores to base scores
+    for pk in ["edge", "risk", "regime"]:
+        if pk in profiles["pillars"]:
+            profiles["pillars"][pk]["adjusted_score"] = profiles["pillars"][pk]["base_score"]
+            profiles["pillars"][pk]["adjustment_rationale"] = "No qualitative adjustment applied (base quant score)."
+            
+    # Run qualitative adjustment if narrative is present
+    if story_summary:
+        try:
+            user_message = f"""Ticker: {ticker}
+Pillar Profiles (Quantitative Base):
+{json.dumps(profiles["pillars"], indent=2)}
+
+Company Qualitative Narrative Story:
+{story_summary}
+
+Active Narrative Themes:
+{json.dumps(key_themes, indent=2)}
+"""
+            response, _, _ = await call_prism_agent(
+                agent_id="CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
+                user_message=user_message,
+                fallback_system_prompt=PILLAR_ADJUSTER_SYSTEM_PROMPT,
+                fallback_agent_name="pillar_adjuster",
+                temperature=0.2,
+                max_tokens=1024,
+                priority=Priority.NORMAL,
+                ticker=ticker,
+            )
+            cleaned = response.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("```json")[-1].split("```")[0].strip()
+                
+            adj_data = json.loads(cleaned)
+            adj_pillars = adj_data.get("pillars", {})
+            for pk in ["edge", "risk", "regime"]:
+                if pk in adj_pillars:
+                    profiles["pillars"][pk]["adjusted_score"] = adj_pillars[pk].get("adjusted_score", profiles["pillars"][pk]["base_score"])
+                    profiles["pillars"][pk]["profile_label"] = adj_pillars[pk].get("profile_label", profiles["pillars"][pk]["profile_label"])
+                    profiles["pillars"][pk]["adjustment_rationale"] = adj_pillars[pk].get("adjustment_rationale", profiles["pillars"][pk]["adjustment_rationale"])
+        except Exception as e:
+            logger.warning(f"[PACKET] Qualitative pillar adjustment failed for {ticker}: {e}")
+
     return EvidencePacket(
         entity_id=ticker,
         claims=final_claims,
@@ -382,6 +486,9 @@ async def build_evidence_packet(
         tool_cache=tool_cache,
         freshness_summary=freshness,
         source_quality_summary=source_quality,
+        company_story=story_summary,
+        key_themes=key_themes,
+        pillar_profiles=profiles,
     )
 
 

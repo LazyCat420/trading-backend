@@ -1,0 +1,8 @@
+regime_fit_score:
+  inputs:
+    - z_score_norm
+    - rsi_norm
+  formula: "0.5 * z_score_norm + 0.5 * rsi_norm"
+  mapping:
+    type: linear
+    to_scale: [1, 10]
