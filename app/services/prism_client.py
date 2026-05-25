@@ -149,6 +149,9 @@ class PrismClient:
         headers: dict | None = None,
     ) -> httpx.Response:
         """Internal API wrapper with explicit timeout and retry logic."""
+        from app.utils.text_utils import sanitize_surrogates
+        json_payload = sanitize_surrogates(json_payload)
+
         max_retries = 3
         backoff = 1.0
 
@@ -390,7 +393,7 @@ class PrismClient:
         }
         if agentic_mode:
             self._enrich_payload_with_tools_and_prefixes(payload, tools, system_prompt, messages)
-        if is_qwen_model:
+        if is_qwen_model or (model and "qwen" in model.lower()):
             payload["thinkingEnabled"] = enable_thinking
         # Forward tools if present.
         if tools:
@@ -401,8 +404,11 @@ class PrismClient:
         elif session_id:
             payload["sessionId"] = session_id
 
-        # Always route through the agent endpoint
-        target_url = f"{self.url}/agent?stream=false"
+        # Route to agentic loop endpoint only when agentic_mode is True, otherwise use standard chat completion
+        if agentic_mode:
+            target_url = f"{self.url}/agent?stream=false"
+        else:
+            target_url = f"{self.url}/chat?stream=false"
         headers = {
             "Content-Type": "application/json",
             "x-project": self.project,
@@ -471,7 +477,7 @@ class PrismClient:
         }
         if agentic_mode:
             self._enrich_payload_with_tools_and_prefixes(payload, tools, system_prompt, messages)
-        if is_qwen_model:
+        if is_qwen_model or (model and "qwen" in model.lower()):
             payload["thinkingEnabled"] = enable_thinking
         if tools:
             payload["tools"] = self._format_tools(tools)
@@ -481,8 +487,11 @@ class PrismClient:
         elif session_id:
             payload["sessionId"] = session_id
 
-        # Always route through the agent endpoint
-        target_url = f"{self.url}/agent"
+        # Route to agentic loop endpoint only when agentic_mode is True, otherwise use standard chat completion
+        if agentic_mode:
+            target_url = f"{self.url}/agent"
+        else:
+            target_url = f"{self.url}/chat"
         headers = {
             "Content-Type": "application/json",
             "x-project": self.project,

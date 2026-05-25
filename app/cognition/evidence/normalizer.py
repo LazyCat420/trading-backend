@@ -34,7 +34,7 @@ def normalize_news(row: tuple, columns: list[str]) -> Optional[NormalizedDocumen
         source_type="news",
         content=f"Title: {row_dict.get('title')}\nSummary: {summary}",
         metadata={"publisher": row_dict.get("publisher"), "url": row_dict.get("url")},
-        timestamp=row_dict.get("published_at", datetime.now(timezone.utc)),
+        timestamp=row_dict.get("published_at") or datetime.now(timezone.utc),
         author=row_dict.get("publisher"),
     )
 
@@ -52,7 +52,7 @@ def normalize_reddit(row: tuple, columns: list[str]) -> NormalizedDocument:
             "score": row_dict.get("score"),
             "comment_count": row_dict.get("comment_count"),
         },
-        timestamp=row_dict.get("created_utc", datetime.now(timezone.utc)),
+        timestamp=row_dict.get("created_utc") or datetime.now(timezone.utc),
         author=row_dict.get("author"),
     )
 
@@ -74,18 +74,18 @@ def normalize_youtube(row: tuple, columns: list[str]) -> NormalizedDocument:
             "channel": row_dict.get("channel"),
             "tickers_mentioned": row_dict.get("tickers_mentioned"),
         },
-        timestamp=row_dict.get("published_at", datetime.now(timezone.utc)),
+        timestamp=row_dict.get("published_at") or datetime.now(timezone.utc),
         author=row_dict.get("channel"),
     )
 
 
 def normalize_structured_row(
-    table_name: str, fact_type: str, pk_id: str, value: Any, timestamp: datetime
+    table_name: str, fact_type: str, pk_id: str, value: Any, timestamp: Optional[datetime]
 ) -> NormalizedDocument:
     return NormalizedDocument(
         source_ref=f"{table_name}_{pk_id}",
         source_type="structured",
         content=str(value),
         metadata={"fact_type": fact_type},
-        timestamp=timestamp,
+        timestamp=timestamp or datetime.now(timezone.utc),
     )

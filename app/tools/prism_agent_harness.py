@@ -134,8 +134,8 @@ async def run_prism_agent(
         {"role": "user", "content": user_prompt},
     ]
 
-    # Get the model from the active endpoint
-    model = llm.model or settings.ACTIVE_MODEL or "auto"
+    # Get the model resolved for this agent
+    model = llm._resolve_model(agent_name)
 
     # CRITICAL: Resolve the correct provider name based on the model's location.
     # DO NOT remove or alter this. It prevents heavy models (like 122B Qwen)
@@ -181,10 +181,19 @@ async def run_prism_agent(
         elapsed_ms = int((time.monotonic() - start) * 1000)
         result_data = response.json()
 
+        # Raise error if response represents an error payload
+        if "error" in result_data or result_data.get("error") is True:
+            error_msg = result_data.get("message") or result_data.get("error") or "Unknown Prism error"
+            raise RuntimeError(f"Prism error: {error_msg}")
+
         # Prism /agent?stream=false wraps the result inside a "response" dictionary
         response_data = result_data.get("response")
         if isinstance(response_data, dict):
             result_data = response_data
+
+        if "error" in result_data or result_data.get("error") is True:
+            error_msg = result_data.get("message") or result_data.get("error") or "Unknown Prism error"
+            raise RuntimeError(f"Prism error: {error_msg}")
 
         # Extract the final assistant response from Prism's response
         final_text = _extract_final_text(result_data)

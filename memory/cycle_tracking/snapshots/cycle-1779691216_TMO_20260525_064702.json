@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 0,
+  "rationale": "Failed to parse thesis. Invalid JSON format. Raw: # Trading Thesis: Thermo Fisher Scientific (TMO)\n\n## **Recommendation: HOLD**\n**Action:** Maintain current position (5.5755 shares). Do not add to the position at this time.\n\n### **Executive Summary**\nThermo Fisher Scientific (TMO) is currently tradi...\n\n\u26a0\ufe0f Data warnings: Stale data/cached fallbacks in use. Newest data is 30.7 hours old.\n\n\ud83d\udcc5 Data timeframe: 2025-09-30 00:00 UTC to 2026-05-24 00:00 UTC\n\n\ud83d\udcdd Memory context: - [2026-05-25] pipeline_r",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

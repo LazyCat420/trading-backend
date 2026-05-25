@@ -42,6 +42,8 @@ async def test_prism_healthy_routes_through_proxy(mock_vllm_client):
             yield chunk
             
     mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.headers = {"content-type": "text/event-stream"}
     mock_response.aiter_text = mock_aiter_text
     mock_stream_ctx = MagicMock()
     mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
@@ -83,6 +85,8 @@ async def test_prism_unhealthy_falls_back_to_vllm(mock_vllm_client):
             yield chunk
             
     mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.headers = {"content-type": "text/event-stream"}
     mock_response.aiter_text = mock_aiter_text_unhealthy
     mock_stream_ctx = MagicMock()
     mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_response)
@@ -138,7 +142,7 @@ def test_prism_client_payload_construction():
     assert payload["systemPrompt"] == "system instructions"
     assert payload["conversationMeta"]["systemPrompt"] == "system instructions"
     assert payload["conversationMeta"]["title"] == "thesis_agent · LLY · cycle-1234"
-    assert url == "http://prism_host:7777/agent?stream=false"
+    assert url == "http://prism_host:7777/chat?stream=false"
     
     # Assert session ID is isolated and cached under compound key: cycle-1234-LLY-thesis_agent
     expected_group_key = "cycle-1234-LLY-thesis_agent"
@@ -178,7 +182,7 @@ def test_prism_client_payload_construction():
         agentic_mode=False
     )
     assert payload_s["systemPrompt"] == "system instructions"
-    assert url_s == "http://prism_host:7777/agent"
+    assert url_s == "http://prism_host:7777/chat"
 
 
 def test_prism_client_conversation_caching():
@@ -195,7 +199,7 @@ def test_prism_client_conversation_caching():
         ticker="AAPL",
         cycle_id="cycle-123",
         enable_thinking=False,
-        agentic_mode=False
+        agentic_mode=True
     )
     
     expected_group_key = "cycle-123-AAPL-thesis_agent"
@@ -214,7 +218,7 @@ def test_prism_client_conversation_caching():
         ticker="AAPL",
         cycle_id="cycle-123",
         enable_thinking=False,
-        agentic_mode=False
+        agentic_mode=True
     )
     assert payload2["conversationId"] == conv_id1
 
@@ -229,7 +233,7 @@ def test_prism_client_conversation_caching():
         ticker="AAPL",
         cycle_id="cycle-123",
         enable_thinking=False,
-        agentic_mode=False
+        agentic_mode=True
     )
     assert payload3["conversationId"] != conv_id1
     assert "cycle-123-AAPL-technical_agent" in client._conversations

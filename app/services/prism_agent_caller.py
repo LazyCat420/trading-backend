@@ -155,28 +155,51 @@ async def _call_via_prism(
     r = await llm.prism_client._call_endpoint(client, url, payload, headers)
     data = r.json()
 
+    # Raise error if response represents an error payload
+    if "error" in data or data.get("error") is True:
+        error_msg = data.get("message") or data.get("error") or "Unknown Prism error"
+        raise RuntimeError(f"Prism error: {error_msg}")
+
     elapsed_ms = int((time.monotonic() - start) * 1000)
 
     # Prism /agent?stream=false wraps the result inside a "response" dictionary
     response_data = data.get("response")
-    if isinstance(response_data, dict):
-        data = response_data
 
-    # Extract response text from Prism's response format
-    text = data.get("text") or data.get("content") or ""
-    if not text:
-        # Try alternate response formats
-        messages = data.get("messages", [])
-        if messages:
-            last = messages[-1]
-            text = last.get("content", "") if isinstance(last, dict) else str(last)
+    # Extract response text
+    text = ""
+    for d in (response_data, data):
+        if isinstance(d, dict):
+            choices = d.get("choices", [])
+            if choices:
+                message = choices[0].get("message", {})
+                text = message.get("content", "")
+                if text:
+                    break
+            text = d.get("text") or d.get("content") or ""
+            if text:
+                break
+            messages = d.get("messages", [])
+            if messages:
+                last = messages[-1]
+                text = last.get("content", "") if isinstance(last, dict) else str(last)
+                if text:
+                    break
 
-    # Token count from Prism response
-    token_count = (
-        data.get("totalTokens", 0)
-        or data.get("usage", {}).get("total_tokens", 0)
-        or data.get("usage", {}).get("totalTokens", 0)
-    )
+    # Extract token count
+    token_count = 0
+    for d in (response_data, data):
+        if isinstance(d, dict):
+            usage = d.get("usage") or {}
+            tc = (
+                d.get("totalTokens", 0)
+                or d.get("total_tokens", 0)
+                or usage.get("total_tokens", 0)
+                or usage.get("totalTokens", 0)
+                or (usage.get("inputTokens", 0) + usage.get("outputTokens", 0))
+            )
+            if tc:
+                token_count = int(tc)
+                break
 
     logger.info(
         "[PrismAgentCaller] %s completed via Prism (agent=%s, tokens=%d, %dms)",

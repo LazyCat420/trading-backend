@@ -124,6 +124,8 @@ class OrchestratorCoreMixin:
             cls._cycle_summary["cycle_id"] = ctx.cycle_id
             cls._cycle_summary["status"] = "created"
             cls._cycle_summary["bot_id"] = bot_id
+            cls._state["cycle_id"] = ctx.cycle_id
+            cls._state["tickers"] = ctx.tickers
             cls._state["status"] = "created"
             
             cls._state["status"] = "queued"

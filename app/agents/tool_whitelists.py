@@ -217,7 +217,7 @@ Audit agents get 10 turns (need to review multiple performance dimensions).
 AGENT_BUDGET_OVERRIDES: dict[str, int] = {
     "risk": 5,
     "verifier": 5,
-    "retriever": 5,
+    "retriever": 8,
     "pre_trade": 12,
     "meta_audit": 10,
     "portfolio_allocator": 10,

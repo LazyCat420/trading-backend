@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 0,
+  "rationale": "Failed to parse thesis. Invalid JSON format. Raw: \n\n# AMD \u2014 Advanced Micro Devices\n**Current Price**: $467.51 | **Change**: +N/A% (data from May 22)\n**Rating**: \u26a0\ufe0f **HOLD** \u2014 No Buy Signal (Constitution Violations)\n\n---\n\n## Quick Verdict...\n\n\u26a0\ufe0f Data warnings: Stale data/cached fallbacks in use. Newest data is 8.2 hours old.\n\n\ud83d\udcc5 Data timeframe: 2025-09-30 00:00 UTC to 2026-05-24 21:50 UTC\n\n\ud83d\udcdd Memory context: - [2026-05-24] pipeline_run: SELL (conf=0)\n- [2026-05-23] pipeline_run: BUY (conf=85)\n- [",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

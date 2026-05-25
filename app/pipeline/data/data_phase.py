@@ -140,9 +140,13 @@ async def run(
                 results["processors"]["data_janitor"] = janitor_metrics
             except Exception as e:
                 logger.error(f"[PIPELINE]   [Janitor] Failed: {e}")
-
-    curation_task = asyncio.create_task(_run_curation_bg())
-    janitor_task = asyncio.create_task(_run_janitor_bg())
+    curation_task = None
+    janitor_task = None
+    if len(tickers) == 1:
+        logger.info("[PIPELINE] [DATA PHASE] Single-ticker mode detected: skipping database curation and data janitor tasks")
+    else:
+        curation_task = asyncio.create_task(_run_curation_bg())
+        janitor_task = asyncio.create_task(_run_janitor_bg())
 
     from app.pipeline.data.data_global_collection import run_global_collection
     from app.config import settings
@@ -434,10 +438,14 @@ async def run(
         status="running",
     )
 
-    await asyncio.gather(
-        _track_a_global_and_discovery(),
-        _track_b_perticker(),
-    )
+    if len(tickers) == 1:
+        logger.info("[PIPELINE] [DATA PHASE] Single-ticker mode detected: skipping background global collection and discovery (Track A)")
+        await _track_b_perticker()
+    else:
+        await asyncio.gather(
+            _track_a_global_and_discovery(),
+            _track_b_perticker(),
+        )
 
     # Merge discovered tickers into the main ticker list for downstream phases
     if _discovery_merged_tickers:
@@ -462,8 +470,9 @@ async def run(
     # ═══════════════════════════════════════════════════════════
     # Wait for background tasks before Deduplication
     # ═══════════════════════════════════════════════════════════
-    logger.info("[PIPELINE]   Waiting for background Curation & Janitor tasks...")
-    await asyncio.gather(curation_task, janitor_task)
+    if curation_task and janitor_task:
+        logger.info("[PIPELINE]   Waiting for background Curation & Janitor tasks...")
+        await asyncio.gather(curation_task, janitor_task)
 
     # ═══════════════════════════════════════════════════════════
     # PASS 5: DEDUPLICATION

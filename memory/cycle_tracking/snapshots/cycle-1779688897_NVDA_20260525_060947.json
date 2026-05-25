@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 0,
+  "rationale": "Failed to parse thesis. Invalid JSON format. Raw: \n\n# NVDA \u2014 NVIDIA CORPORATION\n**Current Price**: $215.33 | **Change**: +0.3% (from $214.65 SMA-20)\n**Rating**: \u2b50\u2b50\u2b50\u2b50 (4/5 Alpha)\n\n---\n\n## \ud83d\udea8 CRITICAL PORTFOLIO CONSTRAINT\n\n**WE HAVE 8 ACTIVE POSITIONS \u2014 MAX ALLOWED IS 8.**\n\nBefore we can BUY NVDA, we m...\n\n\u26a0\ufe0f Data warnings: Stale data/cached fallbacks in use. Newest data is 0.0 hours old.\n\n\ud83d\udcc5 Data timeframe: 2025-10-31 00:00 UTC to 2026-05-25 06:02 UTC\n\n\ud83d\udcdd Memory context: - [2026-05-22] pipeline_ru",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

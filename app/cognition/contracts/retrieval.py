@@ -30,7 +30,7 @@ class SourceDocRef(BaseModel):
     source_type: str
     source_id: str
     summary: str
-    timestamp: datetime
+    timestamp: Optional[datetime] = None
     url: Optional[str] = None
     metadata: Optional[dict] = None
 

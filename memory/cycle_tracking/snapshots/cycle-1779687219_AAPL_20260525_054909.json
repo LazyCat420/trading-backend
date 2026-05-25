@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 0,
+  "rationale": "Failed to parse thesis. Reason: LLM response is empty after stripping <think> tags (model failed to output JSON).. Raw: ...\n\n\u26a0\ufe0f Data warnings: Stale data/cached fallbacks in use. Newest data is 1.5 hours old.\n\n\ud83d\udcc5 Data timeframe: 2025-09-30 00:00 UTC to 2026-05-25 04:10 UTC\n\n\ud83d\udcdd Memory context: - [2026-05-25] pipeline_run: SELL (conf=0)\n- [2026-05-24] pipeline_run: SELL (conf=0)\n- [2026-05-22] pipeline_run: SELL (conf=95)\n- [2026-05-21] pipeline_run: SELL (conf=95)",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

@@ -99,3 +99,81 @@
 
 ⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 0.8 ho...
 
+## 2026-05-25 05:42:08 - TMO
+- **Action:** HOLD @ 0%
+- **Rationale:** Failed to parse thesis. Reason: LLM response is empty after stripping <think> tags (model failed to output JSON).. Raw: ...
+
+⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 29.6 h...
+
+## 2026-05-25 05:47:39 - HBM
+- **Action:** SELL @ 0%
+- **Rationale:** Failed to parse thesis. Reason: LLM response is empty after stripping <think> tags (model failed to output JSON).. Raw: ...
+
+⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 0.7 ho...
+
+## 2026-05-25 05:48:19 - MSFT
+- **Action:** SELL @ 0%
+- **Rationale:** Failed to parse thesis. Invalid JSON format. Raw: 
+
+# MSFT — MICROSOFT CORPORATION
+**Current Price**: $418.57 | **Change**: +0.6% (from $416.13 SMA20)
+**Rating**: ⭐⭐⭐⭐ (4/5 Alpha)
+
+---
+
+## Quick Verdi...
+
+## 2026-05-25 05:49:09 - AAPL
+- **Action:** SELL @ 0%
+- **Rationale:** Failed to parse thesis. Reason: LLM response is empty after stripping <think> tags (model failed to output JSON).. Raw: ...
+
+⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 1.5 ho...
+
+## 2026-05-25 05:59:48 - TMO
+- **Action:** HOLD @ 0%
+- **Rationale:** Failed to parse thesis. Reason: LLM response is empty after stripping <think> tags (model failed to output JSON).. Raw: ...
+
+⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 29.9 h...
+
+## 2026-05-25 06:08:49 - TMO
+- **Action:** HOLD @ 0%
+- **Rationale:** Failed to parse thesis. Invalid JSON format. Raw: 
+
+## TMO — Thermo Fisher Scientific
+**Current Price**: $448.28 | **Change**: 0.0% (flat...
+
+⚠️ Data warnings: Stale data/cached fallbacks in use. Newe...
+
+## 2026-05-25 06:09:47 - NVDA
+- **Action:** SELL @ 0%
+- **Rationale:** Failed to parse thesis. Invalid JSON format. Raw: 
+
+# NVDA — NVIDIA CORPORATION
+**Current Price**: $215.33 | **Change**: +0.3% (from $214.65 SMA-20)
+**Rating**: ⭐⭐⭐⭐ (4/5 Alpha)
+
+---
+
+## 🚨 CRITICAL PO...
+
+## 2026-05-25 06:09:47 - AMD
+- **Action:** SELL @ 0%
+- **Rationale:** Failed to parse thesis. Invalid JSON format. Raw: 
+
+# AMD — Advanced Micro Devices
+**Current Price**: $467.51 | **Change**: +N/A% (data from May 22)
+**Rating**: ⚠️ **HOLD** — No Buy Signal (Constituti...
+
+## 2026-05-25 06:19:42 - TMO
+- **Action:** HOLD @ 0%
+- **Rationale:** Failed to parse thesis. Reason: LLM response is empty after stripping <think> tags (model failed to output JSON).. Raw: ...
+
+⚠️ Data warnings: Stale data/cached fallbacks in use. Newest data is 30.2 h...
+
+## 2026-05-25 06:47:02 - TMO
+- **Action:** HOLD @ 0%
+- **Rationale:** Failed to parse thesis. Invalid JSON format. Raw: # Trading Thesis: Thermo Fisher Scientific (TMO)
+
+## **Recommendation: HOLD**
+**Action:** Maintain current position (5.5755 shares). Do not add to the...
+

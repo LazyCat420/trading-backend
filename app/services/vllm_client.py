@@ -1469,6 +1469,8 @@ class VLLMClient:
         tool_calls = []
 
         import json as _json
+        from app.utils.text_utils import sanitize_surrogates
+        agent_payload = sanitize_surrogates(agent_payload)
 
         async with client.stream(
             "POST",
@@ -1477,7 +1479,28 @@ class VLLMClient:
             headers=headers,
             timeout=240.0,
         ) as response:
-            response.raise_for_status()
+            if response.status_code != 200:
+                body = await response.aread()
+                logger.error(
+                    "[PRISM] Stream request failed status=%d body=%r",
+                    response.status_code, body
+                )
+                response.raise_for_status()
+
+            content_type = response.headers.get("content-type", "")
+            if "text/event-stream" not in content_type:
+                body = await response.aread()
+                logger.error(
+                    "[PRISM] Expected text/event-stream but got content-type=%s body=%r",
+                    content_type, body
+                )
+                try:
+                    error_json = _json.loads(body.decode("utf-8", errors="ignore"))
+                    error_msg = error_json.get("message") or error_json.get("error") or str(error_json)
+                except Exception:
+                    error_msg = body.decode("utf-8", errors="ignore")
+                raise RuntimeError(f"Prism returned non-SSE response: {error_msg}")
+
             buffer = ""
             async for raw_chunk in response.aiter_text():
                 buffer += raw_chunk
@@ -2585,6 +2608,8 @@ class VLLMClient:
 
         try:
             client = await self._get_client()
+            from app.utils.text_utils import sanitize_surrogates
+            payload = sanitize_surrogates(payload)
             async with client.stream(
                 "POST",
                 target_url,
@@ -2592,7 +2617,28 @@ class VLLMClient:
                 headers=headers,
                 timeout=240.0,
             ) as response:
-                response.raise_for_status()
+                if response.status_code != 200:
+                    body = await response.aread()
+                    logger.error(
+                        "[PRISM] chat_stream request failed status=%d body=%r",
+                        response.status_code, body
+                    )
+                    response.raise_for_status()
+
+                content_type = response.headers.get("content-type", "")
+                if "text/event-stream" not in content_type:
+                    body = await response.aread()
+                    logger.error(
+                        "[PRISM] chat_stream expected text/event-stream but got content-type=%s body=%r",
+                        content_type, body
+                    )
+                    try:
+                        error_json = _json.loads(body.decode("utf-8", errors="ignore"))
+                        error_msg = error_json.get("message") or error_json.get("error") or str(error_json)
+                    except Exception:
+                        error_msg = body.decode("utf-8", errors="ignore")
+                    raise RuntimeError(f"Prism returned non-SSE response in chat_stream: {error_msg}")
+
                 buffer = ""
                 async for raw_chunk in response.aiter_text():
                     buffer += raw_chunk

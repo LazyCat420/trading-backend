@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 0,
+  "rationale": "Failed to parse thesis. Invalid JSON format. Raw: \n\n# MSFT \u2014 MICROSOFT CORPORATION\n**Current Price**: $418.57 | **Change**: +0.6% (from $416.13 SMA20)\n**Rating**: \u2b50\u2b50\u2b50\u2b50 (4/5 Alpha)\n\n---\n\n## Quick Verdict\n**HOLD** \u2014 We're at MAX position capacity (8/8). MSFT is fundamentally strong and technically neu...\n\n\u26a0\ufe0f Data warnings: Stale data/cached fallbacks in use. Newest data is 0.4 hours old.\n\n\ud83d\udcc5 Data timeframe: 2025-06-30 00:00 UTC to 2026-05-25 05:20 UTC\n\n\ud83d\udcdd Memory context: - [2026-05-06] pipeline_ru",
+  "config_used": "v2_cognition",
+  "escalated": false
+}
