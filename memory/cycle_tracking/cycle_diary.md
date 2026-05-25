@@ -181,3 +181,7 @@
 - **Action:** HOLD @ 45%
 - **Rationale:** While the 'Risk-On' macro regime generally supports equities, LRMR shows no fundamental earnings support with 'net_income: -166004992.0' and 'revenue: 0.0', making it a speculative hold rather than a ...
 
+## 2026-05-25 20:53:13 - AAPL
+- **Action:** SELL @ 95%
+- **Rationale:** Despite the 'RISK_ON' macro regime, the trading constitution strictly mandates a SELL if RSI > 70, and the current RSI(14) is 78.61 [technical_data]. Additionally, the P/E ratio of 37.43 [fundamental_...
+

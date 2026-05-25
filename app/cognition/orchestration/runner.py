@@ -161,10 +161,10 @@ async def execute_v2_pipeline(
     t2 = time.monotonic()
     try:
         packet = await asyncio.wait_for(build_evidence_packet(ticker), timeout=30.0)
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as te:
         logger.error("[V2] Evidence packet build TIMEOUT for %s (30s)", ticker)
         emit("analyzing", f"v2_evidence_timeout_{ticker}", f"{ticker}: Evidence build TIMEOUT", status="error")
-        raise
+        raise RuntimeError("Evidence packet build timed out after 30s") from te
     ms2 = elapsed_ms(t2)
     stages.append("evidence_build")
     stage_timings["evidence_build"] = ms2
@@ -739,10 +739,10 @@ async def execute_v2_pipeline(
             ),
             timeout=120.0,
         )
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as te:
         logger.error("[V2] Thesis generation TIMEOUT for %s (120s)", ticker)
         emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM TIMEOUT", status="error")
-        raise
+        raise RuntimeError("Thesis generation timed out after 120s") from te
     total_tokens += thesis_tokens
     ms6 = elapsed_ms(t6)
     stages.append("thesis_generation")

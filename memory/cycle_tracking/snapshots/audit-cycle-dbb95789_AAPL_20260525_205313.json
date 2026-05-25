@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 95,
+  "rationale": "Despite the 'RISK_ON' macro regime, the trading constitution strictly mandates a SELL if RSI > 70, and the current RSI(14) is 78.61 [technical_data]. Additionally, the P/E ratio of 37.43 [fundamental_data] suggests the stock is overvalued relative to historical norms, and the price is dangerously close to the 52-week high of 311.40 [fundamental_data]. This thesis is invalidated if the RSI drops below 65 and the price reclaims the 20-day SMA of 289.31.\n\n\ud83d\udcc5 Data timeframe: 2025-09-30 00:00 UTC to ",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

@@ -452,15 +452,18 @@ Company Qualitative Narrative Story:
 Active Narrative Themes:
 {json.dumps(key_themes, indent=2)}
 """
-            response, _, _ = await call_prism_agent(
-                agent_id="CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
-                user_message=user_message,
-                fallback_system_prompt=PILLAR_ADJUSTER_SYSTEM_PROMPT,
-                fallback_agent_name="pillar_adjuster",
-                temperature=0.2,
-                max_tokens=1024,
-                priority=Priority.NORMAL,
-                ticker=ticker,
+            response, _, _ = await asyncio.wait_for(
+                call_prism_agent(
+                    agent_id="CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
+                    user_message=user_message,
+                    fallback_system_prompt=PILLAR_ADJUSTER_SYSTEM_PROMPT,
+                    fallback_agent_name="pillar_adjuster",
+                    temperature=0.2,
+                    max_tokens=1024,
+                    priority=Priority.NORMAL,
+                    ticker=ticker,
+                ),
+                timeout=15.0,
             )
             cleaned = response.strip()
             if cleaned.startswith("```"):

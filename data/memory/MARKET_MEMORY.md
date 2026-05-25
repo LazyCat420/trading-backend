@@ -1,1 +1,1 @@
-[LRMR] [LOW] RSI < 35 + Net Income < 0 + Revenue = 0 = speculative hold; wait for bounce above 20-day SMA ($3.92) before entry.
+[AAPL] [HIGH] RSI(14) > 78 + P/E > 37 + price near 52-wk high = strict SELL signal, overriding RISK_ON macro regime.
