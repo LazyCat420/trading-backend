@@ -181,12 +181,8 @@ New Recent News & Social Developments:
             cycle_id=cycle_id,
         )
         
-        # Clean response if LLM added markdown fences
-        cleaned = response.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("```json")[-1].split("```")[0].strip()
-            
-        data = json.loads(cleaned)
+        from app.utils.text_utils import parse_json_response
+        data = parse_json_response(response)
         story_summary = data.get("story_summary", "").strip()
         key_themes = data.get("key_themes", [])
         

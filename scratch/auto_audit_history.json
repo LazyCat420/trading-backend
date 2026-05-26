@@ -63,6 +63,22 @@
       "errors_count": 6,
       "warnings_count": 6,
       "total_bugs": 12
+    },
+    {
+      "timestamp": "2026-05-26T00:00:11.316112+00:00",
+      "cycle_id": "cycle-1779752512",
+      "run_type": "active-2h",
+      "errors_count": 1787,
+      "warnings_count": 1787,
+      "total_bugs": 3574
+    },
+    {
+      "timestamp": "2026-05-26T00:00:11.335923+00:00",
+      "cycle_id": "cycle-1779752512",
+      "run_type": "active-2h",
+      "errors_count": 1787,
+      "warnings_count": 1787,
+      "total_bugs": 3574
     }
   ]
 }
