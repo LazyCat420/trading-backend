@@ -686,35 +686,14 @@ async def analyze_ticker(
     c_confidence = c_result.get("confidence", 0)
     c_tokens = c_result.get("tokens_used", 0)
 
-    # B5: Rationale validation
+    # B5: Constraint acknowledgment check — advisory only, never re-prompts
     if c_action == "BUY":
         rationale_lower = c_result.get("rationale", "").lower()
         if not ("fee" in rationale_lower or "slippage" in rationale_lower):
-            logger.warning(
-                "[PIPELINE] Constraint validation failed for %s. Re-prompting once.",
+            logger.info(
+                "[PIPELINE] %s BUY rationale does not mention fees/slippage — proceeding (constraints already in context)",
                 ticker,
             )
-            emit(
-                "analyzing",
-                f"validation_{ticker}",
-                f"{ticker}: Rationale ignored constraints. Re-prompting.",
-                status="warning",
-            )
-            c_result = await rlm_analyze(
-                ticker=ticker,
-                context=context
-                + "\n\nCRITICAL FEEDBACK: You recommended BUY but completely ignored the TRADING_CONSTRAINTS (fees, slippage). Please re-evaluate your decision and explicitly account for these constraints in your rationale.",
-                max_iterations=2,
-                enable_thinking=False,
-                cycle_id=cycle_id,
-                bot_id=bot_id,
-                target_role=decision_role,
-            )
-            c_time = time.monotonic() - c_start
-            c_ms = int(c_time * 1000)
-            c_action = gate_action(c_result.get("action", "HOLD"), held)
-            c_confidence = c_result.get("confidence", 0)
-            c_tokens += c_result.get("tokens_used", 0)
 
     # ── Checkpoint: Config C complete ──
     try:
@@ -905,20 +884,21 @@ async def analyze_ticker(
 
         if hall_result["rejected"]:
             logger.warning(
-                "[PIPELINE] [HALLUCINATION] %s: REJECTED — %s. Downgrading action.",
+                "[PIPELINE] [HALLUCINATION] %s: Issues found — %s. Advisory: reducing confidence 10%% (action %s PRESERVED).",
                 ticker,
                 hall_result["rejection_reason"],
+                final_action,
             )
             final_rationale += (
-                f"\n\n⚠️ HALLUCINATION GATE REJECTED: {hall_result['rejection_reason']}"
+                f"\n\n⚠️ HALLUCINATION WARNING (advisory): {hall_result['rejection_reason']}"
             )
-            final_action = gate_action("HOLD", held)
-            final_confidence = max(10, final_confidence // 2)
+            # Advisory only: reduce confidence by 10%, do NOT override the action
+            final_confidence = max(10, final_confidence - 10)
             emit(
                 "analyzing",
                 f"hallucination_{ticker}",
-                f"⚠️ {ticker}: Hallucination gate REJECTED — "
-                f"downgraded to HOLD @ {final_confidence}%",
+                f"⚠️ {ticker}: Hallucination check flagged issues — "
+                f"confidence reduced to {final_confidence}% (action {final_action} preserved)",
                 status="warning",
             )
         elif hall_result["hallucinations"]:

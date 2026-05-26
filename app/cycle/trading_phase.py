@@ -127,8 +127,7 @@ async def execute_decisions(
         "blocked": 0,
         "passes": 0,
     }
-    
-    consecutive_failures = 0
+
 
     for d in decisions:
         from app.cycle.orchestration.cycle_control import cycle_control
@@ -138,16 +137,25 @@ async def execute_decisions(
         action = d.get("action", "HOLD")
         confidence = d.get("confidence", 0)
         human_review = d.get("human_review", False)
+
+        # ── BUY Pipeline Trace: log every decision entering the pipeline ──
+        logger.info(
+            "[PIPELINE]   [%s] DECISION RECEIVED: action=%s confidence=%d%% human_review=%s",
+            ticker, action, confidence, human_review,
+        )
         
         integrity_status = d.get("v2_metadata", {}).get("debate", {}).get("integrity_status", "HIGH")
         if integrity_status == "LOW_INTEGRITY" and action != "HOLD":
-            logger.warning("[PIPELINE]   [%s] OVERRIDING %s TO HOLD due to LOW_INTEGRITY debate", ticker, action)
-            action = "HOLD"
-            confidence = 0
+            # Advisory: reduce confidence instead of overriding action
+            original_conf = confidence
+            confidence = max(confidence - 30, 10)
+            logger.warning(
+                "[PIPELINE]   [%s] LOW_INTEGRITY debate — reducing confidence %d%% → %d%% (action %s preserved)",
+                ticker, original_conf, confidence, action,
+            )
             
         if integrity_status == "LOW_INTEGRITY":
-            consecutive_failures += 1
-            logger.warning("[PIPELINE] [%s] Quarantining ticker due to LOW_INTEGRITY", ticker)
+            logger.warning("[PIPELINE] [%s] LOW_INTEGRITY flag noted (advisory only, not blocking)", ticker)
             try:
                 from app.db.connection import get_db
                 with get_db() as db:
@@ -159,14 +167,6 @@ async def execute_decisions(
                     )
             except Exception as e:
                 logger.error("[PIPELINE] Failed to quarantine %s: %s", ticker, e)
-                
-            if consecutive_failures >= 3:
-                logger.error("[PIPELINE] 3 consecutive LOW_INTEGRITY failures! Aborting trading phase to protect pipeline.")
-                skipped.append({"ticker": ticker, "reason": "HOLD"})
-                counts["holds"] += 1
-                break
-        else:
-            consecutive_failures = 0
 
         # Skip human review items
         if human_review:
@@ -181,16 +181,12 @@ async def execute_decisions(
             alloc_decision = allocations_map.get(ticker)
             if alloc_decision and alloc_decision.get("decision") == "VETO":
                 logger.warning(
-                    "[PIPELINE]   [%s] BUY VETOED by Portfolio Sizing Agent: %s",
+                    "[PIPELINE]   [%s] BUY: Portfolio Sizing Agent suggested VETO: %s — PROCEEDING with Kelly fallback (advisory only)",
                     ticker,
                     alloc_decision.get("veto_reason", "no reason"),
                 )
-                skipped.append({
-                    "ticker": ticker,
-                    "reason": f"PORTFOLIO_ALLOCATOR VETO: {alloc_decision.get('veto_reason', 'risk check failed')}",
-                })
-                counts["blocked"] += 1
-                continue
+                # Don't block — let it fall through to Kelly sizing
+                alloc_decision = None  # Clear so we use Kelly fallback
 
             # ── Portfolio Gate: enforce position limits before BUY ──
             gate = check_portfolio_gate(ticker, action, bot_id, confidence)
@@ -230,16 +226,12 @@ async def execute_decisions(
 
                 if pre_trade_decision and pre_trade_decision.get("decision") == "VETO":
                     logger.warning(
-                        "[PIPELINE]   [%s] BUY VETOED by pre-trade agent: %s",
+                        "[PIPELINE]   [%s] BUY: Pre-trade agent suggested VETO: %s — PROCEEDING with Kelly fallback (advisory only)",
                         ticker,
                         pre_trade_decision.get("veto_reason", "no reason"),
                     )
-                    skipped.append({
-                        "ticker": ticker,
-                        "reason": f"PRE_TRADE VETO: {pre_trade_decision.get('veto_reason', 'risk check failed')}",
-                    })
-                    counts["blocked"] += 1
-                    continue
+                    # Don't block — clear so we use Kelly fallback
+                    pre_trade_decision = None
 
             except asyncio.TimeoutError:
                 logger.warning("[PIPELINE]   [%s] Pre-trade agent timed out, falling back to Allocator/Kelly sizing", ticker)

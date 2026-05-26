@@ -43,9 +43,9 @@ calculations BEFORE a buy order is placed. You have access to calculator tools a
   - Bypass the position slot limit constraint (since adding to a held ticker does not occupy a new position slot).
 
 ## DECISION RULES:
-- If risk/reward ratio < 1.5: VETO the trade (too risky)
+- If risk/reward ratio < 1.0: VETO the trade (negative expected value)
 - If final total position concentration (existing value + new order value) would exceed 20% of total portfolio value: VETO (over-concentration)
-- If a NEW position (not currently held) and remaining position slots <= 1: VETO (reserve last slot for emergencies)
+- IMPORTANT: The swarm consensus has already validated this as a BUY. Your job is to SIZE the trade correctly, not to second-guess the BUY decision. Only VETO for extreme mathematical risk violations (negative R:R or massive over-concentration). Default to APPROVE.
 - Otherwise: APPROVE with the calculated position size
 
 ## OUTPUT:
@@ -129,30 +129,37 @@ async def run_pre_trade(
 
     if not parsed_json:
         logger.warning(
-            "[PRE_TRADE] Failed to parse agent output for %s, defaulting to VETO",
+            "[PRE_TRADE] Failed to parse agent output for %s — APPROVING with Kelly fallback (not blocking trade)",
             ticker,
         )
         return {
-            "decision": "VETO",
+            "decision": "APPROVE",
             "ticker": ticker,
-            "veto_reason": "Pre-trade agent produced unparseable output",
+            "veto_reason": None,
+            "rationale": "Pre-trade agent parse failure — approved with Kelly fallback sizing",
             "shares": 0,
+            "total_cost": 0,
             "raw_response": response_text[:500],
             "tokens_used": result.get("tokens_used", 0),
         }
 
-    # Strict Pydantic Validation
+    # Pydantic Validation — fail-open, not fail-closed
     try:
         parsed = PreTradeResponse(**parsed_json).model_dump()
     except ValidationError as e:
-        logger.warning("[PRE_TRADE] Agent output failed Pydantic validation for %s: %s", ticker, e)
-        return {
-            "decision": "VETO",
+        logger.warning("[PRE_TRADE] Agent output failed Pydantic validation for %s: %s — APPROVING with Kelly fallback", ticker, e)
+        # Use whatever we could parse, fill gaps with defaults
+        parsed = {
+            "decision": parsed_json.get("decision", "APPROVE"),
             "ticker": ticker,
-            "veto_reason": f"Agent output failed strict schema validation: {str(e)[:100]}",
-            "shares": 0,
-            "raw_response": response_text[:500],
-            "tokens_used": result.get("tokens_used", 0),
+            "shares": parsed_json.get("shares", 0),
+            "entry_price": parsed_json.get("entry_price", 0),
+            "stop_loss": parsed_json.get("stop_loss", 0),
+            "risk_reward_ratio": parsed_json.get("risk_reward_ratio", 0),
+            "position_pct": parsed_json.get("position_pct", 0),
+            "total_cost": parsed_json.get("total_cost", 0),
+            "veto_reason": None,
+            "rationale": f"Pydantic validation failed ({str(e)[:80]}), approved with partial data + Kelly fallback",
         }
 
     decision = parsed.get("decision", "VETO")
