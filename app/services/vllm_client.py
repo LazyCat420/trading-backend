@@ -1409,7 +1409,7 @@ class VLLMClient:
             enable_thinking=payload.get("chat_template_kwargs", {}).get("enable_thinking", False),
             tools=tools,
             is_qwen_model=_is_qwen_model(model_id),
-            agentic_mode=is_interactive,
+            agentic_mode=is_interactive or bool(tools),
             provider=provider,
         )
         agent_payload, target_url, headers = prism_payload
@@ -1417,11 +1417,11 @@ class VLLMClient:
         # Convert non-streaming URL to streaming URL
         target_url = target_url.replace("?stream=false", "")
 
-        # For pipeline calls with tools, force functionCallingEnabled to False
-        # to prevent Prism from replacing tools with its own and running them.
+        # For pipeline calls with tools, ensure functionCallingEnabled and agenticLoopEnabled are enabled
+        # so Prism runs the agentic loop and executes the tools.
         if not is_interactive and tools:
-            agent_payload["functionCallingEnabled"] = False
-            agent_payload["agenticLoopEnabled"] = False
+            agent_payload["functionCallingEnabled"] = True
+            agent_payload["agenticLoopEnabled"] = True
 
         # Server-to-server: skip conversation persistence, auto-approve tools
         agent_payload["skipConversation"] = settings.PRISM_SKIP_CONVERSATION

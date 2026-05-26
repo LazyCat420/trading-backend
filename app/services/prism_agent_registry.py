@@ -22,6 +22,11 @@ AGENT_ID_MAP: dict[str, str] = {
     "CUSTOM_BULLISH_DEBATER": "CUSTOM_BULLISH_DEBATER",
     "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "CUSTOM_MARKET_ALPHA": "CUSTOM_MARKET_ALPHA",
+    "CUSTOM_RETRIEVER_AGENT": "CUSTOM_RETRIEVER_AGENT",
+    "CUSTOM_VERIFIER_AGENT": "CUSTOM_VERIFIER_AGENT",
+    "CUSTOM_SYNTHESIZER_AGENT": "CUSTOM_SYNTHESIZER_AGENT",
+    "CUSTOM_PRE_TRADE_AGENT": "CUSTOM_PRE_TRADE_AGENT",
+    "CUSTOM_META_AUDIT_AGENT": "CUSTOM_META_AUDIT_AGENT",
 
     # ── System Janitor Agent Mappings ──
     "CUSTOM_DATA_JANITOR_AGENT": "CUSTOM_SYSTEM_JANITOR_AGENT",
@@ -93,7 +98,7 @@ AGENT_ID_MAP: dict[str, str] = {
     "CUSTOM_CURATION_PASS_AGENT": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "CUSTOM_MACRO_SCOUT_AGENT": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "CUSTOM_DECISION_GLANCE_AGENT": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
-    "CUSTOM_DATA_VERIFIER_AGENT": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
+    "CUSTOM_DATA_VERIFIER_AGENT": "CUSTOM_VERIFIER_AGENT",
     "CUSTOM_CONSENSUS_CHECK_AGENT": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "CUSTOM_EXECUTIVE_DECISION_AGENT": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "CUSTOM_BENCHMARK_AGENT": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
@@ -114,11 +119,11 @@ AGENT_ID_MAP: dict[str, str] = {
     "risk": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "fund_flow": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "comparative": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
-    "retriever": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
-    "verifier": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
-    "synthesizer": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
-    "pre_trade": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
-    "meta_audit": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
+    "retriever": "CUSTOM_RETRIEVER_AGENT",
+    "verifier": "CUSTOM_VERIFIER_AGENT",
+    "synthesizer": "CUSTOM_SYNTHESIZER_AGENT",
+    "pre_trade": "CUSTOM_PRE_TRADE_AGENT",
+    "meta_audit": "CUSTOM_META_AUDIT_AGENT",
     "decision_engine": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "decision_glance": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
     "trading_phase": "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
@@ -151,7 +156,6 @@ AGENT_ID_MAP: dict[str, str] = {
 # Agent names that map to CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT (catch-all for standard analysis)
 _STANDARD_ANALYSIS_AGENTS = frozenset({
     "sentiment", "fundamental", "risk", "fund_flow", "comparative",
-    "retriever", "verifier", "synthesizer", "pre_trade", "meta_audit",
     "decision_engine", "trading_phase", "trading_cycle",
 })
 
@@ -170,7 +174,11 @@ def resolve_agent_id(agent_name: str, default_agent: str = "CUSTOM_MARKET_ALPHA"
         return default_agent
 
     # If the caller already provided a canonical custom agent ID, return it as-is
+    # Except if it maps to a more specific custom agent ID in AGENT_ID_MAP (like CUSTOM_DATA_VERIFIER_AGENT)
     if agent_name.startswith("CUSTOM_"):
+        mapped = AGENT_ID_MAP.get(agent_name)
+        if mapped:
+            return mapped
         return agent_name
 
     # Direct lookup first (fast path)
@@ -178,8 +186,20 @@ def resolve_agent_id(agent_name: str, default_agent: str = "CUSTOM_MARKET_ALPHA"
     if agent_id:
         return agent_id
 
-    # Fuzzy matching for standard analysis agents
+    # Fuzzy matching for specific specialist agents first
     name_lower = agent_name.lower()
+    if "retriever" in name_lower:
+        return "CUSTOM_RETRIEVER_AGENT"
+    if "verifier" in name_lower:
+        return "CUSTOM_VERIFIER_AGENT"
+    if "synthesizer" in name_lower:
+        return "CUSTOM_SYNTHESIZER_AGENT"
+    if "pre_trade" in name_lower:
+        return "CUSTOM_PRE_TRADE_AGENT"
+    if "meta_audit" in name_lower:
+        return "CUSTOM_META_AUDIT_AGENT"
+
+    # Fuzzy matching for standard analysis agents
     if any(x in name_lower for x in _STANDARD_ANALYSIS_AGENTS):
         return "CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT"
 
