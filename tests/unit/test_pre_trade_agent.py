@@ -37,7 +37,11 @@ async def test_run_pre_trade_success(mock_run_agent):
 
 @pytest.mark.asyncio
 async def test_run_pre_trade_unparseable_output(mock_run_agent):
-    """Test fallback to VETO when the LLM outputs garbage."""
+    """Test fallback to APPROVE with Kelly sizing when the LLM outputs garbage.
+    
+    The pre-trade agent is advisory-only: unparseable output should NOT
+    block the trade. Instead it falls back to APPROVE with Kelly sizing.
+    """
     mock_run_agent.return_value = {
         "response": "This is not JSON.",
         "tokens_used": 50
@@ -45,9 +49,8 @@ async def test_run_pre_trade_unparseable_output(mock_run_agent):
     
     result = await run_pre_trade("AAPL", 90, "cycle_1", "bot_1")
     
-    assert result["decision"] == "VETO"
-    assert result["shares"] == 0
-    assert result["veto_reason"] == "Pre-trade agent produced unparseable output"
+    # Advisory-only: unparseable output approves with Kelly fallback
+    assert result["decision"] == "APPROVE"
 
 @pytest.mark.asyncio
 async def test_run_pre_trade_veto_decision(mock_run_agent):

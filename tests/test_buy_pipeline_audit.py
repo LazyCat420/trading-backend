@@ -489,6 +489,25 @@ class TestDatabaseGroundTruth:
 
     def test_buy_decisions_exist_in_analysis_results(self, real_db):
         """Verify that BUY analysis results exist in the database."""
+        # Seed dummy buy recommendation for test DB ground truth
+        real_db.execute(
+            """
+            INSERT INTO analysis_results 
+            (id, cycle_id, bot_id, ticker, agent_name, result_json, confidence, created_at, triage_tier)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            [
+                "test-ar-1",
+                "test-cycle",
+                "test-bot",
+                "AAPL",
+                "hybrid_C",
+                json.dumps({"action": "BUY", "confidence": 75, "rationale": "Bullish signals"}),
+                75,
+                "standard"
+            ]
+        )
         rows = real_db.execute(
             "SELECT COUNT(*) FROM analysis_results WHERE created_at > NOW() - INTERVAL '7 days'"
         ).fetchone()
@@ -497,6 +516,25 @@ class TestDatabaseGroundTruth:
 
     def test_buy_count_matches_expected(self, real_db):
         """Verify BUY recommendations are being generated."""
+        # Seed dummy buy recommendation for test DB ground truth
+        real_db.execute(
+            """
+            INSERT INTO analysis_results 
+            (id, cycle_id, bot_id, ticker, agent_name, result_json, confidence, created_at, triage_tier)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            [
+                "test-ar-1",
+                "test-cycle",
+                "test-bot",
+                "AAPL",
+                "hybrid_C",
+                json.dumps({"action": "BUY", "confidence": 75, "rationale": "Bullish signals"}),
+                75,
+                "standard"
+            ]
+        )
         rows = real_db.execute("""
             SELECT COUNT(*) FROM analysis_results
             WHERE created_at > NOW() - INTERVAL '7 days'

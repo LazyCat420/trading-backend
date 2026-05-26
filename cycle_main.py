@@ -251,7 +251,14 @@ async def poll_system_commands(shutdown: asyncio.Event):
                                 await detect_rotations()
                             asyncio.create_task(_do_refresh_sectors())
                             result = {"status": "refresh_sectors_started"}
-                            
+
+                        else:
+                            logger.warning(
+                                "[cycle_backend] Unknown command type '%s' (job %s) — no handler matched",
+                                cmd_type, job_id,
+                            )
+                            result = {"status": "error", "reason": f"Unknown command type: {cmd_type}"}
+
                         db.execute(
                             "UPDATE system_commands SET status = 'completed', completed_at = CURRENT_TIMESTAMP, result = %s WHERE id = %s", 
                             [json.dumps(result), job_id]

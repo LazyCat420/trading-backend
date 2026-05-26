@@ -763,6 +763,26 @@ async def execute_v2_pipeline(
         elapsed_ms=ms6,
     )
 
+    # ── EMPTY_SIGNAL Detection (Error #2 from audit) ──────────────────
+    # When thesis has confidence=0, claims=0, this is a pipeline failure
+    # (e.g. MetaOrchestrator timed out producing 0 agents/0 tokens).
+    # Flag it so it doesn't silently flow through as a valid SELL/HOLD.
+    if thesis.confidence == 0 and not thesis.core_claims:
+        logger.warning(
+            "[V2] ⚠️ EMPTY_SIGNAL for %s: action=%s confidence=0 claims=0 "
+            "tokens=%d — treating as pipeline failure, NOT a valid signal. "
+            "This usually means MetaOrchestrator returned 0 agents.",
+            ticker,
+            thesis.action,
+            thesis_tokens,
+        )
+        log_manager.log_v2_cycle(cycle_id, "v2_empty_signal", {
+            "ticker": ticker,
+            "original_action": thesis.action,
+            "tokens": thesis_tokens,
+            "reason": "confidence_0_no_claims",
+        })
+
     final_action = thesis.action
     final_confidence = thesis.confidence
     final_rationale = thesis.rationale

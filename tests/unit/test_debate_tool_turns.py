@@ -38,8 +38,11 @@ async def test_agent_forces_json_on_exhaustion(mock_chat, mock_evidence_packet, 
         {"text": '{"action": "BUY", "claims": ["claim 1 [test:1]"], "confidence": 90, "key_argument": "test"}', "total_tokens": 50}
     ]
     
-    # We also need to patch registry.execute_tool_call to prevent actual execution
-    with patch("app.cognition.debate.debate_coordinator.registry.execute_tool_call") as mock_exec:
+    # Patch tool_selector to prevent it from consuming mock chat responses,
+    # and registry to prevent actual tool execution
+    _fake_tool_schema = [{"type": "function", "function": {"name": "get_market_data", "parameters": {}}}]
+    with patch("app.cognition.debate.debate_coordinator.registry.execute_tool_call") as mock_exec, \
+         patch("app.agents.tool_selector.select_tools_for_task", return_value=_fake_tool_schema) as mock_selector:
         mock_exec.return_value = {"role": "tool", "content": "mock data"}
         
         system_prompt = build_system_prompt("bull", "Focus purely on fundamental data.")
@@ -76,7 +79,9 @@ async def test_agent_stops_early_with_json(mock_chat, mock_evidence_packet, monk
         {"text": '{"action": "SELL", "claims": ["claim 1 [test:1]"], "confidence": 90, "key_argument": "test"}', "total_tokens": 50}
     ]
     
-    with patch("app.cognition.debate.debate_coordinator.registry.execute_tool_call") as mock_exec:
+    _fake_tool_schema = [{"type": "function", "function": {"name": "get_market_data", "parameters": {}}}]
+    with patch("app.cognition.debate.debate_coordinator.registry.execute_tool_call") as mock_exec, \
+         patch("app.agents.tool_selector.select_tools_for_task", return_value=_fake_tool_schema) as mock_selector:
         mock_exec.return_value = {"role": "tool", "content": "mock data"}
         
         system_prompt = build_system_prompt("bear", "Focus purely on fundamental data.")

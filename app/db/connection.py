@@ -228,7 +228,10 @@ def _ensure_pool() -> ConnectionPool:
         return _pool
     with _lock:
         if _pool is None:
-            db_url = settings.DATABASE_URL
+            if os.getenv("TRADING_BOT_TEST_DB") == "1":
+                db_url = "postgresql://trader:trading_bot_pass@10.0.0.16:5433/trading_bot_test"
+            else:
+                db_url = settings.DATABASE_URL
             logger.info(
                 f"[DB] Connecting to PostgreSQL: {db_url.split('@')[-1] if '@' in db_url else db_url}"
             )

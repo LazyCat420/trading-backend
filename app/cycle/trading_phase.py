@@ -333,8 +333,8 @@ async def execute_decisions(
                     from app.cycle.attention_tracker import record_trade
 
                     record_trade(ticker)
-                except Exception:
-                    pass
+                except Exception as rt_err:
+                    logger.debug("[TRADE] record_trade failed for %s (non-fatal): %s", ticker, rt_err)
 
         elif action == "SELL":
             # Defensive guard: verify we actually hold this ticker before selling
@@ -425,8 +425,8 @@ async def execute_decisions(
                     from app.cycle.attention_tracker import record_trade
 
                     record_trade(ticker)
-                except Exception:
-                    pass
+                except Exception as rt_err:
+                    logger.debug("[TRADE] record_trade failed for %s (non-fatal): %s", ticker, rt_err)
 
         elif action == "HOLD":
             logger.info(
@@ -469,8 +469,8 @@ async def execute_decisions(
     )
     logger.info(
         "  Portfolio: $%s cash | %d positions",
-        f"{portfolio_after['cash']:,.2f}",
-        portfolio_after["position_count"],
+        f"{portfolio_after.get('cash', 0):,.2f}",
+        portfolio_after.get("position_count", 0),
     )
 
     return {

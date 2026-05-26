@@ -1,0 +1,62 @@
+{
+  "ticker": "TEST",
+  "cycle_id": "cycle_123",
+  "timestamp": "2026-05-26T21:30:22.388833+00:00",
+  "debate_mode": "HOLD-vs-SELL",
+  "verdict": {
+    "action": "HOLD",
+    "confidence": 0,
+    "winner": "split",
+    "rationale": "",
+    "key_factor": "",
+    "rejected_impact": ""
+  },
+  "integrity": "HIGH",
+  "retry_count": 0,
+  "tokens": {
+    "bull": 600,
+    "bear": 600,
+    "cross_exam": 300,
+    "judge": 100,
+    "total": 1600
+  },
+  "persona_outcomes": {
+    "Fundamental": {
+      "bull_claims_count": 1,
+      "bear_claims_count": 1,
+      "bull_survived": 1,
+      "bear_survived": 1,
+      "winner": "split"
+    },
+    "Technical": {
+      "bull_claims_count": 1,
+      "bear_claims_count": 1,
+      "bull_survived": 1,
+      "bear_survived": 1,
+      "winner": "split"
+    },
+    "Macro_Sentiment": {
+      "bull_claims_count": 1,
+      "bear_claims_count": 1,
+      "bull_survived": 1,
+      "bear_survived": 1,
+      "winner": "split"
+    }
+  },
+  "claims": {
+    "bull_total": 2,
+    "bear_total": 2,
+    "verified_bull": [
+      "Revenue up 20% [fundamentals:RevGrowth=0.20]",
+      "Revenue up 20% [fundamentals:RevGrowth=0.20]",
+      "Revenue up 20% [fundamentals:RevGrowth=0.20]"
+    ],
+    "verified_bear": [
+      "P/E is 80 [market_data:PE=80.0]",
+      "P/E is 80 [market_data:PE=80.0]",
+      "P/E is 80 [market_data:PE=80.0]"
+    ],
+    "unverified": []
+  },
+  "cross_exam_summary": "[Fundamental] Evidence verified | [Technical] Evidence verified | [Macro_Sentiment] Evidence verified"
+}

@@ -1,0 +1,1217 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0 -- /home/lazycat/github/projects/sun/trading-service/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/lazycat/github/projects/sun/trading-service
+configfile: pytest.ini
+plugins: anyio-4.13.0, deepeval-4.0.2, rerunfailures-16.2, repeat-0.9.4, xdist-3.8.0, typeguard-4.5.2, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 809 items
+
+tests/integration/test_agent_coordination.py::test_post_and_read_findings PASSED [  0%]
+tests/integration/test_agent_coordination.py::test_request_and_check_investigation PASSED [  0%]
+tests/integration/test_agent_coordination.py::test_targeted_investigation PASSED [  0%]
+tests/integration/test_briefings_generation.py::test_flash_briefing_generation SKIPPED [  0%]
+tests/integration/test_briefings_generation.py::test_morning_briefing_generation SKIPPED [  0%]
+tests/integration/test_circuit_breaker_resilience.py::test_circuit_breaker_race_conditions FAILED [  0%]Running teardown with pytest sessionfinish...
+
+
+=================================== FAILURES ===================================
+_____________________ test_circuit_breaker_race_conditions _____________________
+tests/integration/test_circuit_breaker_resilience.py:91: in test_circuit_breaker_race_conditions
+    assert ep.consecutive_batch_failures == 1
+E   AssertionError: assert 0 == 1
+E    +  where 0 = VLLMEndpoint(name='jetson', url='http://10.0.0.30:8000', role='collector', max_concurrent=50, purpose='Data collection, summarization, LLM curation, agents', enabled=True).consecutive_batch_failures
+----------------------------- Captured stdout call -----------------------------
+
+[DEBUG] Starting test_circuit_breaker_race_conditions
+[DEBUG] Enqueueing 50 requests...
+[DEBUG] 50 requests enqueued.
+[DEBUG] Starting manual dispatcher task...
+[DEBUG] Manual dispatcher task started.
+[DEBUG] Gathering 50 request tasks...
+[DEBUG] Gathering complete. Results size: 50
+------------------------------ Captured log call -------------------------------
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1229 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:323 [BATCH] 🔴 jetson CIRCUIT BREAKER OPEN after error — disabling for 60s
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1222 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:898 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 872, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 994, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1352, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1206, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/pydantic/main.py:263
+  /home/lazycat/github/projects/sun/trading-service/.venv/lib/python3.12/site-packages/pydantic/main.py:263: UserWarning: API_SERVER_KEY is set to the default insecure value!
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+
+app/cognition/contracts/claims.py:10
+  /home/lazycat/github/projects/sun/trading-service/tests/../app/cognition/contracts/claims.py:10: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class Provenance(BaseModel):
+
+app/cognition/contracts/claims.py:24
+  /home/lazycat/github/projects/sun/trading-service/tests/../app/cognition/contracts/claims.py:24: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class Claim(BaseModel):
+
+app/cognition/contracts/retrieval.py:53
+  /home/lazycat/github/projects/sun/trading-service/tests/../app/cognition/contracts/retrieval.py:53: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class RetrievalContext(BaseModel):
+
+app/cognition/contracts/evidence.py:21
+  /home/lazycat/github/projects/sun/trading-service/tests/../app/cognition/contracts/evidence.py:21: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class EvidencePacket(BaseModel):
+
+app/cognition/contracts/debate.py:9
+  /home/lazycat/github/projects/sun/trading-service/tests/../app/cognition/contracts/debate.py:9: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class HypothesisDraft(BaseModel):
+
+app/cognition/contracts/debate.py:32
+  /home/lazycat/github/projects/sun/trading-service/tests/../app/cognition/contracts/debate.py:32: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ArgumentDraft(BaseModel):
+
+app/cognition/contracts/debate.py:41
+  /home/lazycat/github/projects/sun/trading-service/tests/../app/cognition/contracts/debate.py:41: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DecisionDraft(BaseModel):
+
+app/cognition/contracts/debate.py:50
+  /home/lazycat/github/projects/sun/trading-service/tests/../app/cognition/contracts/debate.py:50: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DebateResult(BaseModel):
+
+../../../rods-project/sun/trading-service/tests/regression/test_bare_get_db_leak.py:54
+  /home/lazycat/github/rods-project/sun/trading-service/tests/regression/test_bare_get_db_leak.py:54: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+
+../../../rods-project/sun/trading-service/tests/regression/test_bare_get_db_leak.py:82
+  /home/lazycat/github/rods-project/sun/trading-service/tests/regression/test_bare_get_db_leak.py:82: PytestUnknownMarkWarning: Unknown pytest.mark.unit - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+
+../../../rods-project/sun/trading-service/tests/unit/test_data_janitor.py:171
+  /home/lazycat/github/rods-project/sun/trading-service/tests/unit/test_data_janitor.py:171: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+
+../../../rods-project/sun/trading-service/tests/unit/test_data_janitor.py:210
+  /home/lazycat/github/rods-project/sun/trading-service/tests/unit/test_data_janitor.py:210: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+
+../../../rods-project/sun/trading-service/tests/unit/test_data_janitor.py:283
+  /home/lazycat/github/rods-project/sun/trading-service/tests/unit/test_data_janitor.py:283: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+
+../../../rods-project/sun/trading-service/tests/unit/test_paper_trader_lot_closures.py:5
+  /home/lazycat/github/rods-project/sun/trading-service/tests/unit/test_paper_trader_lot_closures.py:5: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+
+../../../rods-project/sun/trading-service/tests/unit/test_paper_trader_lot_closures.py:54
+  /home/lazycat/github/rods-project/sun/trading-service/tests/unit/test_paper_trader_lot_closures.py:54: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+
+tests/unit/test_scoring_formula.py:153
+  /home/lazycat/github/projects/sun/trading-service/tests/unit/test_scoring_formula.py:153: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.integration
+
+tests/integration/test_circuit_breaker_resilience.py::test_circuit_breaker_race_conditions
+  /home/lazycat/github/projects/sun/trading-service/.venv/lib/python3.12/site-packages/psycopg_pool/pool.py:134: DeprecationWarning: the default for the ConnectionPool 'open' parameter will become 'False' in a future release. Please use open={True|False} explicitly, or use the pool as context manager using: `with ConnectionPool(...) as pool: ...`
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+Test 
+tests/integration/test_briefings_generation.py::test_flash_briefing_generation 
+was skipped. Reason: 
+('/home/lazycat/github/rods-project/sun/trading-service/tests/integration/test_b
+riefings_generation.py', 4, 'Skipped: Test database not enabled. Set 
+TRADING_BOT_TEST_DB=1 to enable.')
+Test 
+tests/integration/test_briefings_generation.py::test_morning_briefing_generation
+was skipped. Reason: 
+('/home/lazycat/github/rods-project/sun/trading-service/tests/integration/test_b
+riefings_generation.py', 47, 'Skipped: Test database not enabled. Set 
+TRADING_BOT_TEST_DB=1 to enable.')
+=========================== short test summary info ============================
+FAILED tests/integration/test_circuit_breaker_resilience.py::test_circuit_breaker_race_conditions
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+============= 1 failed, 3 passed, 2 skipped, 18 warnings in 11.17s =============

@@ -13,6 +13,10 @@ async def test_flash_briefing_generation(real_db):
     import datetime
     now_dt = datetime.datetime.now(datetime.UTC)
     
+    # Clean up any leftover dummy news from crashed runs
+    real_db.execute("DELETE FROM news_articles WHERE id IN ('news-1', 'news-2', 'news-3')")
+    real_db.execute("DELETE FROM flash_briefings WHERE report_content = 'Flash briefing content'")
+    
     # Insert dummy news articles into the real DB
     real_db.execute(
         "INSERT INTO news_articles (id, ticker, title, publisher, url, published_at, summary) "
@@ -31,7 +35,8 @@ async def test_flash_briefing_generation(real_db):
     )
 
     with patch("app.services.flash_briefing.get_db", fake_get_db), \
-         patch("app.services.flash_briefing.llm.chat", AsyncMock(return_value=("Flash briefing content", 100, 100))):
+         patch("app.collectors.news_collector.collect_all", AsyncMock()) as mock_collect, \
+         patch("app.services.flash_briefing.call_prism_agent", AsyncMock(return_value=("Flash briefing content", 100, 100))):
 
         from app.services.flash_briefing import generate_flash_briefing
         await generate_flash_briefing()
@@ -53,11 +58,14 @@ async def test_morning_briefing_generation(real_db):
     def fake_get_db():
         yield real_db
 
+    # Clean up any leftover morning briefings
+    real_db.execute("DELETE FROM morning_briefings WHERE report_content = 'Morning briefing content'")
+
     with patch("app.pipeline.analysis.morning_briefing.get_db", new=fake_get_db), \
          patch("app.pipeline.analysis.morning_briefing.get_current_state", return_value={"positions": [{"ticker": "AAPL"}]}), \
          patch("app.pipeline.analysis.morning_briefing.get_active", return_value=[{"ticker": "TSLA"}]), \
          patch("app.pipeline.analysis.morning_briefing.get_thesis") as mock_thesis, \
-         patch("app.pipeline.analysis.morning_briefing.llm.chat", new_callable=AsyncMock) as mock_llm:
+         patch("app.pipeline.analysis.morning_briefing.call_prism_agent", new_callable=AsyncMock) as mock_llm:
          
         from dataclasses import dataclass
         import datetime
@@ -80,5 +88,5 @@ async def test_morning_briefing_generation(real_db):
         b = briefings[0]
         assert b[0] == "Morning briefing content"
         import json
-        tickers = json.loads(b[1])
+        tickers = json.loads(b[1]) if isinstance(b[1], str) else b[1]
         assert sorted(tickers) == sorted(["AAPL", "TSLA"])

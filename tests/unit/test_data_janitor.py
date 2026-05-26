@@ -317,12 +317,12 @@ async def test_janitor_agent_purges_traces_stats_approvals(real_db):
     new_dt = datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=1)
 
     # Insert old and new records
-    real_db.execute("INSERT INTO agent_traces (created_at) VALUES (%s)", [old_dt])
-    real_db.execute("INSERT INTO agent_traces (created_at) VALUES (%s)", [new_dt])
-    real_db.execute("INSERT INTO agent_loop_stats (created_at) VALUES (%s)", [old_dt])
-    real_db.execute("INSERT INTO agent_loop_stats (created_at) VALUES (%s)", [new_dt])
-    real_db.execute("INSERT INTO pending_approvals (created_at) VALUES (%s)", [old_dt])
-    real_db.execute("INSERT INTO pending_approvals (created_at) VALUES (%s)", [new_dt])
+    real_db.execute("INSERT INTO agent_traces (id, created_at) VALUES (%s, %s)", ["trace_old", old_dt])
+    real_db.execute("INSERT INTO agent_traces (id, created_at) VALUES (%s, %s)", ["trace_new", new_dt])
+    real_db.execute("INSERT INTO agent_loop_stats (id, created_at) VALUES (%s, %s)", ["stat_old", old_dt])
+    real_db.execute("INSERT INTO agent_loop_stats (id, created_at) VALUES (%s, %s)", ["stat_new", new_dt])
+    real_db.execute("INSERT INTO pending_approvals (id, created_at) VALUES (%s, %s)", ["app_old", old_dt])
+    real_db.execute("INSERT INTO pending_approvals (id, created_at) VALUES (%s, %s)", ["app_new", new_dt])
 
     with patch("app.agents.janitor_agent.get_db", new=mock_get_db):
         await run_janitor_cleanup()

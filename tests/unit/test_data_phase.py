@@ -7,9 +7,12 @@ from app.pipeline.data.data_phase import run
 @pytest.mark.asyncio
 async def test_data_phase_concurrency_order():
     """
-    Ensure that the background curation and janitor tasks are scheduled 
+    Ensure that the background curation task is scheduled 
     BEFORE the global collection scraper begins. This allows the LLM 
-    processing and data cleanup to run concurrently with scraping from the beginning.
+    processing to run concurrently with scraping from the beginning.
+
+    Note: The janitor background task is deliberately disabled in data_phase.py
+    (smart_janitor handles filtering/extraction instead).
     """
     # We will track the order of calls
     execution_order = []
@@ -43,14 +46,17 @@ async def test_data_phase_concurrency_order():
 
         await run(tickers=["AAPL", "MSFT"], max_tickers=10)
 
-    # Verify that the tasks were created before the global collection was executed
+    # Verify that the curation task was created before the global collection
     assert "curation_task_created" in execution_order
-    assert "janitor_task_created" in execution_order
     assert "run_global_collection" in execution_order
     
     curation_idx = execution_order.index("curation_task_created")
-    janitor_idx = execution_order.index("janitor_task_created")
     global_idx = execution_order.index("run_global_collection")
     
     assert curation_idx < global_idx, "Curation task should start before global collection"
-    assert janitor_idx < global_idx, "Janitor task should start before global collection"
+    
+    # Janitor task is intentionally disabled — verify it was NOT created
+    assert "janitor_task_created" not in execution_order, (
+        "Janitor background task should NOT be created (disabled in data_phase.py)"
+    )
+

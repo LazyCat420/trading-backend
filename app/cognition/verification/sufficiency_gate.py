@@ -61,6 +61,27 @@ def check_data_sufficiency(entity_id: str, packet: EvidencePacket) -> Sufficienc
     elif warnings:
         status = "insufficient"  # Needs refinement
 
+    # ── Detailed staleness reason logging (Error #5 from audit) ────────
+    # Log WHY the sufficiency check triggered so weekend false-stales
+    # are immediately diagnosable.
+    if warnings:
+        freshness = getattr(packet, "freshness_summary", None)
+        data_age_hours = None
+        if freshness and getattr(freshness, "newest_timestamp", None):
+            from datetime import datetime, timezone
+            age_delta = datetime.now(timezone.utc) - freshness.newest_timestamp
+            data_age_hours = round(age_delta.total_seconds() / 3600, 1)
+            is_weekend = freshness.newest_timestamp.weekday() >= 4  # Fri=4, Sat=5, Sun=6
+            logger.info(
+                "[SUFFICIENCY] %s staleness detail: data_age=%.1fh, "
+                "is_weekend_data=%s, newest=%s, warnings=%s",
+                entity_id,
+                data_age_hours,
+                is_weekend,
+                freshness.newest_timestamp.isoformat(),
+                warnings,
+            )
+
     logger.info(
         "[SUFFICIENCY] %s → %s | claims=%d, facts=%d, missing=%s, blockers=%s, warnings=%d",
         entity_id,
@@ -73,3 +94,4 @@ def check_data_sufficiency(entity_id: str, packet: EvidencePacket) -> Sufficienc
     )
 
     return SufficiencyResult(status=status, blockers=blockers, warnings=warnings)
+

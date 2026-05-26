@@ -183,8 +183,8 @@ class TestScoringFromRealOutcomes:
                 [str(uuid.uuid4()), now],
             )
 
-            with patch("app.pipeline.analysis.autoresearch.get_db", fake_db):
-                from app.pipeline.analysis.autoresearch import _audit_decisions
+            with patch("app.services.logging.autoresearch.get_db", fake_db):
+                from app.services.logging.autoresearch import _audit_decisions
 
                 result = _audit_decisions("score_test", {
                     "buy_count": 3, "sell_count": 0, "hold_count": 8,
@@ -205,8 +205,8 @@ class TestScoringFromRealOutcomes:
         real_db.execute("DELETE FROM analysis_results")
 
         with _redirect_get_db(real_db) as fake_db:
-            with patch("app.pipeline.analysis.autoresearch.get_db", fake_db):
-                from app.pipeline.analysis.autoresearch import _audit_decisions
+            with patch("app.services.logging.autoresearch.get_db", fake_db):
+                from app.services.logging.autoresearch import _audit_decisions
 
                 result = _audit_decisions("empty_test", {
                     "buy_count": 1, "sell_count": 0, "hold_count": 5,
@@ -251,11 +251,11 @@ class TestReflectionPromptIntegration:
                 captured_prompts.append(kwargs.get("user", ""))
                 return ('{"summary": "test", "recommendations": [], "system_health": "healthy"}', 100, 100)
 
-            with patch("app.pipeline.analysis.autoresearch.get_db", fake_db), \
+            with patch("app.services.logging.autoresearch.get_db", fake_db), \
                  patch("app.services.vllm_client.llm") as mock_llm:
                 mock_llm.chat = mock_chat
 
-                from app.pipeline.analysis.autoresearch import _reflect, _audit_decisions
+                from app.services.logging.autoresearch import _reflect, _audit_decisions
 
                 dec_q = _audit_decisions("reflect_test", {
                     "buy_count": 2, "sell_count": 0, "hold_count": 4,

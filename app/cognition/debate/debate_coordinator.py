@@ -1234,6 +1234,20 @@ async def run_adversarial_debate(
             len(bear_claims),
         )
 
+        # ── Zero-Claim Debate Detection ──────────────────────────────────
+        # If ALL personas produced 0 claims on both sides, the judge will
+        # decide on unstructured context alone — defeating the adversarial
+        # system.  Log a prominent WARNING so this is diagnosable.
+        if not bull_claims and not bear_claims:
+            logger.warning(
+                "[DEBATE] ⚠️ EMPTY DEBATE: All %d personas produced 0 claims "
+                "for %s. Judge will rule on unstructured context only. "
+                "Per-persona outcomes: %s",
+                num_personas,
+                ticker,
+                persona_outcomes,
+            )
+
         seen_tools = set()
         deduped_research = []
         for entry in global_tool_research:
