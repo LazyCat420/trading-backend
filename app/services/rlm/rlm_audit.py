@@ -24,6 +24,11 @@ def log_rlm_audit_trail(
     queue_wait_ms: int = 0,
 ) -> None:
     """Log to PostgreSQL (with context dedup + per-box telemetry)."""
+    from app.utils.text_utils import sanitize_surrogates
+    context = sanitize_surrogates(context)
+    trading_system_prompt = sanitize_surrogates(trading_system_prompt)
+    response_text = sanitize_surrogates(response_text)
+
     try:
         with get_db() as db:
             # SHA256-hash context and system prompt for dedup storage

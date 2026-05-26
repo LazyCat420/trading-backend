@@ -58,6 +58,10 @@ class CycleCloser:
 
                 agents = ["analyst", "trader"] if trade_executed else ["analyst"]
 
+                from app.utils.text_utils import sanitize_surrogates
+                episode_text = sanitize_surrogates(episode_text)
+                rationale = sanitize_surrogates(rationale)
+
                 episodic_memory_store.write_episode(
                     cycle_id=cycle_id,
                     ticker=ticker,

@@ -195,10 +195,17 @@ If you call get_market_data, get_technical_indicators, or any tool — the ticke
 CRITICAL RULES:
 - Every claim MUST end with an inline citation: [source_table:value]
   Example: "RSI at 37.8 suggests oversold conditions [technical_data:RSI=37.8]"
-- Do NOT invent data. Only cite values that appear in the Structured Facts.
+- Do NOT invent data. Only cite values that appear in the Structured Facts or retrieved by your tools.
 - Weigh evidence dynamically based on the source's metadata credibility (e.g. prioritize official news/SEC filings over individual Reddit posts/scores).
 - If evidence is genuinely weak for a {action_word} case, acknowledge it — but still build the best {action_word} case you can.
 - Be specific with numbers, dates, and metrics.
+
+PRECISION QUERY TOOLS (use when needed):
+- If you need to verify a specific metric (P/E, revenue, debt-to-equity, FCF), call query_financial_metrics.
+- If you need to check a technical indicator (RSI, MACD, SMA levels), call query_technical_indicator.
+- If you want to verify a claim from a news article or search for insider/congressional activity, call search_database_facts.
+- These tools return ground-truth values from the database. Use them to cross-verify any claims you cite.
+- You can request multiple metrics in a single query_financial_metrics call for efficiency.
 
 Output exactly this JSON:
 {{

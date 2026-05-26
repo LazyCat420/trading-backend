@@ -38,6 +38,7 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "write_memory_note",
         "read_memory_note",
         "request_data_collection",
+        "search_database_facts",
     ],
     "technical": [
         "get_market_data",
@@ -47,6 +48,7 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "search_trading_skills",
         "post_finding",
         "read_team_findings",
+        "query_technical_indicator",
     ],
     "fundamental": [
         "get_market_data",
@@ -57,6 +59,8 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "post_finding",
         "read_team_findings",
         "request_data_collection",
+        "query_financial_metrics",
+        "search_database_facts",
     ],
     "risk": [
         "get_market_data",
@@ -76,6 +80,7 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
         "search_internal_database",
         "post_finding",
         "read_team_findings",
+        "search_database_facts",
     ],
     "comparative": [
         "get_market_data",

@@ -83,6 +83,13 @@ from app.tools.prism_agent_harness import run_prism_agent
 # Phase 11: LLM-Steered Data Collection
 from app.tools.collection_request_tool import request_data_collection
 
+# Phase 12: Precision RAG Tools (Hybrid Context Model)
+from app.tools.precision_rag import (
+    query_financial_metrics,
+    query_technical_indicator,
+    search_database_facts,
+)
+
 __all__ = [
     "registry",
     "PermissionLevel",
@@ -146,4 +153,8 @@ __all__ = [
     "get_cycle_context_all",
     # Phase 11: LLM-Steered Data Collection
     "request_data_collection",
+    # Phase 12: Precision RAG Tools
+    "query_financial_metrics",
+    "query_technical_indicator",
+    "search_database_facts",
 ]
