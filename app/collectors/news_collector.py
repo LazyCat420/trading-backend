@@ -505,26 +505,36 @@ async def collect_finnhub_news(
                 if since and published_at and published_at <= since:
                     continue
 
-                article_id = _get_article_id(headline, ticker.upper())
+                full_text = f"{headline} {summary}"
+                detected_tickers = _detect_tickers_in_text(full_text)
+                if detected_tickers:
+                    detected_tickers = {
+                        t for t in detected_tickers
+                        if _is_article_relevant_to_ticker(t, full_text)
+                    }
+                tickers_to_insert = list(detected_tickers) if detected_tickers else [ticker.upper()]
 
-                db.execute(
-                    """
-                    INSERT INTO news_articles
-                    (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'finnhub', CURRENT_TIMESTAMP)
-                    ON CONFLICT (id) DO NOTHING
-                    """,
-                    [
-                        article_id,
-                        ticker.upper(),
-                        headline[:500],
-                        source,
-                        url,
-                        published_at,
-                        summary,
-                    ],
-                )
-                count += 1
+                for t in tickers_to_insert:
+                    article_id = _get_article_id(headline, t)
+
+                    db.execute(
+                        """
+                        INSERT INTO news_articles
+                        (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'finnhub', CURRENT_TIMESTAMP)
+                        ON CONFLICT (id) DO NOTHING
+                        """,
+                        [
+                            article_id,
+                            t,
+                            headline[:500],
+                            source,
+                            url,
+                            published_at,
+                            summary,
+                        ],
+                    )
+                    count += 1
 
             logger.info(
                 f"[news] Finnhub {ticker}: {count} unique articles (skipped {skipped} duplicates)"
@@ -609,26 +619,36 @@ async def collect_yfinance_news(ticker: str, since: datetime.datetime | None = N
                 if since and published_at and published_at <= since:
                     continue
 
-                article_id = _get_article_id(title, ticker.upper())
+                full_text = f"{title} {summary}"
+                detected_tickers = _detect_tickers_in_text(full_text)
+                if detected_tickers:
+                    detected_tickers = {
+                        t for t in detected_tickers
+                        if _is_article_relevant_to_ticker(t, full_text)
+                    }
+                tickers_to_insert = list(detected_tickers) if detected_tickers else [ticker.upper()]
 
-                db.execute(
-                    """
-                    INSERT INTO news_articles
-                    (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'yfinance', CURRENT_TIMESTAMP)
-                    ON CONFLICT (id) DO NOTHING
-                    """,
-                    [
-                        article_id,
-                        ticker.upper(),
-                        title[:500],
-                        publisher,
-                        url,
-                        published_at,
-                        summary,
-                    ],
-                )
-                count += 1
+                for t in tickers_to_insert:
+                    article_id = _get_article_id(title, t)
+
+                    db.execute(
+                        """
+                        INSERT INTO news_articles
+                        (id, ticker, title, publisher, url, published_at, summary, source, collected_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'yfinance', CURRENT_TIMESTAMP)
+                        ON CONFLICT (id) DO NOTHING
+                        """,
+                        [
+                            article_id,
+                            t,
+                            title[:500],
+                            publisher,
+                            url,
+                            published_at,
+                            summary,
+                        ],
+                    )
+                    count += 1
 
             logger.info(f"[news] yfinance {ticker}: {count} articles")
             return count

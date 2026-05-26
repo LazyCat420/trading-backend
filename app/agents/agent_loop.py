@@ -550,3 +550,116 @@ async def run_agent_loop(
         logger.error(f"[AgentLoop] Failed to save stats: {e}")
 
     return base_result
+
+
+async def run_split_agent_loop(
+    system_prompt: str,
+    user_prompt: str,
+    ticker: str,
+    agent_name: str,
+    cycle_id: str = "",
+    bot_id: str = "",
+    budget: AgentBudget = None,
+    priority: Priority = Priority.NORMAL,
+    previous_messages: list = None,
+    model_override: str | None = None,
+    tools_override: list[dict] | None = None,
+    yield_on_limit: bool = False,
+    require_json_schema: bool = False,
+    critique_rounds: int = 0,
+    max_selector_tools: int = 5,
+) -> dict[str, Any]:
+    """Brain-Action Split Agent Loop.
+
+    Wraps the standard run_agent_loop with a two-phase approach:
+      1. SELECTOR PHASE: A lightweight LLM call picks which tools are needed
+         from the full pool (no JSON schemas sent — just names/descriptions).
+      2. EXECUTOR PHASE: The real agent loop runs with ONLY the selected
+         tool schemas, dramatically reducing context window usage.
+
+    Falls back to the standard monolithic loop if selection fails.
+
+    Args:
+        Same as run_agent_loop, plus:
+        max_selector_tools: Maximum number of tools the selector can pick.
+
+    Returns:
+        Same dict as run_agent_loop.
+    """
+    from app.agents.tool_selector import select_tools_for_task
+
+    # Determine the full tool pool
+    if tools_override is not None:
+        full_pool = tools_override
+    else:
+        full_pool = registry.schemas
+
+    # Skip the selector if the pool is already small
+    if len(full_pool) <= max_selector_tools:
+        logger.debug(
+            "[SplitLoop] Pool size %d <= %d, skipping selector for %s",
+            len(full_pool),
+            max_selector_tools,
+            agent_name,
+        )
+        return await run_agent_loop(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            ticker=ticker,
+            agent_name=agent_name,
+            cycle_id=cycle_id,
+            bot_id=bot_id,
+            budget=budget,
+            priority=priority,
+            previous_messages=previous_messages,
+            model_override=model_override,
+            tools_override=full_pool if tools_override is not None else None,
+            yield_on_limit=yield_on_limit,
+            require_json_schema=require_json_schema,
+            critique_rounds=critique_rounds,
+        )
+
+    # Phase 1: Tool Selection (lightweight, no schemas in context)
+    # Build the task description from system + user prompts
+    task_desc = f"{system_prompt[:500]}\n\nTask: {user_prompt[:1500]}"
+
+    selected_schemas = await select_tools_for_task(
+        task_description=task_desc,
+        available_tool_schemas=full_pool,
+        agent_name=f"{agent_name}_selector",
+        ticker=ticker,
+        cycle_id=cycle_id,
+        priority=priority,
+        max_tools=max_selector_tools,
+    )
+
+    selected_names = [s["function"]["name"] for s in selected_schemas]
+    full_names = [s["function"]["name"] for s in full_pool]
+
+    logger.info(
+        "[SplitLoop] Tool selection complete for %s/%s: %d/%d tools selected → %s",
+        agent_name,
+        ticker,
+        len(selected_schemas),
+        len(full_pool),
+        selected_names,
+    )
+
+    # Phase 2: Run the real agent loop with the reduced tool set
+    return await run_agent_loop(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        ticker=ticker,
+        agent_name=agent_name,
+        cycle_id=cycle_id,
+        bot_id=bot_id,
+        budget=budget,
+        priority=priority,
+        previous_messages=previous_messages,
+        model_override=model_override,
+        tools_override=selected_schemas,
+        yield_on_limit=yield_on_limit,
+        require_json_schema=require_json_schema,
+        critique_rounds=critique_rounds,
+    )
+

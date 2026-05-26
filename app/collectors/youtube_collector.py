@@ -295,17 +295,19 @@ async def _process_video(
     except Exception:
         pass
 
-    existing = db.execute(
-        "SELECT video_id FROM youtube_transcripts WHERE video_id = %s", [video_id]
-    ).fetchone()
-    if existing:
-        return "skipped_in_db"
-
     raw_transcript = _strip_promo_content(raw_transcript)
 
     primary_ticker = force_ticker or _extract_primary_ticker(
         title + " " + raw_transcript[:1000]
     )
+    ticker_suffix = primary_ticker.upper() if primary_ticker else "NONE"
+    row_video_id = f"{video_id}_{ticker_suffix}"
+
+    existing = db.execute(
+        "SELECT video_id FROM youtube_transcripts WHERE video_id = %s", [row_video_id]
+    ).fetchone()
+    if existing:
+        return "skipped_in_db"
 
     if not thumbnail_url:
         thumbnail_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
@@ -319,7 +321,7 @@ async def _process_video(
             ON CONFLICT (video_id) DO NOTHING
     """,
         [
-            video_id,
+            row_video_id,
             primary_ticker,
             title,
             channel_name,

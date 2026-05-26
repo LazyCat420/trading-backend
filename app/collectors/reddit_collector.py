@@ -325,7 +325,8 @@ def _store_post(
     """Store a Reddit post and its discovered tickers. Returns 1 on success, 0 on skip."""
     title = post.get("title", "")
     body = post.get("body", post.get("selftext", ""))
-    post_id = post.get("id", hashlib.md5(title.encode()).hexdigest()[:12])
+    raw_post_id = post.get("id", hashlib.md5(title.encode()).hexdigest()[:12])
+    post_id = f"{raw_post_id}_{primary_ticker.upper()}"
 
     created_val = post.get("created_at", post.get("created_utc"))
     if isinstance(created_val, (int, float)):

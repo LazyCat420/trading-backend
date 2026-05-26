@@ -325,25 +325,42 @@ async def run_agent(
                 logger.error("[BaseAgent] Prism agent routing failed for %s, falling back to local: %s", agent_name, pe)
 
         # Fallback to local agent loop
-        from app.agents.agent_loop import run_agent_loop
+        from app.agents.agent_loop import run_agent_loop, run_split_agent_loop
         from app.agents.agent_budget import AgentBudget
 
         # Role-differentiated budget: risk=5, verifier=5, meta_audit=10, default=3
         budget_turns = get_agent_budget_turns(agent_name, enable_tools)
         budget = AgentBudget(max_turns=budget_turns)
 
-        result = await run_agent_loop(
-            system_prompt=actual_system_prompt,
-            user_prompt=full_prompt,
-            ticker=ticker,
-            agent_name=agent_name,
-            cycle_id=cycle_id,
-            bot_id=bot_id,
-            budget=budget,
-            priority=Priority.NORMAL,
-            tools_override=agent_tools,
-            require_json_schema=True,  # Base agents are expected to return JSON schema
-        )
+        # Use Brain-Action split loop when tools are enabled to save context
+        # The split loop first selects which tools are needed (lightweight call),
+        # then runs the real agent loop with only the selected subset.
+        if enable_tools and agent_tools:
+            result = await run_split_agent_loop(
+                system_prompt=actual_system_prompt,
+                user_prompt=full_prompt,
+                ticker=ticker,
+                agent_name=agent_name,
+                cycle_id=cycle_id,
+                bot_id=bot_id,
+                budget=budget,
+                priority=Priority.NORMAL,
+                tools_override=agent_tools,
+                require_json_schema=True,
+            )
+        else:
+            result = await run_agent_loop(
+                system_prompt=actual_system_prompt,
+                user_prompt=full_prompt,
+                ticker=ticker,
+                agent_name=agent_name,
+                cycle_id=cycle_id,
+                bot_id=bot_id,
+                budget=budget,
+                priority=Priority.NORMAL,
+                tools_override=agent_tools,
+                require_json_schema=True,
+            )
         return (
             result.get("final_text", ""),
             result.get("token_usage", 0),

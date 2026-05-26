@@ -184,6 +184,7 @@ AGENT_ROLE_ROUTING = {
     "retriever": "collector",
     "user_chat": "collector",
     "collector": "collector",
+    "tool_selector": "collector",  # Brain-Action split: lightweight tool routing
     
     # Complex reasoning -> DGX Spark
     "technical": "analyst",
@@ -199,6 +200,7 @@ AGENT_ROLE_ROUTING = {
     "strategy_evaluator": "analyst",
     "judge_evaluator": "analyst",
     "debate": "analyst",
+    "action_executor": "analyst",  # Brain-Action split: tool execution worker
 }
 
 
