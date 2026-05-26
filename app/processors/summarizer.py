@@ -313,7 +313,62 @@ async def _summarize_reddit_batch(
 
     # ── Step 1: Classify all posts ──
     for row in rows:
-        post_id, title, body, subreddit = row[0], row[1], row[2], row[3]
+        post_id = row[0]
+        title = row[1]
+        body = row[2]
+        subreddit = row[3]
+        qualitative_draft = row[4] if len(row) > 4 else None
+
+        if qualitative_draft:
+            try:
+                from app.db.connection import safe_jsonb
+                draft = safe_jsonb(qualitative_draft)
+                if isinstance(draft, dict):
+                    decision = draft.get("decision", "keep").lower()
+                    if decision == "discard":
+                        results.append({
+                            "id": post_id,
+                            "summary": "",
+                            "tokens": 0,
+                            "q_status": "discarded",
+                            "q_reason": draft.get("justification", "Discarded by Smart Janitor")[:200],
+                            "q_score": draft.get("confidence", 100),
+                            "tickers_mentioned": "",
+                            "sentiment": "neutral",
+                        })
+                        logger.debug("[summarizer] Reddit %s bypassed (discarded by draft)", post_id)
+                        continue
+                    elif decision == "keep":
+                        bullets = draft.get("bullet_points", [])
+                        if isinstance(bullets, list):
+                            summary_text = "\n".join(
+                                f"- {str(b)}" if not str(b).strip().startswith("-") else str(b)
+                                for b in bullets
+                            )
+                        else:
+                            summary_text = str(bullets)
+                        
+                        if not summary_text.strip():
+                            summary_text = draft.get("justification", "") or title
+
+                        tickers_list = draft.get("actual_tickers", [])
+                        tickers_str = ", ".join(tickers_list) if isinstance(tickers_list, list) else str(tickers_list)
+                        
+                        results.append({
+                            "id": post_id,
+                            "summary": summary_text,
+                            "tokens": 0,
+                            "q_status": "accepted",
+                            "q_reason": "Reused Smart Janitor qualitative draft",
+                            "q_score": draft.get("confidence", 100),
+                            "tickers_mentioned": tickers_str,
+                            "sentiment": draft.get("impact", "neutral").lower(),
+                        })
+                        logger.debug("[summarizer] Reddit %s bypassed (kept by draft)", post_id)
+                        continue
+            except Exception as e:
+                logger.warning("[summarizer] Failed to parse qualitative_draft for Reddit %s: %s", post_id, e)
+
         density = _classify_reddit_density(title, body)
 
         if density == "garbage":
@@ -440,7 +495,55 @@ async def _summarize_news_batch(
     import re
     from app.utils.text_utils import is_scrape_artifact as _is_scrape_artifact
 
-    async def _do_one(article_id, title, summary_raw):
+    async def _do_one(article_id, title, summary_raw, qualitative_draft=None):
+        summary_raw = summary_raw or ""
+        body_clean = summary_raw.strip()
+        title_clean = title.strip() if title else ""
+
+        # Check qualitative_draft first to bypass LLM call if possible
+        if qualitative_draft:
+            try:
+                from app.db.connection import safe_jsonb
+                draft = safe_jsonb(qualitative_draft)
+                if isinstance(draft, dict):
+                    decision = draft.get("decision", "keep").lower()
+                    if decision == "discard":
+                        return {
+                            "id": article_id,
+                            "summary": "",
+                            "tickers_mentioned": "",
+                            "tokens": 0,
+                            "q_status": "discarded",
+                            "q_reason": draft.get("justification", "Discarded by Smart Janitor")[:200],
+                            "q_score": draft.get("confidence", 100),
+                        }
+                    elif decision == "keep":
+                        bullets = draft.get("bullet_points", [])
+                        if isinstance(bullets, list):
+                            summary_text = "\n".join(
+                                f"- {str(b)}" if not str(b).strip().startswith("-") else str(b)
+                                for b in bullets
+                            )
+                        else:
+                            summary_text = str(bullets)
+                        
+                        if not summary_text.strip():
+                            summary_text = draft.get("justification", "") or title
+                        
+                        tickers_list = draft.get("actual_tickers", [])
+                        tickers_str = ", ".join(tickers_list) if isinstance(tickers_list, list) else str(tickers_list)
+                        
+                        return {
+                            "id": article_id,
+                            "summary": summary_text,
+                            "tickers_mentioned": tickers_str,
+                            "tokens": 0,
+                            "q_status": "accepted",
+                            "q_reason": "Reused Smart Janitor qualitative draft",
+                            "q_score": draft.get("confidence", 100),
+                        }
+            except Exception as e:
+                logger.warning("[summarizer] Failed to parse qualitative_draft for news %s: %s", article_id, e)
         summary_raw = summary_raw or ""
         body_clean = summary_raw.strip()
         title_clean = title.strip() if title else ""
@@ -547,7 +650,7 @@ async def _summarize_news_batch(
         }
 
     from app.services.adaptive_concurrency import concurrency_controller
-    tasks = [_do_one(r[0], r[1], r[2]) for r in rows]
+    tasks = [_do_one(r[0], r[1], r[2], r[3] if len(r) > 3 else None) for r in rows]
     return await concurrency_controller.gather(tasks, label="summarizer_news")
 
 
@@ -618,7 +721,7 @@ async def summarize_unsummarized(
         if ticker:
             reddit_rows = db.execute(
                 """
-                SELECT id, title, COALESCE(body, ''), subreddit
+                SELECT id, title, COALESCE(body, ''), subreddit, qualitative_draft
                 FROM reddit_posts
                 WHERE summary IS NULL
                   AND quality_status IS NULL
@@ -632,7 +735,7 @@ async def summarize_unsummarized(
         else:
             reddit_rows = db.execute(
                 """
-                SELECT id, title, COALESCE(body, ''), subreddit
+                SELECT id, title, COALESCE(body, ''), subreddit, qualitative_draft
                 FROM reddit_posts
                 WHERE summary IS NULL
                   AND quality_status IS NULL
@@ -647,7 +750,7 @@ async def summarize_unsummarized(
         if ticker:
             news_rows = db.execute(
                 """
-                SELECT id, title, COALESCE(summary, '')
+                SELECT id, title, COALESCE(summary, ''), qualitative_draft
                 FROM news_articles
                 WHERE llm_summary IS NULL
                   AND quality_status IS NULL
@@ -662,7 +765,7 @@ async def summarize_unsummarized(
         else:
             news_rows = db.execute(
                 """
-                SELECT id, title, COALESCE(summary, '')
+                SELECT id, title, COALESCE(summary, ''), qualitative_draft
                 FROM news_articles
                 WHERE llm_summary IS NULL
                   AND quality_status IS NULL

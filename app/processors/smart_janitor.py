@@ -77,7 +77,7 @@ Title: {title}
 Summary/Snippet: {summary or "No summary content."}
 """
         response, _, _ = await call_prism_agent(
-            agent_id="CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
+            agent_id="CUSTOM_SYSTEM_JANITOR_AGENT",
             user_message=user_message,
             fallback_system_prompt=SMART_JANITOR_SYSTEM_PROMPT,
             fallback_agent_name="smart_janitor",
@@ -206,7 +206,7 @@ Title: {title}
 Body: {body or "No body content."}
 """
         response, _, _ = await call_prism_agent(
-            agent_id="CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT",
+            agent_id="CUSTOM_SYSTEM_JANITOR_AGENT",
             user_message=user_message,
             fallback_system_prompt=SMART_JANITOR_SYSTEM_PROMPT,
             fallback_agent_name="smart_janior",

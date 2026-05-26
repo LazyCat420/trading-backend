@@ -122,7 +122,7 @@ async def run_consensus_engine(emit: Callable | None = None, ticker: str | None 
                 SELECT id, ticker, publisher, title, summary, llm_summary 
                 FROM news_articles 
                 WHERE published_at >= %s AND ticker = %s
-                AND (quality_status IS NULL OR quality_status = 'ok')
+                AND (quality_status IS NULL OR quality_status IN ('ok', 'accepted', 'relevant'))
                 ORDER BY published_at DESC
             """, [seven_days_ago, ticker]).fetchall()
         else:
@@ -130,7 +130,7 @@ async def run_consensus_engine(emit: Callable | None = None, ticker: str | None 
                 SELECT id, ticker, publisher, title, summary, llm_summary 
                 FROM news_articles 
                 WHERE published_at >= %s 
-                AND (quality_status IS NULL OR quality_status = 'ok')
+                AND (quality_status IS NULL OR quality_status IN ('ok', 'accepted', 'relevant'))
                 ORDER BY published_at DESC
             """, [seven_days_ago]).fetchall()
 

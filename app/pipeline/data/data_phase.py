@@ -143,10 +143,11 @@ async def run(
     curation_task = None
     janitor_task = None
     if len(tickers) == 1:
-        logger.info("[PIPELINE] [DATA PHASE] Single-ticker mode detected: skipping database curation and data janitor tasks")
+        logger.info("[PIPELINE] [DATA PHASE] Single-ticker mode detected: skipping database curation")
     else:
         curation_task = asyncio.create_task(_run_curation_bg())
-        janitor_task = asyncio.create_task(_run_janitor_bg())
+        # Simple janitor background task disabled to prevent duplicate LLM calls; smart_janitor handles filtering and extraction
+        # janitor_task = asyncio.create_task(_run_run_janitor_bg())
 
     from app.pipeline.data.data_global_collection import run_global_collection
     from app.config import settings
@@ -470,9 +471,10 @@ async def run(
     # ═══════════════════════════════════════════════════════════
     # Wait for background tasks before Deduplication
     # ═══════════════════════════════════════════════════════════
-    if curation_task and janitor_task:
-        logger.info("[PIPELINE]   Waiting for background Curation & Janitor tasks...")
-        await asyncio.gather(curation_task, janitor_task)
+    bg_tasks = [t for t in [curation_task, janitor_task] if t is not None]
+    if bg_tasks:
+        logger.info("[PIPELINE]   Waiting for background curation/janitor tasks...")
+        await asyncio.gather(*bg_tasks)
 
     # ═══════════════════════════════════════════════════════════
     # PASS 5: DEDUPLICATION
