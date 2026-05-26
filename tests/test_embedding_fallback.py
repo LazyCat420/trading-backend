@@ -4,14 +4,14 @@ from app.services.embedding_service import EmbeddingService
 
 def test_embed_batch_fallback_to_prism():
     """Test that if the primary API fails, it successfully falls back to Prism."""
-    service = EmbeddingService(model_name="BAAI/bge-small-en-v1.5")
-    
     # Mock settings
     with patch("app.config.settings") as mock_settings:
         mock_settings.EMBEDDING_SERVER_URL = "http://failed-url:8001/embed"
         mock_settings.PRISM_URL = "http://prism-url:7777"
         mock_settings.PRISM_PROJECT = "test-project"
         mock_settings.PRISM_USERNAME = "test-user"
+        
+        service = EmbeddingService(model_name="BAAI/bge-small-en-v1.5")
         
         # Mock httpx client
         mock_client = MagicMock()

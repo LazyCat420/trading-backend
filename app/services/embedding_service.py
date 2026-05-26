@@ -89,35 +89,46 @@ class EmbeddingService:
 
         results = []
         client = self._get_client()
+        
+        # Check if we should bypass the local API call and use Prism directly
+        from app.config import settings
+        bypass_local = ("localhost" in self.api_url or "127.0.0.1" in self.api_url) and settings.PRISM_ENABLED
+        
         # Chunk into batches so we don't overload the API payload size
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
-            try:
-                # OpenAI compatible request
-                payload = {
-                    "model": self._model_name,
-                    "input": batch,
-                }
-                response = client.post(self.api_url, json=payload)
-                response.raise_for_status()
-                data = response.json()
-                
-                if "data" in data:
-                    # OpenAI format
-                    sorted_data = sorted(data["data"], key=lambda x: x["index"])
-                    embeddings = [item["embedding"] for item in sorted_data]
-                    results.extend(embeddings)
-                else:
-                    # Fallback for simple custom servers that just return a list of lists
-                    results.extend(data)
+            success = False
+            
+            if not bypass_local:
+                try:
+                    # OpenAI compatible request
+                    payload = {
+                        "model": self._model_name,
+                        "input": batch,
+                    }
+                    response = client.post(self.api_url, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
                     
-            except Exception as e:
-                logger.error(f"Failed to fetch embeddings from API: {e}")
+                    if "data" in data:
+                        # OpenAI format
+                        sorted_data = sorted(data["data"], key=lambda x: x["index"])
+                        embeddings = [item["embedding"] for item in sorted_data]
+                        results.extend(embeddings)
+                        success = True
+                    else:
+                        # Fallback for simple custom servers that just return a list of lists
+                        results.extend(data)
+                        success = True
+                        
+                except Exception as e:
+                    logger.info(f"Failed to fetch embeddings from primary API (will fallback to Prism): {e}")
+                    
+            if not success:
                 # Try fallback to Prism
                 try:
                     logger.info("Attempting fallback to Prism embedding gateway...")
                     fallback_embeddings = []
-                    from app.config import settings
                     for text in batch:
                         # Call Prism's /embed endpoint
                         url = f"{settings.PRISM_URL}/embed"

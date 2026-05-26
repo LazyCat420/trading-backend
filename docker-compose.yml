@@ -10,6 +10,7 @@ services:
     environment:
       - TZ=America/Los_Angeles
       - DATABASE_URL=postgresql://trader:${POSTGRES_PASSWORD:-trading_bot_pass}@10.0.0.16:5433/trading_bot
+      - SCRAPER_SERVICE_URL=http://10.0.0.16:8001
     volumes:
       - /usr/share/zoneinfo/America/Los_Angeles:/etc/localtime:ro
       - ./logs:/app/logs
