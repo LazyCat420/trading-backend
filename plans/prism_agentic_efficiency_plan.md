@@ -128,11 +128,132 @@ During execution, the following safeguards must be built into the query tools:
 *   **Problem:** Agent queries `P/E Ratio` but database column is `price_to_earnings`.
 *   **Mitigation:** The database connector uses a mapping dict / synonym resolver (e.g., `"pe"`, `"p/e"`, `"pe_ratio"` -> `price_to_earnings`).
 
+### E. Comprehensive Lifecycle Example (How they work together)
+
+To understand how these 4 mitigations work together under the hood, here is the lifecycle of a single query initiated by a Fundamental Analyst agent searching for P/E Ratio and Revenue:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 1. AGENT INITIATES QUERY                                                │
+│    Agent calls: query_financial_metrics(metrics=["P/E Ratio", "Sales"]) │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼ (Mitigation D: Synonym Mapping)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 2. SCHEMA RESOLUTION                                                    │
+│    Maps "P/E Ratio" -> "pe_ratio" and "Sales" -> "revenue"              │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼ (Mitigation C: Temporal Drift)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 3. TIMEFRAME LOCK                                                       │
+│    Locks the query to Q1 2026 (matching active cycle timestamp)         │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼ (Mitigation A: Scale Protection)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 4. METADATA ENRICHMENT                                                  │
+│    Converts raw "100" revenue into {"value": 100, "unit": "Millions"}   │
+└────────────────────────────────────┬────────────────────────────────────┘
+                                     │
+                                     ▼ (Mitigation B: Latency Optimization)
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 5. RESPONSE BATCHED                                                     │
+│    Both metrics returned in a single turn payload to avoid loop taxes   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
 ---
 
-## 5. Execution Roadmap
+## 5. Unified Context & Cross-Referencing (Cross-Verification)
+
+A key advantage of this design is that **Track A (Narrative Context) and Track B (Numerical Tools) are not mutually exclusive—they merge inside the same agentic session.**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Agent Context Window                   │
+├─────────────────────────────────────────────────────────────┤
+│ 1. Upfront System Prompt (Focus bias & instructions)        │
+│ 2. Upfront User Message   (Narrative articles & news)       │
+├──────────────────────────────┬──────────────────────────────┤
+│               Agent Decides: │ "The news says RSI is low.   │
+│                              │  Let me verify this..."      │
+│                              ▼                              │
+│ 3. Tool Call                 │ query_technical_indicator()  │
+│ 4. Tool Output (Ground Truth)│ {"RSI": 31.2}                │
+├──────────────────────────────┴──────────────────────────────┤
+│ 5. Agent Reasoning (Merged): │ "Although the article claims │
+│                              │  unfavorable momentum, our   │
+│                              │  RSI tool confirms it is     │
+│                              │  approaching oversold (31.2),│
+│                              │  presenting a buy signal."   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+When an agent runs under the `/agent` endpoint:
+1.  **Upfront Load:** The agent receives the narrative context (unstructured articles, congressional trade feeds, news bulletins) in the initial prompt history.
+2.  **Emergent Verification:** When the agent reads a claim in an article (e.g., *"The P/E is too high"* or *"Insiders are selling"*), it uses its precision query tools *during* the execution loop to verify that claim against the database.
+3.  **Context Merging:** The tool's output is appended to the agent's short-term history. The agent now holds both the narrative claim and the database ground-truth in its context simultaneously, allowing it to compare, contrast, and resolve contradictions dynamically.
+4.  **Math/Technical Articles:** For articles that contain embedded mathematical or technical data, the agent can use `search_database_facts` or direct query tools to check if the database's raw values match the article's text, filtering out potential hallucinations or outdated news reports.
+
+---
+
+## 6. Swarm Orchestration & Worker Spawning
+
+The hybrid context routing does not happen in a single monolithic agent. Instead, it is orchestrated by the **Python-based Trading Service Pipeline** (our codebase), which spins up specialized worker agents in parallel:
+
+```
+                  ┌───────────────────────────────┐
+                  │   Trading Service Pipeline    │  <-- (Main Orchestrator)
+                  └──────────────┬────────────────┘
+                                 │
+         ┌───────────────────────┼───────────────────────┐
+         ▼                       ▼                       ▼
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+│ Fundamental Bot  │    │  Technical Bot   │    │  Macro/Sent Bot  │  <-- (Parallel Worker Agents)
+│  (agentic loop)  │    │  (agentic loop)  │    │  (agentic loop)  │
+│  Routes: /agent  │    │  Routes: /agent  │    │  Routes: /agent  │
+└────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 │  (JSON verdict payload)
+                                 ▼
+                  ┌───────────────────────────────┐
+                  │    Jury / Judge + Cross-Exam  │  <-- (Impartial Reviewers)
+                  │    Routes: /chat              │
+                  └───────────────────────────────┘
+```
+
+1.  **Main Orchestration (Client-Side):** The Python pipeline acts as the master coordinator. It prepares the base evidence packet, applies the persona evidence filters, and schedules the parallel execution of the worker agents.
+2.  **Worker Spawning (Parallel Agentic Loops):** 
+    - The pipeline spins up separate analyst worker bots (e.g. Fundamental, Technical, Sentiment) in parallel.
+    - Each bot runs its own isolated tool-execution loop routed to Prism's `/agent` endpoint.
+    - Each worker uses its specialized tools (RSI, moving averages, balance sheets) to formulate its case.
+3.  **Result Feeding (Aggregation):** Once the workers complete, they return their structured JSON responses back to the Python coordinator.
+4.  **Impartial Reviewing (Fast Proxying):** The coordinator aggregates the worker findings and passes them to the Cross-Examiner and Judge. Because these reviewers must remain objective and only weigh the existing evidence without fetching new data, they run as simple, single-turn prompts routed to `/chat` for maximum speed and token efficiency.
+
+---
+
+## 7. Execution Roadmap
 
 *   **Phase 1 (Tool Registration):** Write the precision query tools in `app/tools` and register them in `app/tools/registry.py`.
 *   **Phase 2 (Swarm Configuration):** Modify [tool_whitelists.py](file:///home/lazycat/github/projects/sun/trading-service/app/agents/tool_whitelists.py) to bind these tools to the respective analyst roles.
 *   **Phase 3 (Prompt Reduction):** Edit the analyst templates in `debate_coordinator.py` to remove the default dumping of raw structured tables, replacing them with a guide instructing the agent to use tools for numerical values.
 *   **Phase 4 (Validation):** Run regression tests to verify that agents successfully query metrics and parse the JSON responses.
+
+---
+
+## 8. Prototyping & A/B Validation Plan
+
+To verify this concept before touching core pipeline code, we will run a side-by-side A/B test simulation in the scratch directory (`scratch/test_hybrid_rag.py`).
+
+### Verification Checklist:
+1.  **Metric Comparison (Token Savings):** Measure exact input/output token counts for:
+    -   *Control (Current):* Static loading of full context tables.
+    -   *Variant (Proposed):* Initial narrative prompt + dynamic query tool calls.
+2.  **Tool-Calling Reliability (Success Rate):** Test if the model (Qwen 122B) reliably decides to call the query tools when prompted with a missing metric task, and verify that parameters (ticker, indicator, metrics) are correctly constructed.
+3.  **Latency Trade-off:** Measure if parallelizing the query calls inside the `/agent` loop is faster or slower than loading the pre-fetched data statically (due to the loop round-trip overhead).
+4.  **Format Compliance:** Ensure that the final response successfully extracts and outputs valid JSON verdicts under both control and variant conditions.
+
+We will execute this A/B validation script on the Synology Synology NAS container to gather raw data before deciding whether to merge this RAG upgrade.
+
