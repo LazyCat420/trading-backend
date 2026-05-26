@@ -1,38 +1,6 @@
 {
   "consecutive_runs": [
     {
-      "timestamp": "2026-05-26T01:30:12.644406+00:00",
-      "cycle_id": "cycle-1779758962",
-      "run_type": "active-2h",
-      "errors_count": 240,
-      "warnings_count": 240,
-      "total_bugs": 480
-    },
-    {
-      "timestamp": "2026-05-26T01:30:12.665668+00:00",
-      "cycle_id": "cycle-1779758962",
-      "run_type": "active-2h",
-      "errors_count": 240,
-      "warnings_count": 240,
-      "total_bugs": 480
-    },
-    {
-      "timestamp": "2026-05-26T02:00:19.503922+00:00",
-      "cycle_id": "cycle-1779758962",
-      "run_type": "active-2h",
-      "errors_count": 468,
-      "warnings_count": 470,
-      "total_bugs": 938
-    },
-    {
-      "timestamp": "2026-05-26T02:00:19.688749+00:00",
-      "cycle_id": "cycle-1779758962",
-      "run_type": "active-2h",
-      "errors_count": 468,
-      "warnings_count": 470,
-      "total_bugs": 938
-    },
-    {
       "timestamp": "2026-05-26T02:30:14.168711+00:00",
       "cycle_id": "cycle-1779762610",
       "run_type": "active-2h",
@@ -79,6 +47,38 @@
       "errors_count": 359,
       "warnings_count": 361,
       "total_bugs": 720
+    },
+    {
+      "timestamp": "2026-05-26T04:00:14.225335+00:00",
+      "cycle_id": "cycle-1779766850",
+      "run_type": "active-2h",
+      "errors_count": 241,
+      "warnings_count": 242,
+      "total_bugs": 483
+    },
+    {
+      "timestamp": "2026-05-26T04:30:13.932919+00:00",
+      "cycle_id": "cycle-1779766850",
+      "run_type": "active-2h",
+      "errors_count": 304,
+      "warnings_count": 305,
+      "total_bugs": 609
+    },
+    {
+      "timestamp": "2026-05-26T04:30:14.003771+00:00",
+      "cycle_id": "cycle-1779766850",
+      "run_type": "active-2h",
+      "errors_count": 304,
+      "warnings_count": 305,
+      "total_bugs": 609
+    },
+    {
+      "timestamp": "2026-05-26T05:00:12.863408+00:00",
+      "cycle_id": "cycle-1779766850",
+      "run_type": "active-2h",
+      "errors_count": 304,
+      "warnings_count": 305,
+      "total_bugs": 609
     }
   ]
 }

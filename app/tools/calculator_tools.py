@@ -216,18 +216,13 @@ async def calculate_portfolio_allocation(
     total_portfolio_value: float,
     max_position_pct: float = 0.10,
     current_positions: int = 0,
-    max_positions: int = 10,
+    max_positions: int = 999,
 ) -> str:
     """Calculate how much capital to allocate to the next trade."""
-    if current_positions >= max_positions:
-        return json.dumps(
-            {"error": "Max positions reached", "allocation": 0, "remaining_slots": 0}
-        )
-
     max_per_position = total_portfolio_value * max_position_pct
-    remaining_slots = max_positions - current_positions
+    remaining_slots = max(1, max_positions - current_positions)
     # Don't allocate more than 1/remaining_slots of total
-    balanced = total_portfolio_value / remaining_slots if remaining_slots > 0 else 0
+    balanced = total_portfolio_value / remaining_slots
     allocation = min(max_per_position, balanced)
 
     result = {

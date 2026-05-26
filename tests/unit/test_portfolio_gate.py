@@ -32,15 +32,16 @@ def test_portfolio_gate_new_position_under_cap(mock_dependencies):
     assert result["blocked"] is False
     assert result["reason"] is None
 
-def test_portfolio_gate_new_position_at_cap(mock_dependencies):
-    # Not held, at position cap (8 positions)
+def test_portfolio_gate_new_position_at_cap_bypassed(mock_dependencies):
+    # Not held, at position cap (8 positions) - should NOT block on position cap now
     deps = mock_dependencies
-    deps["open"].return_value = [{"ticker": f"T{i}", "sector": "Technology", "qty": 10, "entry_price": 10} for i in range(8)]
+    sectors = ["SectorA", "SectorB", "SectorC", "SectorD", "SectorE", "SectorF", "SectorG", "SectorH"]
+    deps["open"].return_value = [{"ticker": f"T{i}", "sector": sectors[i], "qty": 10, "entry_price": 10} for i in range(8)]
     deps["pf"].return_value = {"cash": 2000.0, "positions": []}
     
     result = check_portfolio_gate("AAPL", "BUY", "bot_1")
-    assert result["blocked"] is True
-    assert "Position limit reached" in result["reason"]
+    assert result["blocked"] is False
+    assert result["reason"] is None
 
 def test_portfolio_gate_addition_at_cap_bypass(mock_dependencies):
     # Already held, at position cap (8 positions) -> should bypass position cap check

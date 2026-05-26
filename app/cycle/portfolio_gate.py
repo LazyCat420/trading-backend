@@ -180,21 +180,8 @@ def check_portfolio_gate(
         )
         return result
 
-    # Gate 1: Position count cap (bypass if it's an addition to existing position)
-    if not is_addition and len(positions) >= pos_cap:
-        result["blocked"] = True
-        result["reason"] = (
-            f"Position limit reached "
-            f"({len(positions)}/{pos_cap}). "
-            f"Close a position before opening new ones."
-        )
-        logger.warning(
-            "[GATE] BLOCKED %s: position limit %d/%d",
-            ticker,
-            len(positions),
-            pos_cap,
-        )
-        return result
+    # Gate 1: Position count cap (Bypassed - removed hardcap rule)
+    pass
 
     # Gate 2: Sector concentration
     new_sector = _get_ticker_sector(ticker)

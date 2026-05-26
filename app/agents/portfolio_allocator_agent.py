@@ -26,7 +26,6 @@ You have access to calculator and portfolio tools.
 1. **Target Sizing**: Sizing per position should scale between 2% and 15% of the total portfolio value based on signal confidence.
 2. **Over-Concentration Cap**: The final total concentration (existing value + new order value) of any single ticker MUST NOT exceed 20% of the total portfolio value.
 3. **Cash Constraints**: Ensure total cost of all approved BUY orders does not exceed available cash. If cash is limited, prioritize the tickers with highest confidence or VETO/scale down lower-priority allocations.
-4. **Position Slots**: Ensure new positions do not exceed the max slots (e.g. 10 positions). Adding to an existing holding does not occupy a new slot.
 
 ## MANDATORY TOOL SEQUENCE:
 1. Call `get_portfolio_state` to see cash, position counts, and held tickers.
