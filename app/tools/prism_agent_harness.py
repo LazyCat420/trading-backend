@@ -63,6 +63,123 @@ class PrismAgentResult:
         }
 
 
+# ── JSON Recovery Helper ───────────────────────────────────────────────
+
+async def recover_json_output(
+    final_text: str,
+    agent_name: str,
+    ticker: str,
+    cycle_id: str,
+    bot_id: str,
+    priority: Priority,
+) -> tuple[dict, str, int, int]:
+    """Attempt fast JSON recovery based on agent schema."""
+    from app.utils.text_utils import parse_json_response
+
+    if agent_name == "pre_trade":
+        recovery_system = (
+            "You are a precise data converter. Your job is to extract the structured pre-trade risk decision "
+            "from the provided unstructured analysis text and output it as a strictly valid JSON object."
+        )
+        recovery_user = (
+            "Here is the unstructured analysis text:\n"
+            f"{final_text}\n\n"
+            "Extract the risk fields and output EXACTLY this JSON format (no markdown formatting, no other text, just the raw JSON object):\n"
+            "{\n"
+            '  "decision": "APPROVE" or "VETO",\n'
+            '  "ticker": "<ticker>",\n'
+            '  "shares": <shares count, integer>,\n'
+            '  "entry_price": <entry price, float>,\n'
+            '  "stop_loss": <stop loss price, float>,\n'
+            '  "risk_reward_ratio": <risk reward ratio, float>,\n'
+            '  "position_pct": <position percentage, float>,\n'
+            '  "total_cost": <total trade cost, float>,\n'
+            '  "veto_reason": null or "<veto reason string>",\n'
+            '  "rationale": "<brief explanation of the decision>"\n'
+            "}\n"
+            "If the text does not specify some values, calculate them: total_cost = shares * entry_price. If the decision is not clear, decide based on the tone."
+        )
+    elif agent_name == "portfolio_allocator":
+        recovery_system = (
+            "You are a precise data converter. Your job is to extract the structured portfolio allocation decisions "
+            "from the provided unstructured analysis text and output it as a strictly valid JSON object."
+        )
+        recovery_user = (
+            "Here is the unstructured analysis text:\n"
+            f"{final_text}\n\n"
+            "Extract the allocations and output EXACTLY this JSON format (no markdown formatting, no other text, just the raw JSON object):\n"
+            "{\n"
+            '  "allocations": [\n'
+            "    {\n"
+            '      "ticker": "<ticker>",\n'
+            '      "decision": "APPROVE" or "VETO",\n'
+            '      "adjusted_size_pct": <percentage, float>,\n'
+            '      "shares": <shares count, integer>,\n'
+            '      "total_cost": <total trade cost, float>,\n'
+            '      "veto_reason": null or "<veto reason string>",\n'
+            '      "rationale": "<explanation>"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "If the decision is not clear, decide based on the tone."
+        )
+    else:
+        recovery_system = (
+            "You are a precise data converter. Your job is to extract the structured financial decision "
+            "from the provided unstructured analysis text and output it as a strictly valid JSON object."
+        )
+        recovery_user = (
+            "Here is the unstructured analysis text:\n"
+            f"{final_text}\n\n"
+            "Extract the following fields and output EXACTLY this JSON format (no markdown formatting or other text, just the raw JSON object):\n"
+            "{\n"
+            '  "action": "BUY" or "SELL",\n'
+            '  "claims": ["claim 1 with source citation", "claim 2...", ...],\n'
+            '  "confidence": <integer 0-100>,\n'
+            '  "key_argument": "single strongest argument"\n'
+            "}\n"
+            "If the text does not specify claims or arguments, fill them in based on the text. If the action is not clear, decide based on the tone."
+        )
+
+    try:
+        recovered_text, rec_tokens, rec_ms = await llm.chat(
+            system=recovery_system,
+            user=recovery_user,
+            temperature=0.1,
+            max_tokens=1024,
+            priority=priority,
+            agent_name=agent_name + "_recovery",
+            ticker=ticker,
+            cycle_id=cycle_id,
+            bot_id=bot_id,
+        )
+        recovered_parsed = parse_json_response(recovered_text)
+
+        # Verify success based on agent schema requirements
+        success = False
+        if agent_name == "pre_trade":
+            if recovered_parsed and "decision" in recovered_parsed and "ticker" in recovered_parsed:
+                success = True
+        elif agent_name == "portfolio_allocator":
+            if recovered_parsed and "allocations" in recovered_parsed:
+                success = True
+        else:
+            if recovered_parsed and "action" in recovered_parsed and "claims" in recovered_parsed:
+                success = True
+
+        if success:
+            logger.info(
+                "[PrismHarness] Fast JSON recovery succeeded for %s: %s",
+                agent_name,
+                recovered_parsed.get("decision") or recovered_parsed.get("action") or "allocations"
+            )
+            return recovered_parsed, json.dumps(recovered_parsed), rec_tokens, rec_ms
+    except Exception as re_err:
+        logger.warning("[PrismHarness] Fast JSON recovery failed for %s: %s", agent_name, re_err)
+
+    return {}, final_text, 0, 0
+
+
 # ── Core Function ──────────────────────────────────────────────────────
 
 async def run_prism_agent(
@@ -276,48 +393,18 @@ async def run_prism_agent(
                 "[PrismHarness] %s response from Prism is not valid JSON. Attempting fast JSON recovery...",
                 agent_name
             )
-            recovery_system = (
-                "You are a precise data converter. Your job is to extract the structured financial decision "
-                "from the provided unstructured analysis text and output it as a strictly valid JSON object."
+            parsed, recovered_text, rec_tokens, rec_ms = await recover_json_output(
+                final_text=final_text,
+                agent_name=agent_name,
+                ticker=ticker,
+                cycle_id=cycle_id,
+                bot_id=bot_id,
+                priority=priority,
             )
-            recovery_user = (
-                "Here is the unstructured analysis text:\n"
-                f"{final_text}\n\n"
-                "Extract the following fields and output EXACTLY this JSON format (no markdown formatting or other text, just the raw JSON object):\n"
-                "{\n"
-                '  "action": "BUY" or "SELL",\n'
-                '  "claims": ["claim 1 with source citation", "claim 2...", ...],\n'
-                '  "confidence": <integer 0-100>,\n'
-                '  "key_argument": "single strongest argument"\n'
-                "}\n"
-                "If the text does not specify claims or arguments, fill them in based on the text. If the action is not clear, decide based on the tone."
-            )
-            try:
-                recovered_text, rec_tokens, rec_ms = await llm.chat(
-                    system=recovery_system,
-                    user=recovery_user,
-                    temperature=0.1,
-                    max_tokens=1024,
-                    priority=priority,
-                    agent_name=agent_name + "_recovery",
-                    ticker=ticker,
-                    cycle_id=cycle_id,
-                    bot_id=bot_id,
-                )
-                recovered_parsed = parse_json_response(recovered_text)
-                if recovered_parsed and "action" in recovered_parsed and "claims" in recovered_parsed:
-                    logger.info(
-                        "[PrismHarness] Fast JSON recovery succeeded for %s: action=%s, claims=%d",
-                        agent_name,
-                        recovered_parsed.get("action"),
-                        len(recovered_parsed.get("claims", []))
-                    )
-                    final_text = json.dumps(recovered_parsed)
-                    token_usage += rec_tokens
-                    elapsed_ms += rec_ms
-                    parsed = recovered_parsed
-            except Exception as re_err:
-                logger.warning("[PrismHarness] Fast JSON recovery failed for %s: %s", agent_name, re_err)
+            if parsed:
+                final_text = recovered_text
+                token_usage += rec_tokens
+                elapsed_ms += rec_ms
 
         if not parsed:
             logger.warning(
@@ -465,11 +552,35 @@ async def _fallback_to_local(
         max_loops=max_loops,
     )
 
+    fallback_text = result.get("final_text", "")
+    token_usage = result.get("token_usage", 0)
+    execution_ms = result.get("execution_ms", 0)
+
+    from app.utils.text_utils import parse_json_response
+    parsed = parse_json_response(fallback_text)
+    if not parsed:
+        logger.info(
+            "[PrismHarness] Local fallback response for %s is not valid JSON. Attempting fast JSON recovery on local output...",
+            agent_name
+        )
+        parsed, recovered_text, rec_tokens, rec_ms = await recover_json_output(
+            final_text=fallback_text,
+            agent_name=agent_name,
+            ticker=ticker,
+            cycle_id=cycle_id,
+            bot_id=bot_id,
+            priority=priority,
+        )
+        if parsed:
+            fallback_text = recovered_text
+            token_usage += rec_tokens
+            execution_ms += rec_ms
+
     # Normalize to PrismAgentResult shape
     return PrismAgentResult(
-        final_text=result.get("final_text", ""),
-        token_usage=result.get("token_usage", 0),
-        execution_ms=result.get("execution_ms", 0),
+        final_text=fallback_text,
+        token_usage=token_usage,
+        execution_ms=execution_ms,
         conversation_id="",
         routed_via="local_fallback",
     ).to_dict()
