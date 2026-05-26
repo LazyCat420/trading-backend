@@ -41,15 +41,15 @@ class TestContextBudget:
         assert fetched.model_id == "test-model-32k"
 
     def test_effective_from_raw_scaling(self):
-        """Effective context should return raw context directly (no scaling or hardcaps)."""
+        """Effective context should return raw context up to a 128k cap."""
         from app.config.context_budget import _effective_from_raw
 
-        # Asserts that raw tokens are returned directly
+        # Asserts that raw tokens are returned directly up to the 128K cap
         assert _effective_from_raw(8192) == 8192
         assert _effective_from_raw(32768) == 32768
         assert _effective_from_raw(131072) == 131072
-        assert _effective_from_raw(262144) == 262144
-        assert _effective_from_raw(1048576) == 1048576
+        assert _effective_from_raw(262144) == 131072
+        assert _effective_from_raw(1048576) == 131072
 
     def test_compressor_threshold_is_75_percent(self):
         """Compressor threshold should be 75% of effective context."""

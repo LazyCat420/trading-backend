@@ -118,10 +118,13 @@ class ContextBudget:
 
 
 def _effective_from_raw(raw_tokens: int) -> int:
-    """Return the raw context length directly, without any hardcaps, as the agents
-    need the full context window (e.g. 64K) to execute tasks with tools.
+    """Return the raw context length up to a hard ceiling of 128K (131072 tokens).
+    This ensures that even if a model supports extremely large windows (e.g. 262K),
+    the budget slices (data context, tool results) are bounded, triggering necessary
+    head-tail truncation and history compression before the model degrades.
     """
-    return raw_tokens
+    MAX_BUDGET_CEILING = 131072  # 128K tokens
+    return min(raw_tokens, MAX_BUDGET_CEILING)
 
 
 def _compute_slice_budgets(effective: int) -> dict:
