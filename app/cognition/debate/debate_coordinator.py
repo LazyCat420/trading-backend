@@ -446,6 +446,32 @@ async def _run_biased_agent(
     if allowed_tools is None:
         allowed_tools = registry.schemas
 
+    # Brain-Action Split: select only needed tools when pool is large
+    if allowed_tools and len(allowed_tools) > 5:
+        try:
+            from app.agents.tool_selector import select_tools_for_task
+            task_desc = f"{system_prompt[:500]}\n\nTask: {user_prompt[:1500]}"
+            allowed_tools = await select_tools_for_task(
+                task_description=task_desc,
+                available_tool_schemas=allowed_tools,
+                agent_name=f"{agent_name}_selector",
+                ticker=entity_id,
+                cycle_id=cycle_id,
+                priority=Priority.NORMAL,
+                max_tools=5,
+            )
+            logger.info(
+                "[Debate] Tool selection: %d tools selected for %s → %s",
+                len(allowed_tools),
+                agent_name,
+                [t["function"]["name"] for t in allowed_tools],
+            )
+        except Exception as sel_err:
+            logger.warning(
+                "[Debate] Tool selection failed for %s, using full pool: %s",
+                agent_name, sel_err,
+            )
+
     # ── Try Prism /agent routing first ──
     from app.config import settings
     if settings.PRISM_ENABLED and settings.PRISM_AGENT_ROUTING:

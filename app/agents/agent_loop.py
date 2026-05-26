@@ -177,6 +177,32 @@ async def run_agent_loop(
 
     active_tools = tools_override if tools_override is not None else registry.schemas
 
+    # Brain-Action Split: select only needed tools when pool is large
+    if active_tools and len(active_tools) > 5:
+        try:
+            from app.agents.tool_selector import select_tools_for_task
+            task_desc = f"{system_prompt[:500]}\n\nTask: {user_prompt[:1500]}"
+            active_tools = await select_tools_for_task(
+                task_description=task_desc,
+                available_tool_schemas=active_tools,
+                agent_name=f"{agent_name}_selector",
+                ticker=ticker,
+                cycle_id=cycle_id,
+                priority=priority,
+                max_tools=5,
+            )
+            logger.info(
+                "[AgentLoop] Tool selection: %d tools selected for %s → %s",
+                len(active_tools),
+                agent_name,
+                [t["function"]["name"] for t in active_tools],
+            )
+        except Exception as sel_err:
+            logger.warning(
+                "[AgentLoop] Tool selection failed for %s, using full pool: %s",
+                agent_name, sel_err,
+            )
+
     final_content = ""
     hit_limit_with_pending_tools = False
     scorecard = ToolCallScorecard()
