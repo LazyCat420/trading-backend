@@ -2192,3 +2192,17 @@ CREATE TABLE IF NOT EXISTS ticker_consensus (
     consensus       TEXT,
     last_updated    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ══════════════════════════════════════════
+-- AGENT TOOL OPTIMIZATION
+-- Tracks unused tools per agent for highlight and prune optimization.
+-- ══════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS agent_tool_optimization (
+    agent_name       TEXT NOT NULL,
+    tool_name        TEXT NOT NULL,
+    unused_count     INTEGER DEFAULT 0,
+    status           TEXT DEFAULT 'active', -- 'active' | 'highlighted' | 'pruned'
+    updated_at       TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (agent_name, tool_name)
+);
+

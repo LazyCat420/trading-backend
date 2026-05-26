@@ -803,3 +803,23 @@ def _fix_eth_cagr_data(conn):
     _safe_add_column(conn, "tool_usage_stats", "service_source", "TEXT DEFAULT 'trading-service'")
     _safe_add_column(conn, "agent_traces", "service_source", "TEXT DEFAULT 'trading-service'")
 
+    # ── Agent Tool Optimization (Highlight & Prune) ──
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS agent_tool_optimization (
+                    agent_name       TEXT NOT NULL,
+                    tool_name        TEXT NOT NULL,
+                    unused_count     INTEGER DEFAULT 0,
+                    status           TEXT DEFAULT 'active',
+                    updated_at       TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (agent_name, tool_name)
+                )
+            """)
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+

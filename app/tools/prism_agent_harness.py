@@ -156,6 +156,41 @@ async def run_prism_agent(
                 agent_name, sel_err,
             )
 
+    # Phase 0.5: Tool Optimization (Highlight & Pruning)
+    try:
+        from app.services.tool_optimizer import optimize_agent_tools
+        active_tools, system_prompt = await optimize_agent_tools(agent_name, active_tools, system_prompt)
+    except Exception as opt_err:
+        logger.warning("[PrismHarness] Tool optimization failed for %s: %s", agent_name, opt_err)
+
+    # Extract tool names from active_tools
+    tool_names = []
+    if active_tools:
+        for t in active_tools:
+            if isinstance(t, dict):
+                name = t.get("name") or t.get("function", {}).get("name")
+                if name:
+                    tool_names.append(name)
+
+    # Dynamically register/update the custom agent persona in Prism
+    # to preserve custom system prompts and whitelisted tools.
+    resolved_agent_id = agent_name
+    try:
+        logger.info("[PrismHarness] Registering/updating custom agent %s in Prism", agent_name)
+        resolved_agent_id = await prism.register_or_update_custom_agent(
+            name=agent_name,
+            identity=system_prompt,
+            enabled_tools=tool_names,
+            project=prism.project,
+        )
+    except Exception as re_err:
+        logger.warning(
+            "[PrismHarness] Failed to dynamically register custom agent %s in Prism: %s. "
+            "Falling back to resolve_agent_id logic.",
+            agent_name, re_err
+        )
+
+
     # Build messages
     messages = [
         {"role": "system", "content": system_prompt},
@@ -177,7 +212,7 @@ async def run_prism_agent(
         max_tokens=max_tokens,
         temperature=temperature,
         system_prompt=system_prompt,
-        agent_name=agent_name,
+        agent_name=resolved_agent_id,
         ticker=ticker,
         cycle_id=cycle_id,
         enable_thinking=False,
@@ -308,6 +343,19 @@ async def run_prism_agent(
             token_usage,
         )
 
+        # Record tool optimization stats asynchronously
+        try:
+            from app.services.tool_optimizer import record_run_usage_from_db
+            asyncio.create_task(
+                record_run_usage_from_db(
+                    agent_name=agent_name,
+                    cycle_id=cycle_id,
+                    offered_tools=active_tools,
+                )
+            )
+        except Exception as rec_err:
+            logger.warning("[PrismHarness] Failed to trigger record_run_usage_from_db: %s", rec_err)
+
         return PrismAgentResult(
             final_text=final_text,
             token_usage=token_usage,
@@ -315,6 +363,7 @@ async def run_prism_agent(
             conversation_id=conversation_id,
             routed_via="prism",
         ).to_dict()
+
 
     except asyncio.TimeoutError:
         elapsed_ms = int((time.monotonic() - start) * 1000)

@@ -169,6 +169,10 @@ def resolve_agent_id(agent_name: str, default_agent: str = "CUSTOM_MARKET_ALPHA"
     if not agent_name:
         return default_agent
 
+    # If the caller already provided a canonical custom agent ID, return it as-is
+    if agent_name.startswith("CUSTOM_"):
+        return agent_name
+
     # Direct lookup first (fast path)
     agent_id = AGENT_ID_MAP.get(agent_name)
     if agent_id:

@@ -203,6 +203,19 @@ async def run_agent_loop(
                 agent_name, sel_err,
             )
 
+    # Phase 0.5: Tool Optimization (Highlight & Pruning)
+    try:
+        from app.services.tool_optimizer import optimize_agent_tools
+        if messages and messages[0].get("role") == "system":
+            opt_tools, opt_prompt = await optimize_agent_tools(agent_name, active_tools, messages[0]["content"])
+            active_tools = opt_tools
+            messages[0]["content"] = opt_prompt
+        else:
+            opt_tools, _ = await optimize_agent_tools(agent_name, active_tools, "")
+            active_tools = opt_tools
+    except Exception as opt_err:
+        logger.warning("[AgentLoop] Tool optimization failed for %s: %s", agent_name, opt_err)
+
     final_content = ""
     hit_limit_with_pending_tools = False
     scorecard = ToolCallScorecard()
@@ -548,6 +561,30 @@ async def run_agent_loop(
 
     # Adjust success score for any recently applied lessons
     adjust_lesson_score(agent_name, success)
+
+    # Record tool optimization stats in a background task
+    try:
+        from app.services.tool_optimizer import record_tool_optimization_usage
+        # Extract used tools
+        used_tools = []
+        for msg in messages:
+            if msg.get("role") == "tool" and msg.get("name"):
+                used_tools.append(msg["name"])
+            elif "tool_calls" in msg:
+                for tc in msg["tool_calls"]:
+                    name = tc.get("function", {}).get("name")
+                    if name:
+                        used_tools.append(name)
+        asyncio.create_task(
+            record_tool_optimization_usage(
+                agent_name=agent_name,
+                offered_tools=active_tools,
+                used_tool_names=used_tools,
+            )
+        )
+    except Exception as rec_err:
+        logger.warning("[AgentLoop] Failed to record tool optimization usage: %s", rec_err)
+
 
     if hit_limit_with_pending_tools and yield_on_limit:
         raise AgentYielded(base_result)

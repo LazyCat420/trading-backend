@@ -499,3 +499,74 @@ class PrismClient:
         }
 
         return payload, target_url, headers
+
+    async def register_or_update_custom_agent(
+        self,
+        name: str,
+        identity: str,
+        guidelines: str = "",
+        enabled_tools: list[str] | None = None,
+        project: str = "vllm-trading-bot",
+    ) -> str:
+        """Register a custom agent in Prism, or update it if it already exists.
+        Returns the custom agent ID (e.g. 'CUSTOM_BEAR_MACRO_SENTIMENT_T2_AGENT').
+        """
+        # Clean agent name to match uppercase identifier slug
+        # e.g., "bear_macro_sentiment_t2_agent" -> "BEAR_MACRO_SENTIMENT_T2_AGENT"
+        slug = name.upper().replace(" ", "_").replace("-", "_").strip("_")
+        agent_id = f"CUSTOM_{slug}" if not slug.startswith("CUSTOM_") else slug
+
+        # Fetch list of existing agents to check for duplicates and get the database ID
+        client = await self._get_client()
+        headers = {
+            "Content-Type": "application/json",
+            "x-project": self.project,
+            "x-username": self.username,
+        }
+
+        agent_db_id = None
+        try:
+            r = await client.get(f"{self.url}/custom-agents", headers=headers, timeout=10.0)
+            r.raise_for_status()
+            existing_agents = r.json()
+            for agent in existing_agents:
+                if agent.get("agentId") == agent_id:
+                    agent_db_id = agent.get("_id")
+                    break
+        except Exception as e:
+            logger.warning("[PRISM] Failed to query existing custom agents: %s", e)
+
+        # Standardize display name (e.g. "bear_macro_sentiment_t2_agent" -> "Bear Macro Sentiment T2 Agent")
+        display_name = name.replace("_", " ").title() if "_" in name else name
+
+        payload = {
+            "name": display_name,
+            "identity": identity,
+            "guidelines": guidelines,
+            "enabledTools": enabled_tools or [],
+            "project": project,
+            "usesDirectoryTree": False,
+            "usesCodingGuidelines": False,
+        }
+
+        if agent_db_id:
+            # Update existing custom agent
+            try:
+                logger.info("[PRISM] Updating existing custom agent %s (db_id: %s)", agent_id, agent_db_id)
+                r = await client.put(f"{self.url}/custom-agents/{agent_db_id}", json=payload, headers=headers, timeout=10.0)
+                r.raise_for_status()
+            except Exception as e:
+                logger.error("[PRISM] Failed to update custom agent %s: %s", agent_id, e)
+                raise
+        else:
+            # Create a new custom agent
+            try:
+                logger.info("[PRISM] Creating new custom agent %s", agent_id)
+                r = await client.post(f"{self.url}/custom-agents", json=payload, headers=headers, timeout=10.0)
+                r.raise_for_status()
+            except Exception as e:
+                logger.error("[PRISM] Failed to create custom agent %s: %s", agent_id, e)
+                raise
+
+        return agent_id
+
