@@ -74,17 +74,18 @@ def _generate_price_history(ticker: str, trend: str) -> tuple[list[datetime.date
     prices = []
     
     # Establish trend parameters (daily drift and volatility/standard deviation)
+    # Note: Negated because price history is reversed at the end to land on the baseline today.
     if trend == "bullish":
-        drift = 0.0012   # Upward drift (approx +20% over 180 days)
+        drift = -0.0012   # Upward drift (approx +20% over 180 days chronologically)
         vol = 0.015
     elif trend == "bearish":
-        drift = -0.0015  # Downward drift (approx -25% over 180 days)
+        drift = 0.0015  # Downward drift (approx -25% over 180 days chronologically)
         vol = 0.015
     elif trend == "volatile":
-        drift = 0.0002
+        drift = -0.0002
         vol = 0.035      # High volatility
     else: # neutral
-        drift = 0.0001
+        drift = -0.0001
         vol = 0.010      # Low volatility
         
     # Start with a baseline price
