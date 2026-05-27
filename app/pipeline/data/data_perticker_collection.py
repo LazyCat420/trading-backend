@@ -853,16 +853,27 @@ async def run_perticker_collection(
             except Exception as e:
                 logger.info(f"[PIPELINE]   [tech] {ticker} FAILED: {e}")
 
-            # ── Run per-ticker processors (dedup, summarize, consensus) ──
-            await run_ticker_processors(ticker, emit)
-
-            # ── Push to analysis queue if pipelining is active ──
+            # ── Push to analysis queue FIRST (eliminates queue starvation) ──
+            # Analysis workers were starving for 3-5 minutes waiting for
+            # smart janitor + summarizer + consensus + narrative to complete.
+            # The V2 pipeline's data_completeness check handles any gaps.
             if analysis_queue is not None:
                 await analysis_queue.put(ticker)
                 logger.info(
-                    "[PIPELINE] %s collection, technicals, and data processors done, queued for analysis immediately",
+                    "[PIPELINE] %s collection + technicals done → queued for analysis (processors running in background)",
                     ticker,
                 )
+
+            # ── Run per-ticker processors as background task ──
+            # These are LLM-heavy (dedup, summarize, consensus, narrative)
+            # and should NOT block the analysis queue push.
+            async def _bg_processors(t: str):
+                try:
+                    await run_ticker_processors(t, emit)
+                except Exception as proc_err:
+                    logger.warning("[PIPELINE] Background processors failed for %s: %s", t, proc_err)
+
+            asyncio.create_task(_bg_processors(ticker))
 
             return ticker
 

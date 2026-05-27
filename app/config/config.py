@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     )
     VLLM_FUTURE_TIMEOUT: int = 300  # seconds before a hung LLM future is killed (aligned with batch timeout)
     ANALYSIS_WORKER_TIMEOUT_SECONDS: int = (
-        600  # 10-min hard cap per ticker — aligned with debate timeout
+        420  # 7-min hard cap per ticker — debate=180s + thesis/evidence/memory ~240s
     )
     BOT_ID: str = "lazy-trader-v4"
     COLLECTION_MAX_CONCURRENT: int = 5  # parallel per-ticker scrapers

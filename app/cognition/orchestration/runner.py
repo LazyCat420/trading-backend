@@ -517,8 +517,8 @@ async def execute_v2_pipeline(
         )
         await cycle_control.wait_if_paused()
         t_debate = time.monotonic()
-        # Add a granular timeout (5 minutes) to ensure a hung debate agent doesn't consume the entire cycle timeout.
-        # With FAST_DEBATE_MODE and reduced tool turns, debates should complete in 2-3 minutes.
+        # Add a granular timeout (3 minutes) to ensure a hung debate agent doesn't consume the entire cycle timeout.
+        # With FAST_DEBATE_MODE and DEBATE_MAX_TOOL_TURNS=1, debates should complete in ~2 minutes.
         debate_result = await asyncio.wait_for(
             run_adversarial_debate(
                 ticker=ticker,
@@ -529,7 +529,7 @@ async def execute_v2_pipeline(
                 position_context=position_context,
                 portfolio_dashboard=portfolio_dashboard,
             ),
-            timeout=300.0,
+            timeout=180.0,
         )
         ms_debate = elapsed_ms(t_debate)
 

@@ -472,31 +472,38 @@ async def _run_biased_agent(
                 agent_name, sel_err,
             )
 
-    # ── Try Prism /agent routing first ──
+    # ── Try Prism /agent routing first (with strict 30s timeout) ──
     from app.config import settings
     if settings.PRISM_ENABLED and settings.PRISM_AGENT_ROUTING:
         try:
-            prism_healthy = await llm.prism_client.check_health()
+            prism_healthy = await asyncio.wait_for(
+                llm.prism_client.check_health(), timeout=5.0,
+            )
             if prism_healthy:
                 from app.tools.prism_agent_harness import run_prism_agent
                 logger.info("[Debate] Routing %s agentic loop to Prism /agent", agent_name)
-                result = await run_prism_agent(
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
-                    ticker=entity_id,
-                    agent_name=agent_name,
-                    cycle_id=cycle_id,
-                    bot_id=bot_id,
-                    priority=Priority.NORMAL,
-                    tools_override=allowed_tools,
-                    temperature=LLM_TEMPERATURES.get(agent_name, 0.4),
-                    max_tokens=4096,
+                result = await asyncio.wait_for(
+                    run_prism_agent(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        ticker=entity_id,
+                        agent_name=agent_name,
+                        cycle_id=cycle_id,
+                        bot_id=bot_id,
+                        priority=Priority.NORMAL,
+                        tools_override=allowed_tools,
+                        temperature=LLM_TEMPERATURES.get(agent_name, 0.4),
+                        max_tokens=4096,
+                    ),
+                    timeout=30.0,  # Hard cap: don't let Prism consume debate budget
                 )
                 return (
                     result.get("final_text", "").strip(),
                     result.get("token_usage", 0),
                     [],  # tool_history is not populated for Prism-delegated runs
                 )
+        except asyncio.TimeoutError:
+            logger.warning("[Debate] Prism routing TIMEOUT for %s — falling back to local vLLM", agent_name)
         except Exception as pe:
             logger.error("[Debate] Prism routing failed for %s, falling back to local: %s", agent_name, pe)
 
