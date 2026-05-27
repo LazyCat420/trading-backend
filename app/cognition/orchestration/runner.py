@@ -1082,6 +1082,7 @@ def _build_v1_compatible_result(
         "confidence": int(confidence),
         "rationale": rationale,
         "config_used": config_used,
+        "triage_tier": sufficiency.status if sufficiency else "standard",
         "escalated": debate_result is not None,
         "agent_results": {},
         "c_result": {

@@ -7,10 +7,10 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 shared_code = os.path.abspath(os.path.join(project_root, "..", "trading-client"))
 
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 if shared_code not in sys.path:
     sys.path.insert(0, shared_code)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Import the registry to trigger registration of all tools
 from app.tools import registry

@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 75,
+  "rationale": "NVDA presents a BUY opportunity as it trades exactly at its 200-day SMA ($199.29) with an RSI(14) of 47.56, which is safely below the 65 threshold required for entry. The forward P/E of 16.5 suggests the stock is not overvalued relative to historical tech norms, even as the market navigates a 'Risk-On' regime where AI narratives remain dominant despite warnings of a potential crash. This trade is invalidated if the RSI(14) spikes above 70 or if the price breaks below the identified support of $1",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

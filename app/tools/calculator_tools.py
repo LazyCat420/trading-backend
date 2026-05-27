@@ -153,10 +153,14 @@ async def calculate_stop_loss(
             },
             "stop_loss_price": {
                 "type": "number",
-                "description": "Stop-loss price for the trade",
+                "description": "Stop-loss price for the trade (alias: stop_loss)",
+            },
+            "stop_loss": {
+                "type": "number",
+                "description": "Alternative key for stop-loss price",
             },
         },
-        "required": ["entry_price", "target_price", "stop_loss_price"],
+        "required": ["entry_price", "target_price"],
     },
     tier=0,
     source="computed",
@@ -164,10 +168,20 @@ async def calculate_stop_loss(
 async def calculate_risk_reward(
     entry_price: float,
     target_price: float,
-    stop_loss_price: float,
+    stop_loss_price: float | None = None,
+    stop_loss: float | None = None,
 ) -> str:
     """Calculate risk-to-reward ratio for a trade setup."""
-    risk = abs(entry_price - stop_loss_price)
+    sl = stop_loss_price if stop_loss_price is not None else stop_loss
+    if sl is None:
+        return json.dumps({"error": "stop_loss_price or stop_loss is required"})
+    
+    # Ensure variables are cast to float
+    entry_price = float(entry_price)
+    target_price = float(target_price)
+    sl = float(sl)
+
+    risk = abs(entry_price - sl)
     reward = abs(target_price - entry_price)
     ratio = round(reward / risk, 2) if risk > 0 else 0
 

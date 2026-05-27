@@ -180,6 +180,17 @@ async def recover_json_output(
     return {}, final_text, 0, 0
 
 
+def clean_surrogates(obj: Any) -> Any:
+    """Recursively clean lone surrogate characters from strings to prevent encoding errors."""
+    if isinstance(obj, str):
+        return "".join(c for c in obj if not (0xD800 <= ord(c) <= 0xDFFF))
+    elif isinstance(obj, dict):
+        return {clean_surrogates(k): clean_surrogates(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_surrogates(x) for x in obj]
+    return obj
+
+
 # ── Core Function ──────────────────────────────────────────────────────
 
 async def run_prism_agent(
@@ -341,6 +352,9 @@ async def run_prism_agent(
     # Add metadata for tracking
     payload["conversationMeta"]["title"] = f"Agent: {agent_name} · {ticker}"
     payload["autoApprove"] = settings.PRISM_AUTO_APPROVE
+
+    # Clean surrogates from payload to prevent UnicodeEncodeError
+    payload = clean_surrogates(payload)
 
     logger.info(
         "[PrismHarness] Delegating %s to Prism /agent (model=%s, tools=%d, ticker=%s)",

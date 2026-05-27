@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 75,
+  "rationale": "This thesis initiates a BUY position because the RSI(14) is 61.13, satisfying the strict requirement to BUY only if RSI < 65 [technical_data]. The entry aligns with the 200-day SMA at $200.54, offering a defined support level for the trade [technical_data]. While the MACD histogram is negative, the forward P/E of 28.0 remains comfortably below the sell trigger of 1.5x sector average, supporting a valuation-based entry in a neutral macro regime. The position size is limited to $25,000 to respect ",
+  "config_used": "v2_cognition",
+  "escalated": false
+}
