@@ -5,7 +5,6 @@ from typing import Callable
 
 from app.config import settings
 from app.monitoring.pipeline_profiler import profiler as pipeline_profiler
-from app.cognition.orchestration.runner import execute_v2_pipeline
 from app.cycle.orchestration.cycle_control import cycle_control
 from app.services.logging.cycle_auditor import auditor
 from app.cycle.context import CycleContext
@@ -48,6 +47,8 @@ async def run_phase4_analysis(
     """
     if not ctx.analyze:
         return []
+
+    from app.cognition.orchestration.runner import execute_v2_pipeline
 
     emit(
         "analyzing",

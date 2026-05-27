@@ -275,7 +275,7 @@ async def test_phase4_all_crash_aborts():
     from app.config import settings
 
     ctx = PipelineContext(
-        tickers=["A", "B"], collect=True, analyze=True,
+        tickers=["A", "B", "C"], collect=True, analyze=True,
         trade=True, cycle_id="test-crash",
     )
     summary = {

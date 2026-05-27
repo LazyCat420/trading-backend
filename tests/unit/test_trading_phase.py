@@ -2,6 +2,13 @@ import pytest
 import asyncio
 from unittest.mock import patch, AsyncMock, MagicMock
 from app.cycle.trading_phase import execute_decisions
+from app.cycle.orchestration.cycle_control import cycle_control
+
+@pytest.fixture(autouse=True)
+def clean_cycle_control():
+    cycle_control.reset()
+    yield
+    cycle_control.reset()
 
 @pytest.fixture
 def mock_trading_deps():
