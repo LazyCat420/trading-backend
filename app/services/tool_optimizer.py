@@ -4,6 +4,10 @@ from app.db.connection import get_db
 
 logger = logging.getLogger(__name__)
 
+# Minimum number of tools an agent must always retain after pruning.
+# Prevents zombie state where agents have 0 tools and hang in Prism.
+MIN_TOOLS_FLOOR = 2
+
 async def optimize_agent_tools(
     agent_name: str,
     initial_tools: list[dict],
@@ -80,6 +84,17 @@ async def optimize_agent_tools(
 
     # Filter out pruned tools
     optimized_tools = [t for t in initial_tools if (t.get("name") or t.get("function", {}).get("name") if isinstance(t, dict) else t) not in pruned_names]
+
+    # ── SAFETY: Never prune below minimum floor ──
+    # If pruning would remove ALL (or nearly all) tools, keep the least-inactive ones.
+    if len(optimized_tools) < MIN_TOOLS_FLOOR and len(initial_tools) >= MIN_TOOLS_FLOOR:
+        logger.warning(
+            "[ToolOptimizer] FLOOR ENFORCED: Pruning would reduce %s to %d tools (floor=%d). "
+            "Keeping all %d tools as active.",
+            agent_name, len(optimized_tools), MIN_TOOLS_FLOOR, len(initial_tools),
+        )
+        optimized_tools = list(initial_tools)
+        pruned_names.clear()  # Don't report pruned since we reversed it
 
     # Inject nudge/guidance if there are highlighted tools
     updated_prompt = system_prompt
@@ -238,4 +253,77 @@ async def record_run_usage_from_db(
             cycle_id,
             e,
         )
+
+
+def reset_all_pruned() -> int:
+    """Reset ALL pruned tools back to 'active' state.
+
+    Call this on boot to clear zombie state where agents
+    had all tools pruned and were sent to Prism with tools=0.
+
+    Returns the number of rows reset.
+    """
+    try:
+        with get_db() as db:
+            db.execute(
+                "UPDATE agent_tool_optimization SET status = 'active', unused_count = 0 "
+                "WHERE status = 'pruned'"
+            )
+            # Get count of affected rows
+            db.execute("SELECT COUNT(*) FROM agent_tool_optimization WHERE status = 'active' AND unused_count = 0")
+            row = db.fetchone()
+            count = row[0] if row else 0
+            logger.info("[ToolOptimizer] Reset pruned tools → all set to 'active' (affected ~%d rows)", count)
+            return count
+    except Exception as e:
+        logger.warning("[ToolOptimizer] Failed to reset pruned tools: %s", e)
+        return 0
+
+
+async def mark_tools_as_used_by_prism(
+    agent_name: str,
+    offered_tools: list[Any],
+) -> None:
+    """Mark all offered tools as 'used' after a successful Prism agent run.
+
+    Prism handles tool execution internally, so we can't know which specific
+    tools were called. To prevent the ToolOptimizer from pruning tools that
+    are actually being used by Prism, we reset all offered tools to active.
+    """
+    if not offered_tools:
+        return
+
+    offered_names = []
+    for t in offered_tools:
+        if isinstance(t, dict):
+            name = t.get("name") or t.get("function", {}).get("name")
+        else:
+            name = str(t)
+        if name:
+            offered_names.append(name)
+
+    if not offered_names:
+        return
+
+    try:
+        with get_db() as db:
+            for tool_name in offered_names:
+                db.execute(
+                    """
+                    INSERT INTO agent_tool_optimization (agent_name, tool_name, unused_count, status, updated_at)
+                    VALUES (%s, %s, 0, 'active', CURRENT_TIMESTAMP)
+                    ON CONFLICT (agent_name, tool_name)
+                    DO UPDATE SET
+                        unused_count = 0,
+                        status = 'active',
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (agent_name, tool_name)
+                )
+        logger.info(
+            "[ToolOptimizer] Marked %d tools as active for Prism-routed agent %s",
+            len(offered_names), agent_name,
+        )
+    except Exception as e:
+        logger.warning("[ToolOptimizer] Failed to mark Prism tools as active for %s: %s", agent_name, e)
 

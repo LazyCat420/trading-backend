@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 78,
+  "rationale": "NVDA qualifies for a BUY under the rule 'RSI < 65' with 'RSI(14): 35.00 [structured_data]', indicating a strong oversold condition ideal for mean reversion. The price is currently '200.35 [structured_data]', which aligns perfectly with the 'sma_200: 200.35 [structured_data]', providing a robust technical support level. While the 'Forward P/E: 18.0 [structured_data]' suggests the stock is not overvalued relative to the 1.5x sector average sell trigger, the trade is invalidated if RSI rises above ",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

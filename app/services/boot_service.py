@@ -107,6 +107,15 @@ class BootService:
 
         PipelineService.reset_on_boot()
 
+        # Reset any zombie-state pruned tools from the ToolOptimizer.
+        # Prism-routed agents never reported tool usage, causing all tools to
+        # get pruned after 4+ cycles. This clears that state on every boot.
+        try:
+            from app.services.tool_optimizer import reset_all_pruned
+            reset_all_pruned()
+        except Exception as e:
+            logger.warning("[Boot] Failed to reset pruned tools (non-fatal): %s", e)
+
         # Start the system PAUSED by default on boot.
         # This prevents all scheduled LLM tasks (morning briefing, flash briefing,
         # janitor, eval worker, etc.) from firing until the user explicitly starts

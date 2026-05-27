@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 72,
+  "rationale": "NVDA presents a valid BUY opportunity as the RSI(14) is 48.98, which is strictly below the 65 threshold required by our trading constitution, and the price is testing the 200-day SMA at 201.59, a key support level. The forward P/E of 28.0 suggests the stock is not overvalued relative to its growth, avoiding the sell trigger of exceeding 1.5x sector average. While Paul Tudor Jones warns of a potential '35% crash' in the Trump-era market boom, the current technical setup supports a mean-reversion ",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

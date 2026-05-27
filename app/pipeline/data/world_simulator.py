@@ -14,6 +14,130 @@ from app.db.connection import get_db
 
 logger = logging.getLogger(__name__)
 
+
+class SimulationGraphSeeder:
+    """Progressively writes simulation nodes to the ontology graph.
+
+    Each method creates one or more ontology nodes and edges, writes them
+    to the DB, and pushes a ``graph_node_events`` row so the trading-client
+    WebSocket can broadcast the addition in real time.
+    """
+
+    def __init__(self, ticker: str, trend: str, sentiment: str):
+        self.ticker = ticker
+        self.trend = trend
+        self.sentiment = sentiment
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S")
+        self.scenario_id = f"sim-{ticker}-{trend}-{sentiment}-{ts}"
+
+    # ── helpers ──────────────────────────────────────────────────────────
+
+    def _upsert_node(self, node_id: str, node_type: str, label: str, metadata: dict | None = None):
+        """Insert or update an ontology node and emit a graph event."""
+        import json
+        meta_json = json.dumps(metadata) if metadata else None
+        now = datetime.datetime.now(datetime.timezone.utc)
+        with get_db() as db:
+            db.execute(
+                "INSERT INTO ontology_nodes (id, node_type, label, activation, metadata_json, created_at, updated_at) "
+                "VALUES (%s, %s, %s, 0.8, %s, %s, %s) "
+                "ON CONFLICT (id) DO UPDATE SET label=EXCLUDED.label, metadata_json=EXCLUDED.metadata_json, "
+                "activation=0.8, updated_at=EXCLUDED.updated_at",
+                [node_id, node_type, label, meta_json, now, now],
+            )
+            db.execute(
+                "INSERT INTO graph_node_events (event_type, node_id, node_type, label, metadata_json, ticker) "
+                "VALUES ('node_added', %s, %s, %s, %s, %s)",
+                [node_id, node_type, label, meta_json, self.ticker],
+            )
+
+    def _upsert_edge(self, source_id: str, target_id: str, relation: str, weight: float = 0.7):
+        """Insert or reinforce an ontology edge and emit a graph event."""
+        edge_id = f"{source_id}--{relation}--{target_id}"
+        now = datetime.datetime.now(datetime.timezone.utc)
+        with get_db() as db:
+            db.execute(
+                "INSERT INTO ontology_edges (id, source_id, target_id, relation, weight, confidence, evidence_count, created_at, updated_at) "
+                "VALUES (%s, %s, %s, %s, %s, 'fact', 1, %s, %s) "
+                "ON CONFLICT (id) DO UPDATE SET weight=EXCLUDED.weight, updated_at=EXCLUDED.updated_at",
+                [edge_id, source_id, target_id, relation, weight, now, now],
+            )
+            db.execute(
+                "INSERT INTO graph_node_events (event_type, source_id, target_id, relation, weight, ticker) "
+                "VALUES ('edge_added', %s, %s, %s, %s, %s)",
+                [source_id, target_id, relation, weight, self.ticker],
+            )
+
+    # ── phase seeders ───────────────────────────────────────────────────
+
+    def seed_scenario(self):
+        """Phase 0: Create root scenario + config nodes."""
+        self._upsert_node(
+            self.scenario_id, "SimulationScenario",
+            f"{self.ticker} Simulation ({self.trend}/{self.sentiment})",
+            {"trend": self.trend, "sentiment": self.sentiment, "ticker": self.ticker},
+        )
+        # Link to existing Asset node (or create a stub)
+        asset_id = f"asset-{self.ticker}"
+        self._upsert_node(asset_id, "Asset", self.ticker)
+        self._upsert_edge(self.scenario_id, asset_id, "SIMULATES", 0.9)
+
+        # PriceTrend config node
+        trend_id = f"{self.scenario_id}-trend"
+        self._upsert_node(trend_id, "PriceTrend", f"Trend: {self.trend.upper()}", {"direction": self.trend})
+        self._upsert_edge(trend_id, self.scenario_id, "CONFIGURES", 0.8)
+
+        # SentimentConfig node
+        sent_id = f"{self.scenario_id}-sentiment"
+        self._upsert_node(sent_id, "SentimentConfig", f"Sentiment: {self.sentiment.upper()}", {"polarity": self.sentiment})
+        self._upsert_edge(sent_id, self.scenario_id, "CONFIGURES", 0.8)
+
+        logger.info("[WORLD-SIM][Graph] Seeded scenario node %s", self.scenario_id)
+
+    def seed_price_history(self, dates, prices):
+        """Phase 1: After price generation — create PriceHistory node."""
+        if not prices:
+            return
+        start_price = prices[0]
+        end_price = prices[-1]
+        total_return = ((end_price - start_price) / start_price) * 100
+        node_id = f"{self.scenario_id}-prices"
+        self._upsert_node(node_id, "PriceTrend", f"{self.ticker} Price History ({len(dates)}d)", {
+            "days": len(dates),
+            "start_price": round(start_price, 2),
+            "end_price": round(end_price, 2),
+            "total_return_pct": round(total_return, 2),
+            "high": round(max(prices), 2),
+            "low": round(min(prices), 2),
+        })
+        self._upsert_edge(self.scenario_id, node_id, "PRODUCES", 0.9)
+        logger.info("[WORLD-SIM][Graph] Seeded price history node (%d days, %.1f%% return)", len(dates), total_return)
+
+    def seed_technicals(self, indicator_summary: dict):
+        """Phase 2: After technical indicator generation."""
+        node_id = f"{self.scenario_id}-technicals"
+        self._upsert_node(node_id, "TechnicalProfile", f"{self.ticker} Technical Profile", indicator_summary)
+        self._upsert_edge(self.scenario_id, node_id, "PRODUCES", 0.8)
+        logger.info("[WORLD-SIM][Graph] Seeded technical profile node (%d indicators)", len(indicator_summary))
+
+    def seed_fundamentals(self, fundamental_summary: dict):
+        """Phase 3: After fundamental data generation."""
+        node_id = f"{self.scenario_id}-fundamentals"
+        self._upsert_node(node_id, "FundamentalProfile", f"{self.ticker} Fundamental Profile", fundamental_summary)
+        self._upsert_edge(self.scenario_id, node_id, "PRODUCES", 0.8)
+        logger.info("[WORLD-SIM][Graph] Seeded fundamental profile node")
+
+    def seed_news_article(self, index: int, headline: str, sentiment_score: float, source: str):
+        """Phase 4: After each news article — one node per article."""
+        node_id = f"{self.scenario_id}-news-{index}"
+        self._upsert_node(node_id, "SimulatedNews", headline, {
+            "sentiment_score": sentiment_score,
+            "source": source,
+            "index": index,
+        })
+        self._upsert_edge(self.scenario_id, node_id, "GENERATED", 0.6)
+
+
 def generate_simulated_world(tickers: list[str], trend: str = "bullish", news_sentiment: str = "positive") -> None:
     """
     Generates simulated data for the given tickers and writes them to the database.
@@ -31,20 +155,41 @@ def generate_simulated_world(tickers: list[str], trend: str = "bullish", news_se
     for ticker in tickers:
         ticker = ticker.upper()
         
+        # Initialize graph seeder for progressive ontology node creation
+        seeder = SimulationGraphSeeder(ticker, trend, news_sentiment)
+        
+        # 0. Seed the root scenario + config nodes in the brain graph
+        try:
+            seeder.seed_scenario()
+        except Exception as e:
+            logger.warning("[WORLD-SIM][Graph] Failed to seed scenario: %s", e)
+        
         # 1. Clear existing simulated data for this ticker to avoid mixing historical periods
         _clear_ticker_data(ticker)
         
         # 2. Generate 180 days of simulated daily prices
         dates, prices = _generate_price_history(ticker, trend)
+        try:
+            seeder.seed_price_history(dates, prices)
+        except Exception as e:
+            logger.warning("[WORLD-SIM][Graph] Failed to seed price history: %s", e)
         
         # 3. Calculate and save technical indicators
-        _generate_technicals(ticker, dates, prices)
+        indicator_summary = _generate_technicals(ticker, dates, prices)
+        try:
+            seeder.seed_technicals(indicator_summary or {})
+        except Exception as e:
+            logger.warning("[WORLD-SIM][Graph] Failed to seed technicals: %s", e)
         
         # 4. Generate and save fundamentals
-        _generate_fundamentals(ticker, prices[-1], trend)
+        fundamental_summary = _generate_fundamentals(ticker, prices[-1], trend)
+        try:
+            seeder.seed_fundamentals(fundamental_summary or {})
+        except Exception as e:
+            logger.warning("[WORLD-SIM][Graph] Failed to seed fundamentals: %s", e)
         
         # 5. Generate and save news articles and Reddit posts
-        _generate_articles_and_posts(ticker, news_sentiment)
+        _generate_articles_and_posts(ticker, news_sentiment, seeder=seeder)
 
 def _clear_ticker_data(ticker: str) -> None:
     """Clear existing data in market tables for the ticker."""
@@ -144,8 +289,11 @@ def _generate_price_history(ticker: str, trend: str) -> tuple[list[datetime.date
             
     return dates, prices
 
-def _generate_technicals(ticker: str, dates: list[datetime.date], prices: list[float]) -> None:
-    """Computes technical indicators on price series and saves to technicals table."""
+def _generate_technicals(ticker: str, dates: list[datetime.date], prices: list[float]) -> dict | None:
+    """Computes technical indicators on price series and saves to technicals table.
+    
+    Returns a summary dict of the latest indicator values for graph seeding.
+    """
     
     # 1. Simple Moving Averages (SMA)
     def compute_sma(period):
@@ -301,9 +449,31 @@ def _generate_technicals(ticker: str, dates: list[datetime.date], prices: list[f
             logger.info("[WORLD-SIM] Inserted %d technical indicator records for %s", len(rows), ticker)
         except Exception as e:
             logger.error("[WORLD-SIM] Failed to insert technical indicators for %s: %s", ticker, e)
+            return None
 
-def _generate_fundamentals(ticker: str, current_price: float, trend: str) -> None:
-    """Generates and saves simulated fundamental metrics for the ticker."""
+    # Return summary of latest values for graph seeding
+    idx = len(prices) - 1
+    return {
+        "rsi_14": round(rsi_14[idx], 2),
+        "macd": round(macd[idx], 4),
+        "macd_signal": round(macd_signal[idx], 4),
+        "sma_20": round(sma20[idx], 2),
+        "sma_50": round(sma50[idx], 2),
+        "sma_200": round(sma200[idx], 2),
+        "bb_upper": round(bb_upper[idx], 2),
+        "bb_lower": round(bb_lower[idx], 2),
+        "atr_14": round(atr_14[idx], 2),
+        "stoch_k": round(stoch_k[idx], 2),
+        "stoch_d": round(stoch_d[idx], 2),
+        "support": round(support[idx], 2),
+        "resistance": round(resistance[idx], 2),
+    }
+
+def _generate_fundamentals(ticker: str, current_price: float, trend: str) -> dict | None:
+    """Generates and saves simulated fundamental metrics for the ticker.
+    
+    Returns a summary dict of the fundamental values for graph seeding.
+    """
     
     if trend == "bullish":
         pe = 35.5
@@ -363,8 +533,18 @@ def _generate_fundamentals(ticker: str, current_price: float, trend: str) -> Non
             logger.info("[WORLD-SIM] Inserted simulated fundamental records for %s", ticker)
         except Exception as e:
             logger.error("[WORLD-SIM] Failed to insert fundamentals for %s: %s", ticker, e)
+            return None
 
-def _generate_articles_and_posts(ticker: str, sentiment: str) -> None:
+    return {
+        "pe_ratio": pe,
+        "forward_pe": forward_pe,
+        "revenue_growth": rev_growth,
+        "profit_margin": profit_margin,
+        "debt_to_equity": debt_to_equity,
+        "market_cap_approx": round(current_price * 5_000_000_000, 0),
+    }
+
+def _generate_articles_and_posts(ticker: str, sentiment: str, seeder: SimulationGraphSeeder | None = None) -> None:
     """Generates simulated news and reddit posts and saves them."""
     
     # Seed details based on sentiment
@@ -419,6 +599,13 @@ def _generate_articles_and_posts(ticker: str, sentiment: str) -> None:
                         summary, f"SUMMARY: {summary}", now, score
                     ]
                 )
+                
+                # Seed news node into the brain graph
+                if seeder:
+                    try:
+                        seeder.seed_news_article(idx, title, score / 100.0, publisher)
+                    except Exception as ne:
+                        logger.warning("[WORLD-SIM][Graph] Failed to seed news node %d: %s", idx, ne)
                 
             # 2. Insert reddit posts
             for idx, (title, body, score, sentiment_val) in enumerate(reddit_templates):

@@ -221,3 +221,15 @@
 - **Action:** BUY @ 75%
 - **Rationale:** NVDA presents a BUY opportunity as it trades exactly at its 200-day SMA ($199.29) with an RSI(14) of 47.56, which is safely below the 65 threshold required for entry. The forward P/E of 16.5 suggests ...
 
+## 2026-05-27 02:24:48 - NVDA
+- **Action:** BUY @ 78%
+- **Rationale:** NVDA qualifies for a BUY under the rule 'RSI < 65' with 'RSI(14): 35.00 [structured_data]', indicating a strong oversold condition ideal for mean reversion. The price is currently '200.35 [structured_...
+
+## 2026-05-27 02:40:02 - NVDA
+- **Action:** BUY @ 72%
+- **Rationale:** NVDA presents a valid BUY opportunity as the RSI(14) is 48.98, which is strictly below the 65 threshold required by our trading constitution, and the price is testing the 200-day SMA at 201.59, a key ...
+
+## 2026-05-27 02:57:50 - NVDA
+- **Action:** BUY @ 72%
+- **Rationale:** NVDA qualifies for a BUY as RSI(14) is 63.74 [technical_data], satisfying the rule to buy only if RSI < 65, while the price sits exactly at the 200-day SMA ($197.82) [technical_data] providing a defin...
+

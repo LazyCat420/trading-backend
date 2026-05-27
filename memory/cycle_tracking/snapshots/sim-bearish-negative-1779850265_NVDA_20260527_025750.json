@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 72,
+  "rationale": "NVDA qualifies for a BUY as RSI(14) is 63.74 [technical_data], satisfying the rule to buy only if RSI < 65, while the price sits exactly at the 200-day SMA ($197.82) [technical_data] providing a defined support level. Although the macro context includes warnings of a potential market crash, the stock's forward P/E of 16.5 [fundamental_data] is not excessive relative to the 1.5x sector average sell trigger, allowing for a position within the $25,000 cap. This thesis is invalidated if RSI rises ab",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

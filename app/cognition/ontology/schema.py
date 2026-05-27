@@ -42,6 +42,7 @@ class GraphFamily(str, Enum):
     PROVENANCE = "provenance"  # backtest / live provenance
     MARKET_ANALYSIS = "market"  # original market-analysis graph (v1)
     KNOWLEDGE = "knowledge"  # LLM-generated claims / hypotheses
+    SIMULATION = "simulation"  # world simulator graph
 
 
 # ── Node types ──────────────────────────────────────────────────────────
@@ -97,6 +98,14 @@ class NodeType(str, Enum):
     DEPLOYMENT = "Deployment"
     MODEL_VERSION = "ModelVersion"
     STRATEGY_VERSION = "StrategyVersion"
+
+    # ── World Simulator ──
+    SIMULATION_SCENARIO = "SimulationScenario"
+    PRICE_TREND = "PriceTrend"
+    SENTIMENT_CONFIG = "SentimentConfig"
+    TECHNICAL_PROFILE = "TechnicalProfile"
+    FUNDAMENTAL_PROFILE = "FundamentalProfile"
+    SIMULATED_NEWS = "SimulatedNews"
 
 
 # ── Edge types ──────────────────────────────────────────────────────────
@@ -171,6 +180,10 @@ class EdgeType(str, Enum):
     DRIFTED_FROM = "DRIFTED_FROM"
     PRODUCED_RESULT = "PRODUCED_RESULT"
 
+    # ── World Simulator ──
+    SIMULATES = "SIMULATES"  # Scenario → Asset
+    CONFIGURES = "CONFIGURES"  # PriceTrend/SentimentConfig → Scenario
+
 
 # ── Node lifecycle classification ───────────────────────────────────────
 # PERMANENT nodes are never decayed or pruned.
@@ -203,6 +216,8 @@ PERMANENT_NODE_TYPES: FrozenSet[NodeType] = frozenset(
         NodeType.EXECUTION_STEP,
         # Runtime infrastructure
         NodeType.SERVICE_COMPONENT,
+        # World Simulator
+        NodeType.SIMULATION_SCENARIO,
     }
 )
 
@@ -229,6 +244,12 @@ EPHEMERAL_NODE_TYPES: FrozenSet[NodeType] = frozenset(
         NodeType.DEPLOYMENT,
         NodeType.MODEL_VERSION,
         NodeType.STRATEGY_VERSION,
+        # World Simulator (transient)
+        NodeType.PRICE_TREND,
+        NodeType.SENTIMENT_CONFIG,
+        NodeType.TECHNICAL_PROFILE,
+        NodeType.FUNDAMENTAL_PROFILE,
+        NodeType.SIMULATED_NEWS,
     }
 )
 

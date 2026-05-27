@@ -445,18 +445,20 @@ async def run_prism_agent(
             token_usage,
         )
 
-        # Record tool optimization stats asynchronously
+        # Record tool optimization stats for Prism-routed agents.
+        # Prism handles tool execution internally, so tool_usage_stats is never
+        # populated for these runs. We mark all offered tools as "active" to
+        # prevent the ToolOptimizer from pruning them after 4+ cycles.
         try:
-            from app.services.tool_optimizer import record_run_usage_from_db
+            from app.services.tool_optimizer import mark_tools_as_used_by_prism
             asyncio.create_task(
-                record_run_usage_from_db(
+                mark_tools_as_used_by_prism(
                     agent_name=agent_name,
-                    cycle_id=cycle_id,
                     offered_tools=active_tools,
                 )
             )
         except Exception as rec_err:
-            logger.warning("[PrismHarness] Failed to trigger record_run_usage_from_db: %s", rec_err)
+            logger.warning("[PrismHarness] Failed to trigger mark_tools_as_used_by_prism: %s", rec_err)
 
         return PrismAgentResult(
             final_text=final_text,

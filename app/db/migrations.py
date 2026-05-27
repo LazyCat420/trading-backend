@@ -824,3 +824,35 @@ def _fix_eth_cagr_data(conn):
         except Exception:
             pass
 
+    # ── Graph Node Events (Real-time Brain Graph WebSocket Bridge) ──
+    # Trading-service writes events here when creating ontology nodes.
+    # Trading-client polls this table and broadcasts to connected WebSocket clients.
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS graph_node_events (
+                    id              SERIAL PRIMARY KEY,
+                    event_type      TEXT NOT NULL,
+                    node_id         TEXT,
+                    node_type       TEXT,
+                    label           TEXT,
+                    source_id       TEXT,
+                    target_id       TEXT,
+                    relation        TEXT,
+                    weight          DOUBLE PRECISION DEFAULT 0.5,
+                    metadata_json   TEXT,
+                    ticker          TEXT,
+                    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    consumed        BOOLEAN DEFAULT FALSE
+                )
+            """)
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_graph_events_consumed "
+                "ON graph_node_events(consumed, created_at)"
+            )
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass

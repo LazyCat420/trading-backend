@@ -1,2 +1,2 @@
-[NVDA] [HIGH] RSI(14) < 65 + entry at 200-day SMA ($200.54) + forward P/E < 1.5x sector = reliable BUY signal (75% confidence). §
-[NVDA] [HIGH] Price at 200-day SMA ($199.29) + RSI(14) < 65 (47.56) + Forward P/E < 17 = strong BUY entry in Risk-On regime.
+[NVDA] [MEDIUM] RSI(14) < 65 + price testing 200-day SMA (201.59) + forward P/E < 1.5x sector = valid mean-reversion BUY signal (72% confidence). §
+[NVDA] [HIGH] RSI(14) < 65 + Price at 200-day SMA ($197.82) + Forward P/E < 1.5x sector = reliable BUY signal (Confidence 72%)

@@ -941,6 +941,24 @@ async def run_adversarial_debate(
             b_tok = 0
             br_tok = 0
 
+            # Per-turn timeout (seconds) — prevents one hung agent from blocking
+            # the entire debate phase. Each agent turn gets 90s max.
+            TURN_TIMEOUT = 90.0
+
+            async def _timed_agent_call(agent_bias, *args, **kwargs):
+                """Wrap _run_biased_agent with a per-turn timeout."""
+                try:
+                    return await asyncio.wait_for(
+                        _run_biased_agent(agent_bias, *args, **kwargs),
+                        timeout=TURN_TIMEOUT,
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(
+                        "[DEBATE] TURN TIMEOUT: %s timed out after %.0fs for %s/%s",
+                        agent_bias, TURN_TIMEOUT, persona_name, ticker,
+                    )
+                    return ("", 0, [])  # Empty fallback — debate continues
+
             # Filter evidence packet to this persona's focus area
             persona_packet = filter_packet_for_persona(packet, persona_name)
             logger.info(
@@ -980,7 +998,7 @@ async def run_adversarial_debate(
             )
 
             # Turn 1: Bull Opening
-            bull_t1, tok1, th1 = await _run_biased_agent(
+            bull_t1, tok1, th1 = await _timed_agent_call(
                 f"bull_{persona_name.lower()}_t1",
                 bull_sys,
                 ticker,
@@ -999,7 +1017,7 @@ async def run_adversarial_debate(
             if cognition_settings.FAST_DEBATE_MODE:
                 _capped_bull_t1 = _cap_debate_text(bull_t1, 3000, "bull_t1_quote")
                 bear_prompt = f"OPPONENT (BULL) OPENING STATEMENT:\n{_capped_bull_t1}\n\nFormulate your opening Bear argument AND a targeted rebuttal to the Bull. YOU MUST USE tools (quant or wiki) to verify or counteract their claims before answering!"
-                bear_t2, tok2, th2 = await _run_biased_agent(
+                bear_t2, tok2, th2 = await _timed_agent_call(
                     f"bear_{persona_name.lower()}_t2",
                     bear_sys,
                     ticker,
@@ -1020,7 +1038,7 @@ async def run_adversarial_debate(
                 _capped_bear_t2 = _cap_debate_text(bear_t2, 3000, "bear_t2_quote")
                 _capped_bear_research = _cap_debate_text(bear_research, 2000, "bear_research")
                 bull_prompt = f"OPPONENT (BEAR) REBUTTAL:\n{_capped_bear_t2}\n\nBEAR'S DATA SOURCES:\n{_capped_bear_research}\n\nFormulate a strict Bull counter-rebuttal. YOU MUST USE tools to find flaws in the Bear's math/logic before sending final JSON!"
-                bull_t3, tok3, th3 = await _run_biased_agent(
+                bull_t3, tok3, th3 = await _timed_agent_call(
                     f"bull_{persona_name.lower()}_t3",
                     bull_sys,
                     ticker,
@@ -1041,7 +1059,7 @@ async def run_adversarial_debate(
                 _capped_bull_t3 = _cap_debate_text(bull_t3, 3000, "bull_t3_quote")
                 _capped_bull_research = _cap_debate_text(bull_research, 2000, "bull_research")
                 bear_prompt_t4 = f"OPPONENT (BULL) COUNTER-REBUTTAL:\n{_capped_bull_t3}\n\nBULL'S DATA SOURCES:\n{_capped_bull_research}\n\nFormulate a 1-2 sentence final Bear conclusion. Ensure your JSON claims are robust and validated."
-                bear_t4, tok4, th4 = await _run_biased_agent(
+                bear_t4, tok4, th4 = await _timed_agent_call(
                     f"bear_{persona_name.lower()}_t4",
                     bear_sys,
                     ticker,
@@ -1066,7 +1084,7 @@ async def run_adversarial_debate(
                 # Turn 2: Bear Opening + Rebuttal to Bull T1
                 _capped_bull_t1 = _cap_debate_text(bull_t1, 3000, "bull_t1_quote")
                 bear_prompt = f"OPPONENT (BULL) OPENING STATEMENT:\n{_capped_bull_t1}\n\nFormulate your opening Bear argument AND a targeted rebuttal to the Bull. YOU MUST USE tools (quant or wiki) to verify or counteract their claims before answering!"
-                bear_t2, tok2, th2 = await _run_biased_agent(
+                bear_t2, tok2, th2 = await _timed_agent_call(
                     f"bear_{persona_name.lower()}_t2",
                     bear_sys,
                     ticker,
@@ -1087,7 +1105,7 @@ async def run_adversarial_debate(
                 _capped_bear_t2 = _cap_debate_text(bear_t2, 3000, "bear_t2_quote")
                 _capped_bear_research = _cap_debate_text(bear_research, 2000, "bear_research")
                 bull_prompt = f"OPPONENT (BEAR) REBUTTAL:\n{_capped_bear_t2}\n\nBEAR'S DATA SOURCES:\n{_capped_bear_research}\n\nFormulate a strict Bull counter-rebuttal. YOU MUST USE tools to find flaws in the Bear's math/logic before sending final JSON!"
-                bull_t3, tok3, th3 = await _run_biased_agent(
+                bull_t3, tok3, th3 = await _timed_agent_call(
                     f"bull_{persona_name.lower()}_t3",
                     bull_sys,
                     ticker,
@@ -1108,7 +1126,7 @@ async def run_adversarial_debate(
                 _capped_bull_t3 = _cap_debate_text(bull_t3, 3000, "bull_t3_quote")
                 _capped_bull_research = _cap_debate_text(bull_research, 2000, "bull_research")
                 bear_prompt = f"OPPONENT (BULL) COUNTER-REBUTTAL:\n{_capped_bull_t3}\n\nBULL'S DATA SOURCES:\n{_capped_bull_research}\n\nFormulate your final Bear conclusion. Ensure your JSON claims are robust and validated by any final tool calls."
-                bear_t4, tok4, th4 = await _run_biased_agent(
+                bear_t4, tok4, th4 = await _timed_agent_call(
                     f"bear_{persona_name.lower()}_t4",
                     bear_sys,
                     ticker,

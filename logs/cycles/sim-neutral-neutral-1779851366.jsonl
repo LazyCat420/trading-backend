@@ -1,0 +1,7 @@
+{"cycle_id": "sim-neutral-neutral-1779851366", "timestamp": "2026-05-27T03:09:27.797610+00:00", "step": "v2_start", "payload": {"ticker": "NVDA", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "sim-neutral-neutral-1779851366", "timestamp": "2026-05-27T03:09:59.115838+00:00", "step": "v2_data_completeness", "payload": {"ticker": "NVDA", "filled": [], "elapsed_ms": 30060}}
+{"cycle_id": "sim-neutral-neutral-1779851366", "timestamp": "2026-05-27T03:10:00.884611+00:00", "step": "v2_ontology", "payload": {"ticker": "NVDA", "node_count": 50, "elapsed_ms": 1767}}
+{"cycle_id": "sim-neutral-neutral-1779851366", "timestamp": "2026-05-27T03:10:17.291112+00:00", "step": "v2_evidence_build", "payload": {"ticker": "NVDA", "claims": 48, "structured_facts": 46, "sources": 10, "missing_fields": [], "teaser_risk": 0.0, "diversity": 4, "elapsed_ms": 15146}}
+{"cycle_id": "sim-neutral-neutral-1779851366", "timestamp": "2026-05-27T03:10:17.291401+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "NVDA", "status": "sufficient", "blockers": [], "warnings": []}}
+{"cycle_id": "sim-neutral-neutral-1779851366", "timestamp": "2026-05-27T03:10:17.312943+00:00", "step": "v2_memory_read", "payload": {"ticker": "NVDA", "episodes": 5, "rules": 0}}
+{"cycle_id": "sim-neutral-neutral-1779851366", "timestamp": "2026-05-27T03:10:31.205745+00:00", "step": "v2_meta_orchestration", "payload": {"ticker": "NVDA", "agent_count": 3, "agent_keys": ["macro_risk", "sentiment", "fundamentals"], "tokens": 7191, "elapsed_ms": 13892}}
