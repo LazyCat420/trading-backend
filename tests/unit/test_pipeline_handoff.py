@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from app.pipeline.trading_phase import (
     get_size_pct,
     estimate_trade,
@@ -53,6 +53,24 @@ def mock_pre_trade():
         mock_pt.return_value = {"decision": "APPROVE", "shares": 10, "total_cost": 1000, "risk_reward_ratio": 2.5}
         yield mock_pt
 
+@pytest.fixture(autouse=True)
+def mock_trading_phase_agents():
+    with patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock) as mock_alloc, \
+         patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock) as mock_exec, \
+         patch("app.cycle.trading_phase._get_current_price") as mock_price, \
+         patch("app.cycle.trading_phase.get_portfolio_value") as mock_pf_val:
+        
+        mock_alloc.return_value = {}
+        mock_exec.return_value = {"decision": "APPROVE", "shares": 10, "total_cost": 1000, "risk_reward_ratio": 2.5}
+        mock_price.return_value = (100.0, 1.0)
+        mock_pf_val.return_value = 10000.0
+        yield {
+            "allocator": mock_alloc,
+            "executor": mock_exec,
+            "price": mock_price,
+            "portfolio_value": mock_pf_val,
+        }
+
 @pytest.fixture
 def mock_emit():
     with patch("app.services.pipeline_service.PipelineService.emit") as mock_e:
@@ -88,23 +106,17 @@ async def test_execute_decisions_blocked_by_gate(mock_portfolio, mock_gate, mock
     mock_buy.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_execute_decisions_advisory_low_integrity(mock_portfolio, mock_get_db):
-    """LOW_INTEGRITY is advisory: reduces confidence, does NOT force HOLD.
-    
-    The pipeline still attempts the BUY (which may fail for other reasons
-    like no price data in test), but the action is not overridden.
-    """
+async def test_execute_decisions_advisory_low_integrity(mock_portfolio, mock_get_db, mock_buy):
+    """LOW_INTEGRITY is advisory: reduces confidence, does NOT force HOLD."""
     decisions = [{
         "ticker": "TSLA", 
         "action": "BUY", 
-        "confidence": 0,
+        "confidence": 50,
         "v2_metadata": {"debate": {"integrity_status": "LOW_INTEGRITY"}}
     }]
     result = await execute_decisions(decisions, bot_id="test_bot")
-    # LOW_INTEGRITY reduces confidence by 30 (clamped to 10) but doesn't force HOLD.
-    # The BUY may still fail for other reasons (no price data, gate, etc.)
-    assert result["counts"].get("holds", 0) == 0 or result["counts"].get("buy_failed", 0) >= 0
-    assert len(result["executed"]) == 0  # No actual execution in test env
+    assert result["counts"].get("holds", 0) == 0
+    mock_buy.assert_called_once()
 
 @pytest.mark.asyncio
 async def test_execute_decisions_low_integrity_reduces_confidence(mock_portfolio, mock_get_db):
@@ -124,7 +136,7 @@ async def test_execute_decisions_sell_skipped_if_not_held(mock_portfolio, mock_g
     # TSLA is not in mock_portfolio
     decisions = [{"ticker": "TSLA", "action": "SELL"}]
     result = await execute_decisions(decisions, bot_id="test_bot")
-    assert result["counts"]["holds"] == 1
+    assert result["counts"]["sell_skipped"] == 1
     assert len(result["executed"]) == 0
     assert "no open position" in result["skipped"][0]["reason"]
 
@@ -190,15 +202,11 @@ async def test_ph04_format_agent_summaries_fallback_without_capsules():
     assert "plan text" in out
 
 @pytest.mark.asyncio
-async def test_ph09_pre_trade_veto_is_advisory(mock_portfolio, mock_gate, mock_pre_trade, mock_buy, mock_get_db):
-    """Pre-trade VETO is advisory: logs warning but proceeds with Kelly sizing.
-    
-    This was intentionally changed so that pre-trade agent suggestions
-    don't block trades — they reduce risk through Kelly fallback instead.
-    """
-    mock_pre_trade.return_value = {"decision": "VETO", "reason": "Too risky"}
-    decisions = [{"ticker": "TSLA", "action": "BUY", "confidence": 90}]
-    result = await execute_decisions(decisions, bot_id="test_bot")
-    # VETO is advisory — buy still proceeds (mock_buy should be called)
-    mock_buy.assert_called_once()
-    assert result["counts"]["buy_executed"] == 1
+async def test_ph09_pre_trade_veto_is_honored(mock_portfolio, mock_gate, mock_buy, mock_get_db):
+    """Pre-trade VETO is honored: blocks the trade."""
+    with patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock) as mock_exec:
+        mock_exec.return_value = {"decision": "VETO", "veto_reason": "Too risky"}
+        decisions = [{"ticker": "TSLA", "action": "BUY", "confidence": 90}]
+        result = await execute_decisions(decisions, bot_id="test_bot")
+        mock_buy.assert_not_called()
+        assert result["counts"]["blocked"] == 1

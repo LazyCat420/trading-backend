@@ -24,7 +24,7 @@ def mock_cycle_summary():
     return {}
 
 @pytest.mark.asyncio
-@patch("app.services.vllm_client.llm")
+@patch("app.cycle.phases.phase1_health.llm")
 async def test_run_phase1_health_all_bots_down(mock_llm, mock_ctx, mock_emit, mock_cycle_summary, mock_state):
     # Both jetson and dgx are False
     mock_llm.health_all = AsyncMock(return_value={"jetson": False, "dgx_spark_1": False})
@@ -35,9 +35,9 @@ async def test_run_phase1_health_all_bots_down(mock_llm, mock_ctx, mock_emit, mo
     assert mock_cycle_summary["no_trade_reason"] == "all_bots_down"
 
 @pytest.mark.asyncio
-@patch("app.services.vllm_client.llm")
-@patch("app.trading.paper_trader.check_stop_losses")
-@patch("app.trading.paper_trader.check_take_profits")
+@patch("app.cycle.phases.phase1_health.llm")
+@patch("app.cycle.phases.phase1_health.check_stop_losses")
+@patch("app.cycle.phases.phase1_health.check_take_profits")
 @patch("app.cycle.phases.phase1_health.get_db")
 async def test_run_phase1_health_success(mock_get_db, mock_ctp, mock_csl, mock_llm, mock_ctx, mock_emit, mock_cycle_summary, mock_state):
     mock_llm.health_all = AsyncMock(return_value={"jetson": True, "dgx_spark_1": True})

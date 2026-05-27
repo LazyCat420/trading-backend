@@ -51,7 +51,7 @@ async def run_single_cycle(
     from app.cycle.core import PipelineContext
     from app.cycle.orchestration.state_manager import PipelineStateMixin
     from app.cycle.orchestration.orchestrator_core import OrchestratorCoreMixin
-    from app.services.bot_manager import get_active_bot_id
+    from app.services.bot_manager import resolve_bot_id
     from unittest.mock import MagicMock
 
     class CycleEngine(OrchestratorCoreMixin, PipelineStateMixin):
@@ -77,10 +77,7 @@ async def run_single_cycle(
                 logger.warning("[cycle_backend] Ticker selection failed: %s", e)
                 tickers = ["AAPL"]
 
-        try:
-            bot_id = get_active_bot_id()
-        except Exception:
-            pass
+        bot_id = resolve_bot_id(bot_id)
 
         ctx = PipelineContext(
             tickers=tickers,
@@ -88,6 +85,7 @@ async def run_single_cycle(
             analyze=True,
             trade=True,
             cycle_id=cycle_id,
+            bot_id=bot_id,
         )
 
         # Initialize the pipeline state using the db state manager
@@ -121,8 +119,18 @@ async def run_single_cycle(
             )
             return {"cycle_id": cycle_id, "status": "error", "error": str(e)}
     finally:
-        # Cleanly shut down pools and background tasks to prevent exit hang
-        await BootService.shutdown()
+        pass
+
+
+_background_tasks = set()
+
+
+def track_task(coro):
+    """Start a background task and hold a strong reference to prevent GC."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 
 async def poll_system_commands(shutdown: asyncio.Event):
@@ -134,144 +142,149 @@ async def poll_system_commands(shutdown: asyncio.Event):
     
     while not shutdown.is_set():
         try:
+            job_id, cmd_type, payload_val = None, None, None
             with get_db() as db:
-                row = db.execute(
-                    "SELECT id, command_type, payload FROM system_commands WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1"
-                ).fetchone()
-                
-                if row:
-                    job_id, cmd_type, payload_val = row
-                    db.execute(
-                        "UPDATE system_commands SET status = 'running', started_at = CURRENT_TIMESTAMP WHERE id = %s", 
-                        [job_id]
-                    )
+                with db.transaction():
+                    row = db.execute(
+                        "SELECT id, command_type, payload FROM system_commands WHERE status = 'pending' ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED"
+                    ).fetchone()
                     
-                    try:
-                        payload = json.loads(payload_val) if isinstance(payload_val, str) else (payload_val or {})
-                        result = None
-                        
-                        logger.info(f"[cycle_backend] Processing command {cmd_type} ({job_id})")
-                        
-                        if cmd_type == "START_CYCLE":
-                            from app.services.pipeline_service import PipelineService
-                            # Sync in-memory state from DB before checking guards.
-                            # Without this, stale in-memory state (e.g. 'starting' from
-                            # a previous failed attempt) will reject the command even
-                            # though the DB has been reset to 'idle'.
-                            PipelineService.load_state()
-                            result = await PipelineService.start_cycle(tickers=payload.get("tickers", []))
-                        elif cmd_type == "ANALYZE_TICKER":
-                            from app.pipeline.analysis.decision_engine import analyze_ticker
-                            result = await analyze_ticker(payload.get("ticker"), cycle_id="manual_run")
-                        elif cmd_type == "MORNING_BRIEFING":
-                            from app.pipeline.analysis.morning_briefing import generate_morning_briefing
-                            result = await generate_morning_briefing()
-                        elif cmd_type == "FLASH_BRIEFING":
-                            from app.services.flash_briefing import generate_flash_briefing
-                            result = await generate_flash_briefing()
-                        elif cmd_type == "STOP_CYCLE":
-                            from app.services.pipeline_service import PipelineService
-                            result = await PipelineService.stop_cycle()
-                        elif cmd_type == "PAUSE_CYCLE":
-                            from app.services.pipeline_service import PipelineService
-                            PipelineService.pause_cycle()
-                            result = {"status": "paused"}
-                        elif cmd_type == "RESUME_CYCLE":
-                            from app.services.pipeline_service import PipelineService
-                            await PipelineService.resume_cycle()
-                            result = {"status": "resumed"}
-                        elif cmd_type == "RESUME_INTERRUPTED":
-                            from app.services.pipeline_service import PipelineService
-                            result = await PipelineService.resume_interrupted_cycle()
-                        elif cmd_type == "DISCARD_CHECKPOINT":
-                            from app.services.pipeline_service import PipelineService
-                            result = PipelineService.discard_checkpoint()
-                        elif cmd_type == "FORCE_CHECKPOINT":
-                            from app.services.pipeline_service import PipelineService
-                            PipelineService.force_save_checkpoint()
-                            result = {"status": "checkpoint_saved"}
-                        elif cmd_type == "REFRESH_SCHEDULE":
-                            from app.services.cycle_scheduler import SchedulerService
-                            SchedulerService.refresh_job(payload.get("job_id"))
-                            result = {"status": "schedule_refreshed"}
-                        elif cmd_type == "AUTORESEARCH":
-                            from app.services.logging import run_autoresearch
-                            asyncio.create_task(run_autoresearch(payload.get("cycle_id"), payload.get("cycle_summary")))
-                            result = {"status": "autoresearch_started"}
-                        elif cmd_type == "DEPLOY_FIX":
-                            from app.cognition.evolution.deployer import deploy_fix_to_disk
-                            result = deploy_fix_to_disk(payload.get("fix_id"))
-                        elif cmd_type == "ROLLBACK_FIX":
-                            from app.cognition.evolution.deployer import rollback_fix
-                            result = rollback_fix(payload.get("fix_id"))
-                        elif cmd_type == "ACTIVATE_BRAIN_GRAPH":
-                            from app.cognition.ontology.ontology_builder import BrainGraph
-                            ticker = payload.get("ticker")
-                            max_hops = payload.get("max_hops", 3)
-                            seeded = BrainGraph.seed_from_ticker_metadata(ticker)
-                            graph_res = BrainGraph.spreading_activation(seed_node_ids=[ticker], max_hops=max_hops)
-                            graph_res["seeded"] = seeded
-                            result = graph_res
-                        elif cmd_type == "EVALUATE_STRATEGY":
-                            from app.cognition.evaluation.strategy_auditor import evaluate_strategy
-                            asyncio.create_task(evaluate_strategy(cycle_id=payload.get("cycle_id"), refresh_pending=True))
-                            result = {"status": "evaluation_started"}
-                        elif cmd_type == "GENERATE_MORNING_BRIEFING":
-                            from app.pipeline.analysis.morning_briefing import generate_morning_briefing
-                            asyncio.create_task(generate_morning_briefing())
-                            result = {"status": "briefing_started"}
-                        elif cmd_type == "RUN_MARKET_COLLECTION":
-                            from app.collectors.market_regime_collector import collect_market_data
-                            from app.data.market_regime_engine import compute_market_regime, compute_sector_breadth
-                            async def _do_market_collect():
-                                await collect_market_data(period=payload.get("period", "6mo"))
-                                await compute_market_regime()
-                                await compute_sector_breadth()
-                            asyncio.create_task(_do_market_collect())
-                            result = {"status": "market_collection_started"}
-                        elif cmd_type == "RUN_FRED_COLLECTION":
-                            from app.services.boot_service import BootService
-                            asyncio.create_task(BootService._startup_fred_refresh())
-                            result = {"status": "fred_collection_started"}
-                        elif cmd_type == "COLLECT_SP500_DATA":
-                            from app.data.sp500_universe import load_sp500_universe
-                            from app.data.sp500_price_collector import collect_sp500_prices
-                            async def _do_sp500_collect():
-                                await load_sp500_universe(enrich=payload.get("enrich", False))
-                                await collect_sp500_prices(period=payload.get("price_period", "6mo"))
-                            asyncio.create_task(_do_sp500_collect())
-                            result = {"status": "sp500_collection_started"}
-                        elif cmd_type == "REFRESH_SECTORS":
-                            from app.data.sector_aggregator import compute_sector_performance
-                            from app.data.sector_correlation_engine import compute_all_correlations
-                            from app.data.rotation_detector import detect_rotations
-                            async def _do_refresh_sectors():
-                                await compute_sector_performance()
-                                await compute_all_correlations()
-                                await detect_rotations()
-                            asyncio.create_task(_do_refresh_sectors())
-                            result = {"status": "refresh_sectors_started"}
+                    if row:
+                        job_id, cmd_type, payload_val = row
+                        db.execute(
+                            "UPDATE system_commands SET status = 'running', started_at = CURRENT_TIMESTAMP WHERE id = %s", 
+                            [job_id]
+                        )
+            
+            if job_id:
+                try:
+                    payload = json.loads(payload_val) if isinstance(payload_val, str) else (payload_val or {})
+                    result = None
+                    
+                    logger.info(f"[cycle_backend] Processing command {cmd_type} ({job_id})")
+                    
+                    if cmd_type == "START_CYCLE":
+                        from app.services.pipeline_service import PipelineService
+                        # Sync in-memory state from DB before checking guards.
+                        # Without this, stale in-memory state (e.g. 'starting' from
+                        # a previous failed attempt) will reject the command even
+                        # though the DB has been reset to 'idle'.
+                        PipelineService.load_state()
+                        result = await PipelineService.start_cycle(tickers=payload.get("tickers", []))
+                    elif cmd_type == "ANALYZE_TICKER":
+                        from app.pipeline.analysis.decision_engine import analyze_ticker
+                        result = await analyze_ticker(payload.get("ticker"), cycle_id="manual_run")
+                    elif cmd_type == "MORNING_BRIEFING":
+                        from app.pipeline.analysis.morning_briefing import generate_morning_briefing
+                        result = await generate_morning_briefing()
+                    elif cmd_type == "FLASH_BRIEFING":
+                        from app.services.flash_briefing import generate_flash_briefing
+                        result = await generate_flash_briefing()
+                    elif cmd_type == "STOP_CYCLE":
+                        from app.services.pipeline_service import PipelineService
+                        result = await PipelineService.stop_cycle()
+                    elif cmd_type == "PAUSE_CYCLE":
+                        from app.services.pipeline_service import PipelineService
+                        PipelineService.pause_cycle()
+                        result = {"status": "paused"}
+                    elif cmd_type == "RESUME_CYCLE":
+                        from app.services.pipeline_service import PipelineService
+                        await PipelineService.resume_cycle()
+                        result = {"status": "resumed"}
+                    elif cmd_type == "RESUME_INTERRUPTED":
+                        from app.services.pipeline_service import PipelineService
+                        result = await PipelineService.resume_interrupted_cycle()
+                    elif cmd_type == "DISCARD_CHECKPOINT":
+                        from app.services.pipeline_service import PipelineService
+                        result = PipelineService.discard_checkpoint()
+                    elif cmd_type == "FORCE_CHECKPOINT":
+                        from app.services.pipeline_service import PipelineService
+                        PipelineService.force_save_checkpoint()
+                        result = {"status": "checkpoint_saved"}
+                    elif cmd_type == "REFRESH_SCHEDULE":
+                        from app.services.cycle_scheduler import SchedulerService
+                        SchedulerService.refresh_job(payload.get("job_id"))
+                        result = {"status": "schedule_refreshed"}
+                    elif cmd_type == "AUTORESEARCH":
+                        from app.services.logging import run_autoresearch
+                        track_task(run_autoresearch(payload.get("cycle_id"), payload.get("cycle_summary")))
+                        result = {"status": "autoresearch_started"}
+                    elif cmd_type == "DEPLOY_FIX":
+                        from app.cognition.evolution.deployer import deploy_fix_to_disk
+                        result = deploy_fix_to_disk(payload.get("fix_id"))
+                    elif cmd_type == "ROLLBACK_FIX":
+                        from app.cognition.evolution.deployer import rollback_fix
+                        result = rollback_fix(payload.get("fix_id"))
+                    elif cmd_type == "ACTIVATE_BRAIN_GRAPH":
+                        from app.cognition.ontology.ontology_builder import BrainGraph
+                        ticker = payload.get("ticker")
+                        max_hops = payload.get("max_hops", 3)
+                        seeded = BrainGraph.seed_from_ticker_metadata(ticker)
+                        graph_res = BrainGraph.spreading_activation(seed_node_ids=[ticker], max_hops=max_hops)
+                        graph_res["seeded"] = seeded
+                        result = graph_res
+                    elif cmd_type == "EVALUATE_STRATEGY":
+                        from app.cognition.evaluation.strategy_auditor import evaluate_strategy
+                        track_task(evaluate_strategy(cycle_id=payload.get("cycle_id"), refresh_pending=True))
+                        result = {"status": "evaluation_started"}
+                    elif cmd_type == "GENERATE_MORNING_BRIEFING":
+                        from app.pipeline.analysis.morning_briefing import generate_morning_briefing
+                        track_task(generate_morning_briefing())
+                        result = {"status": "briefing_started"}
+                    elif cmd_type == "RUN_MARKET_COLLECTION":
+                        from app.collectors.market_regime_collector import collect_market_data
+                        from app.data.market_regime_engine import compute_market_regime, compute_sector_breadth
+                        async def _do_market_collect():
+                            await collect_market_data(period=payload.get("period", "6mo"))
+                            await compute_market_regime()
+                            await compute_sector_breadth()
+                        track_task(_do_market_collect())
+                        result = {"status": "market_collection_started"}
+                    elif cmd_type == "RUN_FRED_COLLECTION":
+                        from app.services.boot_service import BootService
+                        track_task(BootService._startup_fred_refresh())
+                        result = {"status": "fred_collection_started"}
+                    elif cmd_type == "COLLECT_SP500_DATA":
+                        from app.data.sp500_universe import load_sp500_universe
+                        from app.data.sp500_price_collector import collect_sp500_prices
+                        async def _do_sp500_collect():
+                            await load_sp500_universe(enrich=payload.get("enrich", False))
+                            await collect_sp500_prices(period=payload.get("price_period", "6mo"))
+                        track_task(_do_sp500_collect())
+                        result = {"status": "sp500_collection_started"}
+                    elif cmd_type == "REFRESH_SECTORS":
+                        from app.data.sector_aggregator import compute_sector_performance
+                        from app.data.sector_correlation_engine import compute_all_correlations
+                        from app.data.rotation_detector import detect_rotations
+                        async def _do_refresh_sectors():
+                            await compute_sector_performance()
+                            await compute_all_correlations()
+                            await detect_rotations()
+                        track_task(_do_refresh_sectors())
+                        result = {"status": "refresh_sectors_started"}
 
-                        else:
-                            logger.warning(
-                                "[cycle_backend] Unknown command type '%s' (job %s) — no handler matched",
-                                cmd_type, job_id,
-                            )
-                            result = {"status": "error", "reason": f"Unknown command type: {cmd_type}"}
+                    else:
+                        logger.warning(
+                            "[cycle_backend] Unknown command type '%s' (job %s) — no handler matched",
+                            cmd_type, job_id,
+                        )
+                        result = {"status": "error", "reason": f"Unknown command type: {cmd_type}"}
 
+                    with get_db() as db:
                         db.execute(
                             "UPDATE system_commands SET status = 'completed', completed_at = CURRENT_TIMESTAMP, result = %s WHERE id = %s", 
                             [json.dumps(result), job_id]
                         )
-                        logger.info(f"[cycle_backend] Completed command {job_id}")
-                    except BaseException as e:
-                        logger.error(f"[cycle_backend] Command {job_id} failed: {e}")
+                    logger.info(f"[cycle_backend] Completed command {job_id}")
+                except BaseException as e:
+                    logger.error(f"[cycle_backend] Command {job_id} failed: {e}")
+                    with get_db() as db:
                         db.execute(
                             "UPDATE system_commands SET status = 'error', completed_at = CURRENT_TIMESTAMP, error_message = %s WHERE id = %s", 
                             [str(e), job_id]
                         )
-                        if isinstance(e, asyncio.CancelledError):
-                            raise
+                    if isinstance(e, asyncio.CancelledError):
+                        raise
         except BaseException as e:
             logger.error("[cycle_backend] Poller error: %s", e)
             if isinstance(e, asyncio.CancelledError):
@@ -309,19 +322,38 @@ async def run_worker(tickers: list[str] | None = None) -> None:
     # Keep the main loop alive
     await shutdown.wait()
     
+    # Cancel and await remaining background tasks before shutting down dependencies
+    if _background_tasks:
+        logger.info("[cycle_backend] Cleaning up %d background tasks on shutdown...", len(_background_tasks))
+        for task in list(_background_tasks):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*_background_tasks, return_exceptions=True)
+
     # Cleanup
     await BootService.shutdown()
     await poller_task
 
 
 async def start_health_server(shutdown_event: asyncio.Event):
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from fastapi import Depends, HTTPException, Security
+    from app.config import settings
+
+    security = HTTPBearer()
+
+    def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
+        if credentials.credentials != settings.API_SERVER_KEY:
+            raise HTTPException(status_code=403, detail="Invalid API Server Key")
+        return credentials.credentials
+
     app = FastAPI(title="Trading Cycle Backend Health")
     @app.get("/health")
     def health():
         return {"status": "ok", "service": "trading-service"}
 
     @app.get("/status")
-    def status(summary_only: bool = False):
+    def status(summary_only: bool = False, token: str = Depends(verify_api_key)):
         from app.cycle.orchestration.state_manager import PipelineStateMixin
         return PipelineStateMixin.get_current_state(summary_only=summary_only)
 
@@ -358,15 +390,8 @@ def main():
     tickers = [t.strip() for t in args.tickers.split(",")] if args.tickers else None
 
     if args.once:
-        from app.services.boot_service import BootService
-        try:
-            result = asyncio.run(run_single_cycle(tickers=tickers))
-            print(f"Result: {result}")
-        finally:
-            try:
-                asyncio.run(BootService.shutdown())
-            except Exception as shutdown_err:
-                print(f"Error during shutdown: {shutdown_err}")
+        result = asyncio.run(run_single_cycle(tickers=tickers))
+        print(f"Result: {result}")
     else:
         async def _run_all():
             shutdown = asyncio.Event()

@@ -70,15 +70,15 @@ async def test_memory_generation_on_cycle_close(monkeypatch, mock_db):
     async def mock_agent(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("app.pipeline.analysis.purge_pass.run_purge_pass", mock_purge_pass)
-    monkeypatch.setattr("app.cognition.ontology.knowledge_purge.purge_stale_knowledge", mock_purge_knowledge)
-    monkeypatch.setattr("app.pipeline.analysis.agent_maintenance.run_janitor_tasks", mock_maintenance)
-    monkeypatch.setattr("app.pipeline.subsystem_benchmarks.record_all", lambda *a, **kw: None)
-    monkeypatch.setattr("app.agents.meta_audit_agent.run_meta_audit", mock_agent)
-    monkeypatch.setattr("app.agents.quant_research_agent.run_quant_research", mock_agent)
+    monkeypatch.setattr("app.cycle.phases.phase6_post.run_purge_pass", mock_purge_pass)
+    monkeypatch.setattr("app.cycle.phases.phase6_post.purge_stale_knowledge", mock_purge_knowledge)
+    monkeypatch.setattr("app.cycle.phases.phase6_post.run_janitor_tasks", mock_maintenance)
+    monkeypatch.setattr("app.cycle.phases.phase6_post.record_all", lambda *a, **kw: None)
+    monkeypatch.setattr("app.cycle.phases.phase6_post.run_meta_audit", mock_agent)
+    monkeypatch.setattr("app.cycle.phases.phase6_post.run_quant_research", mock_agent)
 
     # Mock get_portfolio to avoid NoneType error
-    monkeypatch.setattr("app.trading.paper_trader.get_portfolio", lambda x: {"cash": 10000.0})
+    monkeypatch.setattr("app.cycle.phases.phase6_post._get_pf", lambda x: {"cash": 10000.0})
 
     ctx = PipelineContext(
         tickers=["AAPL"],

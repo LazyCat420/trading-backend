@@ -229,7 +229,7 @@ def _ensure_pool() -> ConnectionPool:
     with _lock:
         if _pool is None:
             if os.getenv("TRADING_BOT_TEST_DB") == "1":
-                db_url = "postgresql://trader:trading_bot_pass@10.0.0.16:5433/trading_bot_test"
+                db_url = settings.TEST_DATABASE_URL
             else:
                 db_url = settings.DATABASE_URL
             logger.info(

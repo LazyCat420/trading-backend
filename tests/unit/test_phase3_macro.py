@@ -19,7 +19,7 @@ async def test_run_phase3_macro_disabled(mock_settings, mock_emit):
 
 @pytest.mark.asyncio
 @patch("app.cycle.phases.phase3_macro.settings")
-@patch("app.pipeline.analysis.macro_scout.run_macro_scout")
+@patch("app.cycle.phases.phase3_macro.run_macro_scout")
 async def test_run_phase3_macro_success(mock_run_scout, mock_settings, mock_emit):
     mock_settings.MACRO_SCOUT_ENABLED = True
     

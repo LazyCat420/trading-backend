@@ -172,6 +172,25 @@ def runner_mocks():
         yield patches_dict
 
 
+@pytest.fixture(autouse=True)
+def mock_trading_phase_agents():
+    with patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock) as mock_alloc, \
+         patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock) as mock_exec, \
+         patch("app.cycle.trading_phase._get_current_price") as mock_price, \
+         patch("app.cycle.trading_phase.get_portfolio_value") as mock_pf_val:
+        
+        mock_alloc.return_value = {}
+        mock_exec.return_value = {"decision": "APPROVE", "shares": 10, "total_cost": 1500, "risk_reward_ratio": 2.0}
+        mock_price.return_value = (150.0, 1.0)
+        mock_pf_val.return_value = 100000.0
+        yield {
+            "allocator": mock_alloc,
+            "executor": mock_exec,
+            "price": mock_price,
+            "portfolio_value": mock_pf_val,
+        }
+
+
 # ═══════════════════════════════════════════════════════════════════
 # P1: News Collector Import Smoke Test
 # (Battle test for Breakpoint 1 — the IndentationError)
@@ -214,7 +233,12 @@ async def test_p2_check_and_fill_returns_valid_report(
 
     from app.pipeline.data.data_completeness import check_and_fill
 
-    with patch("app.pipeline.data.data_completeness.get_db", return_value=mock_db):
+    with patch("app.pipeline.data.data_completeness.get_db", return_value=mock_db), \
+         patch("app.pipeline.data.data_perticker_collection.run_smart_janitor_on_ticker_data", new_callable=AsyncMock), \
+         patch("app.processors.deduplicator.deduplicate_news"), \
+         patch("app.processors.summarizer.summarize_unsummarized", new_callable=AsyncMock), \
+         patch("app.processors.consensus_engine.run_consensus_engine", new_callable=AsyncMock), \
+         patch("app.processors.narrative_curator.update_company_narrative", new_callable=AsyncMock):
         report = await check_and_fill("AAPL")
 
     # DATA CONTRACT: required keys
@@ -511,10 +535,29 @@ async def test_p6_orchestrator_phases_called_in_order():
             side_effect=lambda *a, **k: call_order.append("phase6"),
         ))
         stack.enter_context(patch(
-            "app.services.logging.run_autoresearch", new_callable=AsyncMock,
+            "app.cycle.orchestration.orchestrator_core.run_autoresearch", new_callable=AsyncMock,
         ))
         stack.enter_context(patch(
             "app.cycle.orchestration.state_manager.PipelineStateDB.clear_checkpoint",
+        ))
+        stack.enter_context(patch(
+            "app.monitoring.pipeline_profiler.profiler.start_cycle",
+        ))
+        stack.enter_context(patch(
+            "app.monitoring.pipeline_profiler.profiler.end_cycle",
+        ))
+        stack.enter_context(patch(
+            "app.cycle.orchestration.orchestrator_core.persist_benchmark",
+        ))
+        stack.enter_context(patch(
+            "app.cycle.orchestration.state_manager.PipelineStateDB.get_state",
+            return_value={"events": []}
+        ))
+        stack.enter_context(patch(
+            "app.cycle.orchestration.orchestrator_core._auditor",
+        ))
+        stack.enter_context(patch(
+            "app.cycle.orchestration.orchestrator_core.checkpoint_manager.clear_cycle",
         ))
 
         # Set up the mixin's class-level state
@@ -569,10 +612,29 @@ async def test_p6_skip_phases_when_flags_false():
             side_effect=lambda *a, **k: call_order.append("phase6"),
         ))
         stack.enter_context(patch(
-            "app.services.logging.run_autoresearch", new_callable=AsyncMock,
+            "app.cycle.orchestration.orchestrator_core.run_autoresearch", new_callable=AsyncMock,
         ))
         stack.enter_context(patch(
             "app.cycle.orchestration.state_manager.PipelineStateDB.clear_checkpoint",
+        ))
+        stack.enter_context(patch(
+            "app.monitoring.pipeline_profiler.profiler.start_cycle",
+        ))
+        stack.enter_context(patch(
+            "app.monitoring.pipeline_profiler.profiler.end_cycle",
+        ))
+        stack.enter_context(patch(
+            "app.cycle.orchestration.orchestrator_core.persist_benchmark",
+        ))
+        stack.enter_context(patch(
+            "app.cycle.orchestration.state_manager.PipelineStateDB.get_state",
+            return_value={"events": []}
+        ))
+        stack.enter_context(patch(
+            "app.cycle.orchestration.orchestrator_core._auditor",
+        ))
+        stack.enter_context(patch(
+            "app.cycle.orchestration.orchestrator_core.checkpoint_manager.clear_cycle",
         ))
 
         OrchestratorCoreMixin._state = {"status": "idle"}

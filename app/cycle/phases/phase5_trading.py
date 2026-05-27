@@ -1,21 +1,24 @@
 import logging
-import traceback
-from typing import Callable, Any
+from typing import Callable
 
 from app.cycle.orchestration.state_manager import PipelineStateDB
 from app.services.logging.cycle_auditor import CycleAuditor
+from app.cycle.trading_phase import execute_decisions
+from app.trading.portfolio import take_snapshot
+from app.cycle.context import CycleContext
+from app.utils.emit import noop_emit
 
 logger = logging.getLogger(__name__)
 
 
 async def run_phase5_trading(
-    ctx: Any,
+    ctx: CycleContext,
     bot_id: str,
     results: list[dict],
-    emit: Callable,
-    cycle_summary: dict,
-    state: dict,
-    auditor: CycleAuditor,
+    emit: Callable = noop_emit,
+    cycle_summary: dict = None,
+    state: dict = None,
+    auditor: CycleAuditor = None,
 ) -> dict:
     """
     Phase 5: Trading
@@ -33,8 +36,6 @@ async def run_phase5_trading(
             f"Executing trade decisions for {len(results)} tickers",
         )
         try:
-            from app.cycle.trading_phase import execute_decisions
-
             trade_result = await execute_decisions(
                 results, bot_id=bot_id, cycle_id=ctx.cycle_id
             )
@@ -73,21 +74,14 @@ async def run_phase5_trading(
             logger.error("Trading crashed: %s", e)
             emit("trading", "fatal", f"Trading crashed: {e}", status="error")
             state["error"] = str(e)
-            try:
-                PipelineStateDB.log_execution_error(
-                    cycle_id=ctx.cycle_id,
-                    phase="trading",
-                    ticker="system",
-                    error_type="trading_crash",
-                    error_message=str(e)[:500],
-                    stack_trace=traceback.format_exc()[:2000],
-                )
-            except Exception:
-                pass
+            PipelineStateDB.safe_log_execution_error(
+                cycle_id=ctx.cycle_id,
+                phase="trading",
+                error_type="trading_crash",
+                error=e,
+            )
 
         try:
-            from app.trading.portfolio import take_snapshot
-
             take_snapshot(bot_id)
             emit("trading", "snapshot", "Portfolio snapshot saved", status="ok")
         except Exception as e:

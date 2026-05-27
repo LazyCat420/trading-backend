@@ -2,10 +2,11 @@
 Central configuration for the vLLM Trading Bot.
 All settings loaded from .env — no hardcoded values anywhere else.
 """
-
+import json
+import os
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -25,15 +26,43 @@ if not ENV_FILE.exists():
             break
 
 
+# --- projects.json dynamic loader ---
+def _load_projects_json() -> dict:
+    curr = Path(__file__).resolve()
+    for parent in curr.parents:
+        p1 = parent / "vault-service" / "projects.json"
+        if p1.is_file():
+            try:
+                with open(p1, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        p2 = parent / "projects.json"
+        if p2.is_file():
+            try:
+                with open(p2, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+    return {}
+
+_projects_data = _load_projects_json()
+_config = _projects_data.get("config", {})
+_default_host = _projects_data.get("defaultHost", "10.0.0.16")
+
+
 # Ensure data directories exist
 DATA_DIR = ROOT_DIR / "data"
 MEMORY_DB_PATH = DATA_DIR / "memory.db"
 
 
 class Settings(BaseSettings):
+    # ── Default Host ──
+    DEFAULT_HOST: str = _default_host
+
     # ── Jetson/DGX vLLM ──
-    JETSON_VLLM_URL: str = "http://10.0.0.30:8000"
-    DGX_SPARK_VLLM_URL: str = "http://10.0.0.141:8000"
+    JETSON_VLLM_URL: str = _config.get("JETSON_VLLM_URL", "http://10.0.0.30:8000")
+    DGX_SPARK_VLLM_URL: str = _config.get("DGX_SPARK_VLLM_URL", "http://10.0.0.141:8000")
     ACTIVE_MODEL: str = ""  # Auto-discovered from vLLM /v1/models at startup
 
     # ── Concurrency (tuned from saturation benchmarks — see tests/benchmarks/outputs/) ──
@@ -149,11 +178,11 @@ class Settings(BaseSettings):
     LESSON_CONSOLIDATION_THRESHOLD: int = 50  # Consolidate when lessons exceed this
 
     # ── Database ──
-    DATABASE_URL: str = (
-        "postgresql://localhost:5432/trading_bot"
+    DATABASE_URL: str = _config.get(
+        "DATABASE_URL", "postgresql://localhost:5432/trading_bot"
     )
-    TEST_DATABASE_URL: str = (
-        "postgresql://localhost:5432/trading_bot_test"
+    TEST_DATABASE_URL: str = _config.get(
+        "TEST_DATABASE_URL", f"postgresql://{_default_host}:5433/trading_bot_test"
     )
 
     # ── Finnhub ──
@@ -190,19 +219,19 @@ class Settings(BaseSettings):
     WAR_CONTEXT_ENABLED: bool = True
 
     # ── Prism AI Gateway (MongoDB mirror) ──
-    PRISM_URL: str = "http://localhost:7777"
+    PRISM_URL: str = _config.get("PRISM_URL", f"http://{_default_host}:7777")
     PRISM_PROJECT: str = "vllm-trading-bot"
     PRISM_USERNAME: str = "lazy-trader"
     PRISM_ENABLED: bool = True
     PRISM_AGENT: str = "CUSTOM_MARKET_ALPHA"  # Routes through the CUSTOM_MARKET_ALPHA persona in Prism — custom agent with tailored trading tools
     PRISM_AGENT_ROUTING: bool = True  # Always route through Prism /agent as requested.
-    PRISM_MONGO_URI: str = "mongodb://10.0.0.16:27017/?directConnection=true"
+    PRISM_MONGO_URI: str = _config.get("PRISM_MONGO_URI", f"mongodb://{_default_host}:27017/?directConnection=true")
     PRISM_MONGO_DB: str = "prism"
     PRISM_SKIP_CONVERSATION: bool = False
     PRISM_AUTO_APPROVE: bool = True
 
     # ── SEC 13F Tracking ──
-    SEC_USER_AGENT: str = "vllm-trading-bot analysis@example.com"
+    SEC_USER_AGENT: str = "vllm-trading-bot LazyCat420@users.noreply.github.com"
     SEC_13F_MAX_FILERS: int = 0  # 0 means scrape all
 
     # ── Prism Working Memory ──
@@ -212,23 +241,29 @@ class Settings(BaseSettings):
     USE_TOOL_CALLING: bool = False
 
     # ── Hermes Agent (Hub-and-Spoke) ──
-    JETSON_HERMES_HOST: str = "10.0.0.30"
+    JETSON_HERMES_HOST: str = _config.get("JETSON_HERMES_HOST", "10.0.0.30")
     JETSON_HERMES_PORT: int = 8642
 
-    DGX_SPARK_HERMES_HOST: str = "10.0.0.141"
+    DGX_SPARK_HERMES_HOST: str = _config.get("DGX_SPARK_HERMES_HOST", "10.0.0.141")
     DGX_SPARK_HERMES_PORT: int = 8642
 
     API_SERVER_KEY: str = "change-me-local-dev"
 
-    @field_validator("API_SERVER_KEY")
-    def warn_default_key(cls, v):
-        if v == "change-me-local-dev":
-            import warnings
-
-            warnings.warn(
-                "API_SERVER_KEY is set to the default insecure value!", stacklevel=2
-            )
-        return v
+    @model_validator(mode="after")
+    def validate_api_key(self) -> "Settings":
+        if self.API_SERVER_KEY == "change-me-local-dev":
+            if self.EXECUTION_MODE == "production":
+                raise ValueError(
+                    "API_SERVER_KEY cannot be set to the default insecure value in production execution mode!"
+                )
+            else:
+                import warnings
+                warnings.warn(
+                    "API_SERVER_KEY is set to the default insecure value!",
+                    UserWarning,
+                    stacklevel=2
+                )
+        return self
 
     @property
     def HERMES_ENDPOINT_MAP(self) -> dict[str, str]:

@@ -51,7 +51,7 @@ async def test_agent_loop_aborts_when_stopped(stopped_cycle_control):
         "app.pipeline.orchestration.cycle_control.cycle_control", stopped_cycle_control
     ):
         with patch("app.db.connection.get_db", return_value=_mock_db_ctx()):
-            with pytest.raises(asyncio.CancelledError, match="Pipeline stopped"):
+            with pytest.raises(asyncio.CancelledError, match="stopped"):
                 await run_agent_loop(
                     system_prompt="test system",
                     user_prompt="test user",

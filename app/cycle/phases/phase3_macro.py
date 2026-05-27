@@ -3,11 +3,13 @@ import asyncio
 from typing import Callable
 
 from app.config import settings
+from app.pipeline.analysis.macro_scout import run_macro_scout
+from app.utils.emit import noop_emit
 
 logger = logging.getLogger(__name__)
 
 
-async def run_phase3_macro(emit: Callable) -> str:
+async def run_phase3_macro(emit: Callable = noop_emit) -> str:
     """
     Phase 3: Macro Scout
     Runs the macro strategy scout independently to generate a memo.
@@ -18,8 +20,6 @@ async def run_phase3_macro(emit: Callable) -> str:
         return ""
 
     try:
-        from app.pipeline.analysis.macro_scout import run_macro_scout
-
         emit(
             "analyzing",
             "macro_start",

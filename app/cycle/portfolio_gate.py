@@ -138,30 +138,27 @@ def check_portfolio_gate(
     positions = _get_open_positions(bot_id)
     result["position_count"] = len(positions)
 
-    # Calculate current ticker concentration percentage of total portfolio value
-    from app.trading.paper_trader import get_portfolio, _get_current_price
+    from app.trading.paper_trader import get_portfolio_value, _get_current_price, MAX_PRICE_AGE_HOURS
 
-    try:
-        portfolio = get_portfolio(bot_id)
-        cash = portfolio.get("cash", 0.0)
-    except Exception as e:
-        logger.warning("[GATE] Failed to get portfolio for concentration check: %s", e)
-        cash = 0.0
+    total_portfolio_value = get_portfolio_value(bot_id)
 
-    total_position_value = 0.0
     ticker_val = 0.0
+    valid_positions = []
     for p in positions:
         pos_ticker = p["ticker"]
         qty = p["qty"]
-        price, _ = _get_current_price(pos_ticker)
-        if price is None:
-            price = p["entry_price"]
+        price, age_hours = _get_current_price(pos_ticker)
+        if price is None or (age_hours is not None and age_hours > MAX_PRICE_AGE_HOURS):
+            logger.warning(
+                "[GATE] Skipping %s in concentration check due to stale/null price (age_hours=%s)",
+                pos_ticker,
+                age_hours,
+            )
+            continue
         pos_val = qty * price
-        total_position_value += pos_val
         if pos_ticker == ticker:
             ticker_val = pos_val
-
-    total_portfolio_value = cash + total_position_value
+        valid_positions.append({**p, "pos_val": pos_val})
     concentration_pct = (ticker_val / total_portfolio_value * 100.0) if total_portfolio_value > 0 else 0.0
 
     # If already held, enforce concentration limit (max 20% total concentration)
@@ -203,43 +200,58 @@ def check_portfolio_gate(
     new_sector = _get_ticker_sector(ticker)
     result["sector"] = new_sector
 
-    if new_sector and positions:
-        same_sector = [p for p in positions if p["sector"] == new_sector]
+    if new_sector and valid_positions:
+        same_sector = [p for p in valid_positions if p["sector"] == new_sector]
         result["sector_count"] = len(same_sector)
 
-        if positions:
-            sector_pct = (len(same_sector) / len(positions)) * 100
-            result["sector_pct"] = round(sector_pct, 1)
+        sector_val = sum(p["pos_val"] for p in same_sector)
+        sector_pct = (sector_val / total_portfolio_value * 100.0) if total_portfolio_value > 0 else 0.0
+        result["sector_pct"] = round(sector_pct, 1)
 
-            if sector_pct >= sector_cap and len(same_sector) >= 2:
-                tickers_in_sector = [p["ticker"] for p in same_sector]
-                result["blocked"] = True
-                result["reason"] = (
-                    f"Sector overexposure: {new_sector} is "
-                    f"{sector_pct:.0f}% of portfolio "
-                    f"({len(same_sector)} positions: "
-                    f"{', '.join(tickers_in_sector)}). "
-                    f"Max allowed: {sector_cap}%."
-                )
-                logger.warning(
-                    "[GATE] BLOCKED %s: sector %s at %.0f%% (%d positions)",
-                    ticker,
-                    new_sector,
-                    sector_pct,
-                    len(same_sector),
-                )
-                return result
+        if sector_pct >= sector_cap and len(same_sector) >= 2:
+            tickers_in_sector = [p["ticker"] for p in same_sector]
+            result["blocked"] = True
+            result["reason"] = (
+                f"Sector overexposure: {new_sector} is "
+                f"{sector_pct:.1f}% of total portfolio value "
+                f"({len(same_sector)} positions: "
+                f"{', '.join(tickers_in_sector)}). "
+                f"Max allowed: {sector_cap}%."
+            )
+            logger.warning(
+                "[GATE] BLOCKED %s: sector %s at %.1f%% (%d positions)",
+                ticker,
+                new_sector,
+                sector_pct,
+                len(same_sector),
+            )
+            return result
 
-    # Gate 3: Correlation check (warning only, not blocking)
+    # Gate 3: Correlation check
     for pos in positions:
         corr = _get_correlation(ticker, pos["ticker"])
-        if corr is not None and abs(corr) > corr_thresh:
-            warning = (
-                f"High correlation ({corr:.2f}) with existing position "
-                f"{pos['ticker']} ({pos['sector']})"
-            )
-            result["warnings"].append(warning)
-            logger.info("[PIPELINE] [GATE] WARNING for %s: %s", ticker, warning)
+        if corr is not None:
+            abs_corr = abs(corr)
+            if abs_corr > 0.90:
+                result["blocked"] = True
+                result["reason"] = (
+                    f"Extreme correlation limit exceeded: {ticker} has correlation of "
+                    f"{corr:.2f} with existing position {pos['ticker']} (max allowed: 0.90)."
+                )
+                logger.warning(
+                    "[GATE] BLOCKED %s: extreme correlation %.2f with %s",
+                    ticker,
+                    corr,
+                    pos["ticker"],
+                )
+                return result
+            elif abs_corr > corr_thresh:
+                warning = (
+                    f"High correlation ({corr:.2f}) with existing position "
+                    f"{pos['ticker']} ({pos['sector']})"
+                )
+                result["warnings"].append(warning)
+                logger.info("[PIPELINE] [GATE] WARNING for %s: %s", ticker, warning)
 
     # Gate 4: Already holding this exact ticker
     existing = [p for p in positions if p["ticker"] == ticker]

@@ -8,3 +8,4 @@ d:
 .pytest_cache/
 .deepeval/
 cycle_run.log
+scratch/

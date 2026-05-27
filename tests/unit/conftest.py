@@ -21,7 +21,9 @@ def mock_new_agents_globally():
     """Globally mock the new specialist agents that make external LLM calls."""
     from unittest.mock import AsyncMock, patch
     with patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock) as mock_pa, \
-         patch("app.agents.post_mortem_auditor_agent.run_post_mortem", new_callable=AsyncMock) as mock_pm:
+         patch("app.cycle.trading_phase.run_portfolio_allocator", mock_pa), \
+         patch("app.agents.post_mortem_auditor_agent.run_post_mortem", new_callable=AsyncMock) as mock_pm, \
+         patch("app.cycle.phases.phase6_post.run_post_mortem", mock_pm):
         mock_pa.return_value = {}
         mock_pm.return_value = None
         yield mock_pa, mock_pm

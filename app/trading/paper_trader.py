@@ -199,6 +199,19 @@ def get_portfolio(bot_id: str) -> dict:
     }
 
 
+def get_portfolio_value(bot_id: str) -> float:
+    """Compute the total portfolio value (cash + mark-to-market positions)."""
+    portfolio = get_portfolio(bot_id)
+    cash = portfolio.get("cash", 0.0)
+    total_position_value = 0.0
+    for p in portfolio.get("positions", []):
+        price, _ = _get_current_price(p["ticker"])
+        if price is None:
+            price = p["avg_entry_price"]
+        total_position_value += p["qty"] * price
+    return cash + total_position_value
+
+
 async def buy(
     bot_id: str,
     ticker: str,

@@ -34,7 +34,7 @@ class TestContextBudget:
 
         budget = register_model_context("test-model-32k", 32768)
         assert budget.raw_context_tokens == 32768
-        assert budget.effective_context_tokens == 32768
+        assert budget.effective_context_tokens == 16384
 
         # Should be retrievable
         fetched = get_context_budget("test-model-32k")
@@ -44,21 +44,22 @@ class TestContextBudget:
         """Effective context should return raw context up to a 128k cap."""
         from app.config.context_budget import _effective_from_raw
 
-        # Asserts that raw tokens are returned directly up to the 128K cap
-        assert _effective_from_raw(8192) == 8192
-        assert _effective_from_raw(32768) == 32768
-        assert _effective_from_raw(131072) == 131072
-        assert _effective_from_raw(262144) == 131072
-        assert _effective_from_raw(1048576) == 131072
+        # Asserts 50% of raw context up to a 64K hard cap
+        assert _effective_from_raw(8192) == 4096
+        assert _effective_from_raw(32768) == 16384
+        assert _effective_from_raw(131072) == 65536
+        assert _effective_from_raw(262144) == 65536
+        assert _effective_from_raw(1048576) == 65536
 
     def test_compressor_threshold_is_75_percent(self):
         """Compressor threshold should be 75% of effective context."""
         from app.config.context_budget import register_model_context
 
         budget = register_model_context("test-threshold", 32768)
-        expected_effective = 32768
+        expected_effective = 16384
         expected_threshold = int(expected_effective * 0.75)
         assert budget.compressor_threshold == expected_threshold
+
 
     def test_total_allocated_fits_within_effective(self):
         """Sum of all budget slices should not exceed effective context."""

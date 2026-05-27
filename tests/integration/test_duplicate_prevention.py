@@ -108,8 +108,8 @@ class TestTradingPhaseDedup:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 10, "total_cost": 1500}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 10, "total_cost": 1500}):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions

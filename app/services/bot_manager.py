@@ -90,6 +90,18 @@ def get_active_bot_id() -> str:
     return _active_bot_id
 
 
+def resolve_bot_id(bot_id: str | None) -> str:
+    """Resolve bot_id: if default, empty, or None, use the active bot.
+    Handles fallbacks internally.
+    """
+    if not bot_id or bot_id == "default":
+        try:
+            return get_active_bot_id()
+        except Exception:
+            return settings.BOT_ID
+    return bot_id
+
+
 def get_bot_starting_cash(bot_id: str = "") -> float:
     """Return the starting cash for a bot profile.
 

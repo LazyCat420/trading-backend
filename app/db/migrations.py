@@ -947,3 +947,38 @@ def _fix_eth_cagr_data(conn):
             conn.rollback()
         except Exception:
             pass
+
+    # ── Fix A.7: Add PRIMARY KEY (ticker, cycle_id) to cycle_summaries table ──
+    _safe_add_column(conn, "cycle_summaries", "created_at", "TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP")
+    try:
+        with conn.cursor() as cur:
+            # Check if primary key constraint already exists
+            cur.execute("""
+                SELECT 1 FROM pg_constraint
+                WHERE conrelid = 'cycle_summaries'::regclass
+                AND contype = 'p'
+            """)
+            if not cur.fetchone():
+                # Deduplicate first: keep the row with the highest ctid
+                cur.execute("""
+                    DELETE FROM cycle_summaries a USING (
+                        SELECT MIN(ctid) as ctid, ticker, cycle_id
+                        FROM cycle_summaries
+                        GROUP BY ticker, cycle_id HAVING COUNT(*) > 1
+                    ) b
+                    WHERE a.ticker = b.ticker AND a.cycle_id = b.cycle_id AND a.ctid <> b.ctid
+                """)
+                cur.execute("""
+                    ALTER TABLE cycle_summaries
+                    ADD CONSTRAINT cycle_summaries_pkey
+                    PRIMARY KEY (ticker, cycle_id)
+                """)
+            conn.commit()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("[MIGRATION] cycle_summaries primary key addition failed: %s", e)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+

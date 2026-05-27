@@ -131,14 +131,29 @@ def _parse_parameter_size(model_id: str) -> float | None:
 
 def _url_to_prism_provider(url: str | None) -> str:
     """Resolve the canonical Prism provider name ('vllm', 'vllm-2')
-    based on the endpoint URL (10.0.0.30 -> vllm, 10.0.0.141 -> vllm-2).
+    based on the endpoint URL.
     """
     if not url:
         return "vllm"
-    if "10.0.0.30" in url:
+    if settings.JETSON_VLLM_URL and settings.JETSON_VLLM_URL in url:
         return "vllm"
-    if "10.0.0.141" in url:
+    if settings.DGX_SPARK_VLLM_URL and settings.DGX_SPARK_VLLM_URL in url:
         return "vllm-2"
+    # Fallback to hostname checks if exact URL didn't match
+    from urllib.parse import urlparse
+    try:
+        parsed_url = urlparse(url)
+        host = parsed_url.hostname or url
+        
+        jetson_host = urlparse(settings.JETSON_VLLM_URL).hostname if settings.JETSON_VLLM_URL else None
+        dgx_host = urlparse(settings.DGX_SPARK_VLLM_URL).hostname if settings.DGX_SPARK_VLLM_URL else None
+        
+        if jetson_host and jetson_host in host:
+            return "vllm"
+        if dgx_host and dgx_host in host:
+            return "vllm-2"
+    except Exception:
+        pass
     return "vllm"
 
 
@@ -1628,7 +1643,7 @@ class VLLMClient:
             try:
                 from app.pipeline.orchestration.cycle_control import cycle_control
                 if cycle_control.is_stopped:
-                    raise asyncio.CancelledError("Pipeline stopped — rejecting new LLM request")
+                    raise asyncio.CancelledError("Cycle stopped by user")
             except ImportError:
                 pass
 
@@ -1796,7 +1811,7 @@ class VLLMClient:
             try:
                 from app.pipeline.orchestration.cycle_control import cycle_control
                 if cycle_control.is_stopped:
-                    raise asyncio.CancelledError("Pipeline stopped — rejecting new LLM request")
+                    raise asyncio.CancelledError("Cycle stopped by user")
             except ImportError:
                 pass
 

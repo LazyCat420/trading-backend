@@ -16,6 +16,17 @@ from app.cycle.phases.phase4_analysis import run_phase4_analysis
 from app.cycle.phases.phase5_trading import run_phase5_trading
 from app.cycle.phases.phase6_post import run_phase6_post
 
+from app.monitoring.pipeline_profiler import profiler as pipeline_profiler
+from app.services.bot_manager import resolve_bot_id
+from app.utils.trace import set_trace_id
+from app.pipeline.orchestration.cycle_control import cycle_control
+from app.cycle.orchestration.priority_queue import PriorityAnalysisQueue
+from app.services.logging import run_autoresearch
+from app.db.checkpoints import checkpoint_manager
+from app.pipeline.analysis.benchmark import persist_benchmark
+from app.cycle.context import CycleContext
+from app.utils.emit import noop_emit
+
 logger = logging.getLogger(__name__)
 _auditor = CycleAuditor()
 
@@ -28,7 +39,7 @@ class OrchestratorCoreMixin:
     """
 
     @classmethod
-    async def _execute_cycle(cls, ctx: Any) -> None:
+    async def _execute_cycle(cls, ctx: CycleContext) -> None:
         """
         Main loop for the trading cycle.
         """
@@ -73,13 +84,7 @@ class OrchestratorCoreMixin:
             "primary_failure_reason": None,
         }
 
-        bot_id = settings.BOT_ID
-        try:
-            from app.services.bot_manager import get_active_bot_id
-
-            bot_id = get_active_bot_id()
-        except Exception:
-            pass
+        bot_id = resolve_bot_id(settings.BOT_ID)
         try:
             await cls._execute_cycle_impl(ctx, bot_id)
         finally:
@@ -105,12 +110,11 @@ class OrchestratorCoreMixin:
             import os as _os
             _start_paused = _os.getenv("START_PAUSED", "true").lower() in ("true", "1", "yes")
             if _start_paused:
-                from app.pipeline.orchestration.cycle_control import cycle_control
                 cycle_control.pause()
                 logger.info("[CYCLE] Cycle ended — re-pausing system (background tasks dormant).")
 
     @classmethod
-    async def _execute_cycle_impl(cls, ctx: Any, bot_id: str) -> None:
+    async def _execute_cycle_impl(cls, ctx: CycleContext, bot_id: str) -> None:
         """
         Executes the concurrent cycle:
           Phase 1 (Health) → Concurrent Core (Collection + Macro + Analysis) → Trading → Bounded Housekeeping
@@ -121,7 +125,6 @@ class OrchestratorCoreMixin:
         Post-cycle housekeeping and AutoResearch are timeout-bounded to prevent zombie loops.
         """
         try:
-            from app.utils.trace import set_trace_id
             set_trace_id(ctx.cycle_id)
 
             # Checkpoint: 'created' -> 'queued'
@@ -199,7 +202,6 @@ class OrchestratorCoreMixin:
             # Priority queue ensures portfolio holdings are analyzed first.
             analysis_queue = None
             if ctx.analyze and not _skip_analyze and not _skip_collect:
-                from app.cycle.orchestration.priority_queue import PriorityAnalysisQueue
                 _triage = cls._state.get("triage", {})
                 analysis_queue = PriorityAnalysisQueue(
                     position_tickers=set(cls._state.get("position_tickers", [])),
@@ -291,8 +293,7 @@ class OrchestratorCoreMixin:
 
             # ── Signal analysis workers that collection is done ──
             if analysis_queue is not None:
-                from app.config import settings as _s
-                _worker_count = _s.V2_TICKER_CONCURRENCY or 3
+                _worker_count = settings.V2_TICKER_CONCURRENCY or 3
                 _pre_sentinel_depth = analysis_queue.qsize()
                 for _ in range(_worker_count):
                     analysis_queue.put_nowait(None)  # sentinel
@@ -374,10 +375,8 @@ class OrchestratorCoreMixin:
                 logger.warning("Failed to clear checkpoint on success: %s", e)
 
             # ── Trigger AutoResearch (BOUNDED — was fire-and-forget, caused zombie loops) ──
-            _AUTORESEARCH_TIMEOUT = 120  # seconds — hard cap
             try:
-                from app.services.logging import run_autoresearch
-
+                _AUTORESEARCH_TIMEOUT = 120  # seconds — hard cap
                 cls._autoresearch_task = asyncio.create_task(
                     run_autoresearch(ctx.cycle_id, dict(cls._cycle_summary))
                 )
@@ -407,9 +406,7 @@ class OrchestratorCoreMixin:
                 data=cls._cycle_summary,
             )
 
-            # Fix D.2: Clear checkpoints after successful cycle to prevent unbounded growth
             try:
-                from app.db.checkpoints import checkpoint_manager
                 cleared = checkpoint_manager.clear_cycle(ctx.cycle_id)
                 if cleared:
                     logger.info("[CYCLE] Cleared %d checkpoints for completed cycle %s", cleared, ctx.cycle_id[:12])
@@ -444,13 +441,11 @@ class OrchestratorCoreMixin:
             try:
                 # If a checkpoint exists, it's an interrupted cycle, not a failed one.
                 # But we definitely want to log it so we know *why* it stopped.
-                PipelineStateDB.log_execution_error(
+                PipelineStateDB.safe_log_execution_error(
                     cycle_id=ctx.cycle_id,
                     phase=cls._cycle_summary.get("status", "unknown"),
-                    ticker="system",
                     error_type="cycle_cancelled",
-                    error_message="Task was cancelled (e.g. by user stop or timeout)",
-                    stack_trace="CancelledError",
+                    error="Task was cancelled (e.g. by user stop or timeout)",
                 )
             except Exception:
                 pass
@@ -469,13 +464,11 @@ class OrchestratorCoreMixin:
             cls.emit("trading", "error", f"Cycle failed: {e}", status="error")
 
             try:
-                PipelineStateDB.log_execution_error(
+                PipelineStateDB.safe_log_execution_error(
                     cycle_id=ctx.cycle_id,
                     phase=cls._cycle_summary.get("status", "unknown"),
-                    ticker="system",
                     error_type="fatal_pipeline_crash",
-                    error_message=str(e)[:500],
-                    stack_trace=traceback.format_exc()[:2000],
+                    error=e,
                 )
             except Exception:
                 pass
@@ -499,7 +492,6 @@ class OrchestratorCoreMixin:
             logger.warning("[CYCLE] Failed to end pipeline profiler: %s", e)
 
         try:
-            from app.pipeline.analysis.benchmark import persist_benchmark
             bench_state = dict(cls._state)
             
             # Map requested/effective version keys

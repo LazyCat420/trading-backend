@@ -1,12 +1,18 @@
 import logging
-from typing import Callable, Any
+from typing import Callable
 import asyncio
+
+from app.pipeline.data.data_phase import run as run_data
+from app.cycle.context import CycleContext
+from app.utils.emit import noop_emit
 
 logger = logging.getLogger(__name__)
 
 
 async def run_phase2_collection(
-    ctx: Any, emit: Callable, state: dict,
+    ctx: CycleContext,
+    emit: Callable = noop_emit,
+    state: dict = None,
     analysis_queue: asyncio.Queue | None = None,
 ) -> list[str]:
     """
@@ -15,8 +21,6 @@ async def run_phase2_collection(
     tickers are pushed to analysis as they finish (concurrent pipelining).
     """
     try:
-        from app.pipeline.data.data_phase import run as run_data
-
         data_results = await run_data(
             ctx.tickers,
             emit=emit,

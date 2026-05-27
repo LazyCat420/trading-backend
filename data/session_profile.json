@@ -13,8 +13,20 @@
         {
             "timestamp": "2026-05-27T02:17:40.267054+00:00",
             "note": "\u26a0\ufe0f AUTORESEARCH CRITICAL WARNING (Cycle sim-bear): Trading cycle audit reveals a critical system health status due to repeated tool execution failures in risk calculation and datetime handling errors in scheduling. Despite high data quality (99%) and zero data gaps, the 40% win rate combined with timeout warnings and partial agent returns indicates significant instability in the decision-making pipeline."
+        },
+        {
+            "timestamp": "2026-05-27T21:48:53.132082+00:00",
+            "note": "\u26a0\ufe0f AUTORESEARCH CRITICAL WARNING (Cycle battle-o): The trading system is in a critical state due to a complete lack of trading decisions (0 BUY, 0 SELL, 0 HOLD) despite high data quality (98%). The root cause is a datetime handling error in the scheduling module ('can't subtract offset-naive and offset-aware datetimes'), which likely prevented the execution logic from running. While the LLM component is stable with 0 failures, the system is currently non-functional for trading."
+        },
+        {
+            "timestamp": "2026-05-27T21:52:26.194894+00:00",
+            "note": "\u26a0\ufe0f AUTORESEARCH CRITICAL WARNING (Cycle battle-o): The trading system is in a critical state due to a complete lack of trading decisions (0 BUY, 0 SELL, 0 HOLD) despite high data quality (98%) and zero execution errors. The root cause appears to be a datetime handling bug in the scheduling module ('can't subtract offset-naive and offset-aware datetimes'), which likely prevented the logic from triggering. The system is currently in a cold start phase with insufficient prediction accuracy data."
+        },
+        {
+            "timestamp": "2026-05-27T21:58:10.208042+00:00",
+            "note": "\u26a0\ufe0f AUTORESEARCH CRITICAL WARNING (Cycle battle-o): The trading cycle audit indicates a critical failure state where no trading decisions were generated due to a manual cancellation of the pipeline. While data quality is high (98%) and LLM calls were successful, the system halted execution before producing any BUY, SELL, or HOLD signals. A specific code-level error regarding datetime offset handling was detected in the scheduling module, contributing to the instability."
         }
     ],
     "created_at": "2026-05-21T00:03:38.710555+00:00",
-    "updated_at": "2026-05-27T02:17:40.267080+00:00"
+    "updated_at": "2026-05-27T21:58:10.208073+00:00"
 }

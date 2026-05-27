@@ -18,7 +18,7 @@ def mock_state():
     return {}
 
 @pytest.mark.asyncio
-@patch("app.pipeline.data.data_phase.run")
+@patch("app.cycle.phases.phase2_collection.run_data")
 async def test_run_phase2_collection_success(mock_run_data, mock_ctx, mock_emit, mock_state):
     # Mock data_results
     mock_run_data.return_value = {
@@ -33,7 +33,7 @@ async def test_run_phase2_collection_success(mock_run_data, mock_ctx, mock_emit,
     assert mock_state["data_coverage_pct"] == round((2 / 3) * 100, 1)
 
 @pytest.mark.asyncio
-@patch("app.pipeline.data.data_phase.run")
+@patch("app.cycle.phases.phase2_collection.run_data")
 async def test_run_phase2_collection_exception_handling(mock_run_data, mock_ctx, mock_emit, mock_state):
     # Mock exception
     mock_run_data.side_effect = Exception("API timeout")

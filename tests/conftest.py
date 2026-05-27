@@ -8,6 +8,9 @@ Provides:
 import os
 import sys
 
+# Set execution mode to staging during tests to bypass production API key validation check
+os.environ["EXECUTION_MODE"] = "staging"
+
 # Ensure project root is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -22,7 +25,8 @@ def real_test_db_engine():
     if not os.environ.get("TRADING_BOT_TEST_DB"):
         return None
 
-    db_url = "postgresql://trader:trading_bot_pass@10.0.0.16:5433/trading_bot_test"
+    from app.config import settings
+    db_url = settings.TEST_DATABASE_URL
 
     try:
         import psycopg

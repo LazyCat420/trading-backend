@@ -307,6 +307,36 @@ class PipelineStateDB:
             logger.error("[PipelineStateDB] Failed to log execution error: %s", e)
 
     @classmethod
+    def safe_log_execution_error(
+        cls,
+        cycle_id: str | None,
+        phase: str | None,
+        error_type: str,
+        error: Exception | str,
+        ticker: str = "system",
+    ):
+        """Safely log an execution error by handling string slicing and stack trace generation internally.
+        Guaranteed not to raise an exception.
+        """
+        try:
+            import traceback
+            error_message = str(error)[:500]
+            stack_trace = traceback.format_exc()[:2000]
+            # If traceback has no active exception stack, use empty string
+            if "NoneType: None" in stack_trace:
+                stack_trace = ""
+            cls.log_execution_error(
+                cycle_id=cycle_id or "unknown",
+                phase=phase or "unknown",
+                ticker=ticker,
+                error_type=error_type,
+                error_message=error_message,
+                stack_trace=stack_trace,
+            )
+        except Exception as e:
+            logger.error("[PipelineStateDB] safe_log_execution_error failed: %s", e)
+
+    @classmethod
     def default_state(cls) -> dict:
         return {
             "status": "idle",

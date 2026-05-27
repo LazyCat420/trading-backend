@@ -1,20 +1,35 @@
 import logging
 import json
 import asyncio
-from typing import Callable, Any
+from typing import Callable
 
 from app.db.connection import get_db
+from app.services.memory.cycle_closer import cycle_closer
+from app.agents.post_mortem_auditor_agent import run_post_mortem
+from app.cycle.trading_phase import estimate_trade
+from app.trading.paper_trader import get_portfolio as _get_pf
+from app.pipeline.analysis.purge_pass import run_purge_pass
+from app.cognition.ontology.knowledge_purge import purge_stale_knowledge
+from app.pipeline.analysis.agent_maintenance import run_janitor_tasks
+from app.pipeline.subsystem_benchmarks import record_all
+from app.agents.meta_audit_agent import run_meta_audit
+from app.agents.quant_research_agent import run_quant_research
+from app.services.bot_manager import resolve_bot_id
+from app.cycle.orchestration.state_manager import PipelineStateDB
+from app.cycle.context import CycleContext
+from app.utils.emit import noop_emit
+from app.utils.async_utils import run_with_timeout, safe_agent
 
 logger = logging.getLogger(__name__)
 
 
 async def run_phase6_post(
-    ctx: Any,
+    ctx: CycleContext,
     bot_id: str,
     results: list[dict],
     trade_result: dict,
-    emit: Callable,
-    state: dict,
+    emit: Callable = noop_emit,
+    state: dict = None,
     cycle_summary: dict | None = None,
 ) -> None:
     """
@@ -22,7 +37,6 @@ async def run_phase6_post(
     """
     # 0. Commit Memory
     try:
-        from app.services.memory.cycle_closer import cycle_closer
         mode = state.get("execution_mode", "production")
         # Ensure we pass the cycle's actual summary details if needed, for now just empty dict
         await cycle_closer.close_cycle(
@@ -45,7 +59,6 @@ async def run_phase6_post(
             emit("purge", "post_mortem_start", f"Running Post-Mortem retrospects for {len(executed_sells)} closed positions...", status="running")
             async def _run_single_post_mortem(t):
                 try:
-                    from app.agents.post_mortem_auditor_agent import run_post_mortem
                     # get entry price from decision_outcomes
                     entry_price = 0.0
                     with get_db() as db:
@@ -73,24 +86,15 @@ async def run_phase6_post(
                 except Exception as pm_err:
                     logger.warning("Post-mortem retrospective failed for %s: %s", t["ticker"], pm_err)
 
-            try:
-                # Limit total runtime to 90s max to prevent pipeline stalling
-                await asyncio.wait_for(
-                    asyncio.gather(*[_run_single_post_mortem(t) for t in executed_sells]),
-                    timeout=90.0
-                )
-                emit("purge", "post_mortem_done", f"Retrospective audits complete for {len(executed_sells)} closed positions", status="ok")
-            except asyncio.TimeoutError:
-                logger.warning("Post-mortem retrospective timed out.")
-                emit("purge", "post_mortem_timeout", "Post-Mortem retrospective audits timed out", status="warning")
-            except Exception as pm_g_err:
-                logger.warning("Post-mortem audits gather failed: %s", pm_g_err)
+            await run_with_timeout(
+                asyncio.gather(*[_run_single_post_mortem(t) for t in executed_sells]),
+                timeout=90.0,
+                label="post_mortem_audits",
+            )
+            emit("purge", "post_mortem_done", f"Retrospective audits complete for {len(executed_sells)} closed positions", status="ok")
 
     # 1. Post-Trade Enrichment
     try:
-        from app.cycle.trading_phase import estimate_trade
-        from app.trading.paper_trader import get_portfolio as _get_pf
-
         pf = _get_pf(bot_id)
         cash = pf.get("cash", 0)
 
@@ -206,7 +210,6 @@ async def run_phase6_post(
     if ctx.analyze:
         async def _bg_purge():
             try:
-                from app.pipeline.analysis.purge_pass import run_purge_pass
                 purge_result = await run_purge_pass(
                     watchlist=ctx.tickers,
                     cycle_results=results,
@@ -225,7 +228,6 @@ async def run_phase6_post(
 
         async def _bg_knowledge_purge():
             try:
-                from app.cognition.ontology.knowledge_purge import purge_stale_knowledge
                 kg_result = await purge_stale_knowledge()
                 kg_ops = sum(v for k, v in kg_result.items() if isinstance(v, int))
                 if kg_ops > 0:
@@ -240,105 +242,59 @@ async def run_phase6_post(
 
         async def _bg_janitor():
             try:
-                from app.pipeline.analysis.agent_maintenance import run_janitor_tasks
                 await run_janitor_tasks()
             except Exception as e:
                 logger.error("Agent maintenance failed: %s", e)
 
         async def _bg_benchmarks():
             try:
-                from app.pipeline.subsystem_benchmarks import record_all
                 record_all(ctx.cycle_id)
             except Exception as bench_err:
                 logger.error("Benchmark recording failed: %s", bench_err)
 
         # ── Housekeeping: gathered with strict timeout (no orphan tasks) ──
         emit("purge", "start", "Launching bounded housekeeping...", status="ok")
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(
-                    _bg_purge(),
-                    _bg_knowledge_purge(),
-                    _bg_janitor(),
-                    _bg_benchmarks(),
-                    return_exceptions=True,
-                ),
-                timeout=_HOUSEKEEPING_TIMEOUT,
-            )
-            logger.info("[CYCLE] All housekeeping tasks completed within %ds", _HOUSEKEEPING_TIMEOUT)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "[CYCLE] Housekeeping timeout (%ds) — cancelling remaining tasks",
-                _HOUSEKEEPING_TIMEOUT,
-            )
-        except Exception as hk_err:
-            logger.error("[CYCLE] Housekeeping gather failed: %s", hk_err)
+        await run_with_timeout(
+            asyncio.gather(
+                _bg_purge(),
+                _bg_knowledge_purge(),
+                _bg_janitor(),
+                _bg_benchmarks(),
+                return_exceptions=True,
+            ),
+            timeout=_HOUSEKEEPING_TIMEOUT,
+            label="housekeeping",
+        )
 
         # ── Post-cycle agents: gathered with strict timeout (no orphan tasks) ──
         async def _run_post_cycle_agents():
             try:
-                import traceback
-                from app.agents.meta_audit_agent import run_meta_audit
-                from app.agents.quant_research_agent import run_quant_research
-
-                bot_id_resolved = bot_id
-                try:
-                    from app.services.bot_manager import get_active_bot_id
-                    bot_id_resolved = get_active_bot_id()
-                except Exception:
-                    pass
-
-                # Run both agents with individual error handling
-                async def _safe_agent(coro, name):
-                    try:
-                        await coro
-                    except asyncio.CancelledError:
-                        logger.info("[%s] Cancelled (timeout or shutdown).", name)
-                    except Exception as e:
-                        logger.error("[%s] Failed: %s", name, e)
-                        try:
-                            from app.db.pipeline_state import PipelineStateDB
-                            PipelineStateDB.log_execution_error(
-                                cycle_id=ctx.cycle_id,
-                                phase="post_trade",
-                                ticker="system",
-                                error_type=f"{name}_failure",
-                                error_message=str(e)[:500],
-                                stack_trace=traceback.format_exc()[:2000],
-                            )
-                        except Exception:
-                            pass
+                bot_id_resolved = resolve_bot_id(bot_id)
 
                 await asyncio.gather(
-                    _safe_agent(
+                    safe_agent(
                         run_meta_audit(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
                         "meta_audit",
+                        cycle_id=ctx.cycle_id,
                     ),
-                    _safe_agent(
+                    safe_agent(
                         run_quant_research(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
                         "quant_research",
+                        cycle_id=ctx.cycle_id,
                     ),
                     return_exceptions=True,
                 )
             except Exception as agent_err:
                 logger.warning("Post-cycle agents failed (non-fatal): %s", agent_err)
 
-        try:
-            emit(
-                "evaluated",
-                "post_cycle_agents",
-                "Running post-cycle agents (bounded)...",
-                status="ok",
-            )
-            await asyncio.wait_for(
-                _run_post_cycle_agents(),
-                timeout=_HOUSEKEEPING_TIMEOUT,
-            )
-            logger.info("[CYCLE] Post-cycle agents completed within %ds", _HOUSEKEEPING_TIMEOUT)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "[CYCLE] Post-cycle agents timeout (%ds) — cancelling",
-                _HOUSEKEEPING_TIMEOUT,
-            )
-        except Exception as pca_err:
-            logger.warning("Post-cycle agent launch failed (non-fatal): %s", pca_err)
+        emit(
+            "evaluated",
+            "post_cycle_agents",
+            "Running post-cycle agents (bounded)...",
+            status="ok",
+        )
+        await run_with_timeout(
+            _run_post_cycle_agents(),
+            timeout=_HOUSEKEEPING_TIMEOUT,
+            label="post_cycle_agents",
+        )

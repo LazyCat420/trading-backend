@@ -351,11 +351,11 @@ class BootService:
             col = db["mcp_servers"]
 
             # 2. Determine MCP server URL dynamically
-            prism_host = "10.0.0.16"
+            prism_host = settings.DEFAULT_HOST
             if settings.PRISM_URL:
                 try:
                     prism_parsed = urlparse(settings.PRISM_URL)
-                    prism_host = prism_parsed.hostname or "10.0.0.16"
+                    prism_host = prism_parsed.hostname or settings.DEFAULT_HOST
                 except Exception:
                     pass
 

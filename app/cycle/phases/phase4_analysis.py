@@ -1,21 +1,34 @@
 import logging
 import asyncio
 import time
-from typing import Callable, Any
+from typing import Callable
 
 from app.config import settings
 from app.monitoring.pipeline_profiler import profiler as pipeline_profiler
+from app.cognition.orchestration.runner import execute_v2_pipeline
+from app.cycle.orchestration.cycle_control import cycle_control
+from app.services.logging.cycle_auditor import auditor
+from app.cycle.context import CycleContext
+from app.utils.emit import noop_emit
+from app.cycle.summary import tally_results
 
 logger = logging.getLogger(__name__)
 
 
+def _log_ticker_result(cycle_id: str, ticker: str, result: dict, elapsed_ms: int) -> None:
+    try:
+        auditor.ticker_result(cycle_id, ticker, result, elapsed_s=elapsed_ms / 1000.0)
+    except Exception as ae:
+        logger.error("Failed to log ticker_result to auditor: %s", ae)
+
+
 async def run_phase4_analysis(
-    ctx: Any,
+    ctx: CycleContext,
     bot_id: str,
     macro_memo: str | dict,
-    emit: Callable,
-    cycle_summary: dict,
-    state: dict,
+    emit: Callable = noop_emit,
+    cycle_summary: dict = None,
+    state: dict = None,
     analysis_queue: asyncio.Queue | None = None,
 ) -> list[dict]:
     """
@@ -42,8 +55,6 @@ async def run_phase4_analysis(
         f"Analysis Phase: evaluating {len(ctx.tickers)} tickers",
         status="running",
     )
-
-    from app.cognition.orchestration.runner import execute_v2_pipeline
 
     results = []
     errors = []
@@ -170,7 +181,6 @@ async def run_phase4_analysis(
                 continue
             _seen_tickers.add(ticker)
 
-            from app.cycle.orchestration.cycle_control import cycle_control
             await cycle_control.wait_if_paused()
 
             # Check triage tier
@@ -217,11 +227,7 @@ async def run_phase4_analysis(
                         worker_id, ticker, _action, _conf, _ticker_elapsed_ms,
                         analyzed_count, len(ctx.tickers),
                     )
-                    try:
-                        from app.services.logging.cycle_auditor import auditor
-                        auditor.ticker_result(ctx.cycle_id, ticker, result, elapsed_s=_ticker_elapsed_ms / 1000.0)
-                    except Exception as ae:
-                        logger.error("Failed to log ticker_result to auditor: %s", ae)
+                    _log_ticker_result(ctx.cycle_id, ticker, result, _ticker_elapsed_ms)
 
             except asyncio.TimeoutError:
                 _ticker_elapsed_ms = int((time.monotonic() - _ticker_start) * 1000)
@@ -245,11 +251,7 @@ async def run_phase4_analysis(
                 async with count_lock:
                     errors.append(ticker)
                     results.append(fallback_result)
-                try:
-                    from app.services.logging.cycle_auditor import auditor
-                    auditor.ticker_result(ctx.cycle_id, ticker, fallback_result, elapsed_s=_ticker_elapsed_ms / 1000.0)
-                except Exception as ae:
-                    logger.error("Failed to log ticker_result timeout to auditor: %s", ae)
+                _log_ticker_result(ctx.cycle_id, ticker, fallback_result, _ticker_elapsed_ms)
             except Exception as e:
                 _ticker_elapsed_ms = int((time.monotonic() - _ticker_start) * 1000)
                 err_str = str(e)
@@ -272,11 +274,7 @@ async def run_phase4_analysis(
                 async with count_lock:
                     errors.append(ticker)
                     results.append(fallback_result)
-                try:
-                    from app.services.logging.cycle_auditor import auditor
-                    auditor.ticker_result(ctx.cycle_id, ticker, fallback_result, elapsed_s=_ticker_elapsed_ms / 1000.0)
-                except Exception as ae:
-                    logger.error("Failed to log ticker_result crash to auditor: %s", ae)
+                _log_ticker_result(ctx.cycle_id, ticker, fallback_result, _ticker_elapsed_ms)
             finally:
                 work_queue.task_done()
 
@@ -348,16 +346,7 @@ async def run_phase4_analysis(
     )
 
     # Calculate summary metrics
-    for r in results:
-        action = r.get("action", "HOLD")
-        if action == "BUY":
-            cycle_summary["buy_count"] += 1
-        elif action == "SELL":
-            cycle_summary["sell_count"] += 1
-        elif action == "HOLD":
-            cycle_summary["hold_count"] += 1
-        if r.get("human_review"):
-            cycle_summary["review_count"] += 1
+    tally_results(results, cycle_summary)
 
     cycle_summary["analysis_results_count"] = len(results)
 

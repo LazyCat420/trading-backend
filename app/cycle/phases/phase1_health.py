@@ -1,15 +1,29 @@
 import logging
 from datetime import datetime, timezone
-from typing import Callable, Any
+from typing import Callable
 
 from app.config import settings
 from app.db.connection import get_db
+from app.services.vllm_client import llm
+from app.trading.paper_trader import check_stop_losses, check_take_profits
+from app.cycle.attention_tracker import (
+    flag_neglected_tickers,
+    get_attention_summary,
+    increment_days_since_deep,
+)
+from app.pipeline.ticker_triage import classify_tickers
+from app.cycle.context import CycleContext
+from app.utils.emit import noop_emit
 
 logger = logging.getLogger(__name__)
 
 
 async def run_phase1_health(
-    ctx: Any, bot_id: str, emit: Callable, cycle_summary: dict, state: dict
+    ctx: CycleContext,
+    bot_id: str,
+    emit: Callable = noop_emit,
+    cycle_summary: dict = None,
+    state: dict = None,
 ) -> None:
     """
     Phase 1: Health Checks, Stop Losses, Triage, and Directives.
@@ -23,8 +37,6 @@ async def run_phase1_health(
     )
 
     # 1. Bot Health Check
-    from app.services.vllm_client import llm
-
     health_status = await llm.health_all()
     jetson_ok = health_status.get("jetson", False)
     dgx_ok = any(
@@ -61,8 +73,6 @@ async def run_phase1_health(
     # 2. Stop-Loss Check
     if ctx.trade:
         try:
-            from app.trading.paper_trader import check_stop_losses, check_take_profits
-
             triggered_stops = await check_stop_losses(bot_id)
             triggered_tps = await check_take_profits(bot_id)
             triggered = triggered_stops + triggered_tps
@@ -143,13 +153,6 @@ async def run_phase1_health(
     # 4. Smart Triage
     if ctx.tickers and settings.TRIAGE_ENABLED:
         try:
-            from app.cycle.attention_tracker import (
-                flag_neglected_tickers,
-                get_attention_summary,
-                increment_days_since_deep,
-            )
-            from app.pipeline.ticker_triage import classify_tickers
-
             emit(
                 "started", "triage", "Running smart ticker triage...", status="running"
             )

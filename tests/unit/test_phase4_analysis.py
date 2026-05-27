@@ -13,7 +13,7 @@ def mock_ctx():
     return ctx
 
 @pytest.mark.asyncio
-@patch("app.cognition.orchestration.runner.execute_v2_pipeline")
+@patch("app.cycle.phases.phase4_analysis.execute_v2_pipeline")
 async def test_run_phase4_analysis_success(mock_execute, mock_ctx):
     mock_execute.side_effect = [
         {"ticker": "AAPL", "action": "BUY", "confidence": 0.8},
@@ -31,9 +31,12 @@ async def test_run_phase4_analysis_success(mock_execute, mock_ctx):
     assert cycle_summary["hold_count"] == 1
     
 @pytest.mark.asyncio
-@patch("app.cognition.orchestration.runner.execute_v2_pipeline")
-@patch("app.pipeline.phases.phase4_analysis.settings.ANALYSIS_WORKER_TIMEOUT_SECONDS", 0.1)
+@patch("app.cycle.phases.phase4_analysis.execute_v2_pipeline")
+@patch("app.cycle.phases.phase4_analysis.settings.ANALYSIS_WORKER_TIMEOUT_SECONDS", 0.1)
 async def test_run_phase4_analysis_timeout_fallback(mock_execute, mock_ctx):
+    # Set tickers to at least 3 to trigger the all-crash gate abort
+    mock_ctx.tickers = ["AAPL", "NVDA", "MSFT"]
+    
     # Make the execute function sleep to force a timeout
     async def slow_execute(*args, **kwargs):
         await asyncio.sleep(0.5)
@@ -45,11 +48,11 @@ async def test_run_phase4_analysis_timeout_fallback(mock_execute, mock_ctx):
     state = {}
     emit = MagicMock()
     
-    with pytest.raises(RuntimeError, match="All 2 tickers crashed"):
+    with pytest.raises(RuntimeError, match="All 3 tickers crashed"):
         await run_phase4_analysis(mock_ctx, "bot1", "macro", emit, cycle_summary, state)
 
 @pytest.mark.asyncio
-@patch("app.cognition.orchestration.runner.execute_v2_pipeline")
+@patch("app.cycle.phases.phase4_analysis.execute_v2_pipeline")
 async def test_run_phase4_analysis_zero_results(mock_execute, mock_ctx):
     # Return empty lists or None
     mock_execute.return_value = None

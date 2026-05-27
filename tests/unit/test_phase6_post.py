@@ -15,16 +15,16 @@ def mock_ctx():
 
 @pytest.mark.asyncio
 @patch("app.cycle.phases.phase6_post.get_db")
-@patch("app.services.memory.cycle_closer.cycle_closer.close_cycle", new_callable=AsyncMock)
-@patch("app.trading.paper_trader.get_portfolio")
-@patch("app.cycle.trading_phase.estimate_trade")
-@patch("app.pipeline.analysis.purge_pass.run_purge_pass", new_callable=AsyncMock)
-@patch("app.cognition.ontology.knowledge_purge.purge_stale_knowledge", new_callable=AsyncMock)
-@patch("app.pipeline.analysis.agent_maintenance.run_janitor_tasks", new_callable=AsyncMock)
-@patch("app.pipeline.subsystem_benchmarks.record_all")
-@patch("app.agents.meta_audit_agent.run_meta_audit", new_callable=AsyncMock)
-@patch("app.agents.quant_research_agent.run_quant_research", new_callable=AsyncMock)
-@patch("app.services.bot_manager.get_active_bot_id", return_value="test_bot")
+@patch("app.cycle.phases.phase6_post.cycle_closer.close_cycle", new_callable=AsyncMock)
+@patch("app.cycle.phases.phase6_post._get_pf")
+@patch("app.cycle.phases.phase6_post.estimate_trade")
+@patch("app.cycle.phases.phase6_post.run_purge_pass", new_callable=AsyncMock)
+@patch("app.cycle.phases.phase6_post.purge_stale_knowledge", new_callable=AsyncMock)
+@patch("app.cycle.phases.phase6_post.run_janitor_tasks", new_callable=AsyncMock)
+@patch("app.cycle.phases.phase6_post.record_all")
+@patch("app.cycle.phases.phase6_post.run_meta_audit", new_callable=AsyncMock)
+@patch("app.cycle.phases.phase6_post.run_quant_research", new_callable=AsyncMock)
+@patch("app.cycle.phases.phase6_post.resolve_bot_id", return_value="test_bot")
 async def test_run_phase6_post_success(
     mock_bot_id, mock_quant, mock_audit, mock_record,
     mock_janitor, mock_purge_stale, mock_purge_pass,

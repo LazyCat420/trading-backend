@@ -72,7 +72,9 @@ def ensure_summary_columns(db=None):
                 confidence_tier VARCHAR,
                 rationale_summary VARCHAR,
                 was_correct BOOLEAN,
-                outcome_pnl DOUBLE PRECISION
+                outcome_pnl DOUBLE PRECISION,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (ticker, cycle_id)
             )""",
             """CREATE TABLE IF NOT EXISTS debate_history (
                 ticker VARCHAR,

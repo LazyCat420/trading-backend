@@ -12,7 +12,18 @@ def mock_dependencies():
         
         mock_thresh.return_value = (30.0, 8, 0.70)  # sector_cap, pos_cap, corr_thresh
         mock_sector.return_value = "Technology"
-        mock_price.return_value = (None, None)      # force fallback to entry_price
+        
+        def price_side_effect(ticker):
+            try:
+                open_pos = mock_open.return_value
+                for p in open_pos:
+                    if p["ticker"] == ticker:
+                        return (float(p.get("entry_price", p.get("avg_entry_price", 10.0))), 1.0)
+            except Exception:
+                pass
+            return (10.0, 1.0)
+        
+        mock_price.side_effect = price_side_effect
         
         yield {
             "open": mock_open,
@@ -32,22 +43,22 @@ def test_portfolio_gate_new_position_under_cap(mock_dependencies):
     assert result["blocked"] is False
     assert result["reason"] is None
 
-def test_portfolio_gate_new_position_at_cap_bypassed(mock_dependencies):
-    # Not held, at position cap (8 positions) - should NOT block on position cap now
+def test_portfolio_gate_new_position_at_cap_blocked(mock_dependencies):
+    # Not held, at position cap (8 positions) - should block on position cap now
     deps = mock_dependencies
     sectors = ["SectorA", "SectorB", "SectorC", "SectorD", "SectorE", "SectorF", "SectorG", "SectorH"]
     deps["open"].return_value = [{"ticker": f"T{i}", "sector": sectors[i], "qty": 10, "entry_price": 10} for i in range(8)]
     deps["pf"].return_value = {"cash": 2000.0, "positions": []}
     
     result = check_portfolio_gate("AAPL", "BUY", "bot_1")
-    assert result["blocked"] is False
-    assert result["reason"] is None
+    assert result["blocked"] is True
+    assert "Position count cap reached" in result["reason"]
 
 def test_portfolio_gate_addition_at_cap_bypass(mock_dependencies):
     # Already held, at position cap (8 positions) -> should bypass position cap check
     deps = mock_dependencies
-    held_positions = [{"ticker": f"T{i}", "sector": "Other", "qty": 10, "entry_price": 10.0} for i in range(7)]
-    held_positions.append({"ticker": "AAPL", "sector": "Technology", "qty": 10, "entry_price": 100.0})
+    held_positions = [{"ticker": f"T{i}", "sector": "Other", "qty": 10, "entry_price": 10.0, "avg_entry_price": 10.0} for i in range(7)]
+    held_positions.append({"ticker": "AAPL", "sector": "Technology", "qty": 10, "entry_price": 100.0, "avg_entry_price": 100.0})
     deps["open"].return_value = held_positions
     deps["pf"].return_value = {"cash": 1000.0, "positions": held_positions}
     
@@ -61,11 +72,11 @@ def test_portfolio_gate_addition_under_concentration_cap(mock_dependencies):
     # Already held, under 20% concentration
     deps = mock_dependencies
     held_positions = [
-        {"ticker": "AAPL", "sector": "Technology", "qty": 1, "entry_price": 100.0},
-        {"ticker": "MSFT", "sector": "Other", "qty": 9, "entry_price": 100.0},
-        {"ticker": "T1", "sector": "Other", "qty": 10, "entry_price": 100.0},
-        {"ticker": "T2", "sector": "Other", "qty": 10, "entry_price": 100.0},
-        {"ticker": "T3", "sector": "Other", "qty": 10, "entry_price": 100.0}
+        {"ticker": "AAPL", "sector": "Technology", "qty": 1, "entry_price": 100.0, "avg_entry_price": 100.0},
+        {"ticker": "MSFT", "sector": "Other", "qty": 9, "entry_price": 100.0, "avg_entry_price": 100.0},
+        {"ticker": "T1", "sector": "Other", "qty": 10, "entry_price": 100.0, "avg_entry_price": 100.0},
+        {"ticker": "T2", "sector": "Other", "qty": 10, "entry_price": 100.0, "avg_entry_price": 100.0},
+        {"ticker": "T3", "sector": "Other", "qty": 10, "entry_price": 100.0, "avg_entry_price": 100.0}
     ]
     deps["open"].return_value = held_positions
     deps["pf"].return_value = {"cash": 8000.0, "positions": held_positions}
@@ -78,4 +89,16 @@ def test_portfolio_gate_addition_under_concentration_cap(mock_dependencies):
     assert result["reason"] is None
     assert any("Already holding AAPL" in w for w in result["warnings"])
     assert any("representing 0.8% of portfolio" in w for w in result["warnings"])
+
+
+def test_portfolio_gate_extreme_correlation_blocked(mock_dependencies):
+    # Not held, but extreme correlation (>0.90) with an existing position
+    deps = mock_dependencies
+    deps["open"].return_value = [{"ticker": "MSFT", "sector": "Technology", "qty": 10, "entry_price": 10.0}]
+    deps["pf"].return_value = {"cash": 10000.0, "positions": [{"ticker": "MSFT", "qty": 10, "avg_entry_price": 10.0}]}
+    
+    with patch("app.cycle.portfolio_gate._get_correlation", return_value=0.95):
+        result = check_portfolio_gate("AAPL", "BUY", "bot_1")
+        assert result["blocked"] is True
+        assert "Extreme correlation limit exceeded" in result["reason"]
 
