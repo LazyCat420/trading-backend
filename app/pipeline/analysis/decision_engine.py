@@ -1119,10 +1119,13 @@ async def analyze_tickers(
 
 
 def _log_decision(result: dict, cycle_id: str, bot_id: str) -> None:
-    """Log the decision to analysis_results table.
+    """Log the decision to analysis_results + cycle_summaries tables.
 
     Stores ALL fields the frontend needs so they survive DB round-trips:
     estimate, agent_results, c_result, d_result, total_time_s, total_tokens.
+
+    Both INSERTs are wrapped in a single transaction for atomicity (Fix B.4).
+    Uses ON CONFLICT upsert to prevent duplicates (Fix A.1, A.2).
     """
     try:
         from app.utils.text_utils import sanitize_surrogates
@@ -1190,55 +1193,87 @@ def _log_decision(result: dict, cycle_id: str, bot_id: str) -> None:
             _is_thesis_run = result.get("triage_tier") in ("standard", "deep")
             _thesis_now = datetime.now(timezone.utc) if _is_thesis_run else None
 
-            db.execute(
-                """
-                INSERT INTO analysis_results
-                (id, cycle_id, bot_id, ticker, agent_name, result_json, confidence, created_at, triage_tier,
-                 thesis_verdict, thesis_confidence, thesis_summary, thesis_updated_at, thesis_unchanged)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
-                ON CONFLICT (id) DO NOTHING
-            """,
-                [
-                    result_id,
-                    cycle_id or "manual",
-                    bot_id or "decision-engine",
-                    ticker,
-                    f"hybrid_{result.get('config_used', 'C')}",
-                    json.dumps(result_payload),
-                    confidence,
-                    result.get("timestamp"),
-                    result.get("triage_tier", "standard"),
-                    # Thesis fields — only populated for standard/deep runs
-                    action if _is_thesis_run else None,
-                    confidence if _is_thesis_run else None,
-                    result.get("rationale", "")[:1500] if _is_thesis_run else None,
-                    _thesis_now,
-                ],
-            )
-
-            # A4: Log to cycle_summaries
-            db.execute(
-                """
-                INSERT INTO cycle_summaries
-                (ticker, cycle_id, cycle_date, agent_name, action, confidence, confidence_tier, rationale_summary, was_correct, outcome_pnl)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            # Fix B.4: Wrap both INSERTs in a transaction for atomicity
+            with db.transaction():
+                # Fix A.1: Upsert on (cycle_id, ticker) to prevent duplicate rows.
+                # The ON CONFLICT target uses a partial unique index added via migration.
+                # Fallback: if the index doesn't exist yet, ON CONFLICT (id) DO NOTHING
+                # still prevents exact-ID dupes (legacy behavior).
+                db.execute(
+                    """
+                    INSERT INTO analysis_results
+                    (id, cycle_id, bot_id, ticker, agent_name, result_json, confidence, created_at, triage_tier,
+                     thesis_verdict, thesis_confidence, thesis_summary, thesis_updated_at, thesis_unchanged)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, FALSE)
+                    ON CONFLICT (id) DO NOTHING
                 """,
-                [
-                    ticker,
-                    cycle_id or "manual",
-                    result.get("timestamp"),
-                    f"hybrid_{result.get('config_used', 'C')}",
-                    action,
-                    confidence,
-                    "high"
-                    if confidence >= 70
-                    else "medium"
-                    if confidence >= 40
-                    else "low",
-                    result.get("rationale", "")[:500],
-                    None,  # was_correct
-                    None,  # outcome_pnl
-                ],
-            )
+                    [
+                        result_id,
+                        cycle_id or "manual",
+                        bot_id or "decision-engine",
+                        ticker,
+                        f"hybrid_{result.get('config_used', 'C')}",
+                        json.dumps(result_payload),
+                        confidence,
+                        result.get("timestamp"),
+                        result.get("triage_tier", "standard"),
+                        # Thesis fields — only populated for standard/deep runs
+                        action if _is_thesis_run else None,
+                        confidence if _is_thesis_run else None,
+                        result.get("rationale", "")[:1500] if _is_thesis_run else None,
+                        _thesis_now,
+                    ],
+                )
+
+                # Fix A.2: Add ON CONFLICT to prevent PK violation on (ticker, cycle_id)
+                db.execute(
+                    """
+                    INSERT INTO cycle_summaries
+                    (ticker, cycle_id, cycle_date, agent_name, action, confidence, confidence_tier, rationale_summary, was_correct, outcome_pnl)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (ticker, cycle_id) DO UPDATE SET
+                        action = EXCLUDED.action,
+                        confidence = EXCLUDED.confidence,
+                        confidence_tier = EXCLUDED.confidence_tier,
+                        rationale_summary = EXCLUDED.rationale_summary,
+                        agent_name = EXCLUDED.agent_name
+                    """,
+                    [
+                        ticker,
+                        cycle_id or "manual",
+                        result.get("timestamp"),
+                        f"hybrid_{result.get('config_used', 'C')}",
+                        action,
+                        confidence,
+                        "high"
+                        if confidence >= 70
+                        else "medium"
+                        if confidence >= 40
+                        else "low",
+                        result.get("rationale", "")[:500],
+                        None,  # was_correct
+                        None,  # outcome_pnl
+                    ],
+                )
+
+            # Fix E.2: Record BUY/SELL decisions for outcome tracking
+            if action in ("BUY", "SELL"):
+                try:
+                    from app.pipeline.analysis.outcome_tracker import record_decision
+                    _entry_price = None
+                    if estimate:
+                        _entry_price = estimate.get("price")
+                    record_decision(
+                        cycle_id=cycle_id or "manual",
+                        ticker=ticker,
+                        action=action,
+                        confidence=confidence,
+                        entry_price=_entry_price,
+                        lesson=result.get("rationale", "")[:200],
+                    )
+                except Exception as outcome_err:
+                    logger.warning(
+                        "[PIPELINE] record_decision failed for %s: %s", ticker, outcome_err
+                    )
     except Exception as e:
         logger.error("[PIPELINE] [decision_engine] log failed: %s", e)

@@ -222,7 +222,7 @@ class TestTradingPhaseExecutionGates:
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
              patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.pre_trade_agent.run_pre_trade", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 10, "total_cost": 1500}):
+             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 10, "total_cost": 1500}):
 
             mock_cc.wait_if_paused = AsyncMock()
 
@@ -270,7 +270,7 @@ class TestTradingPhaseExecutionGates:
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
              patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.pre_trade_agent.run_pre_trade", new_callable=AsyncMock, return_value=mock_pre_trade):
+             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value=mock_pre_trade):
 
             mock_cc.wait_if_paused = AsyncMock()
 
@@ -322,7 +322,7 @@ class TestTradingPhaseExecutionGates:
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
              patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value=allocator_map), \
-             patch("app.agents.pre_trade_agent.run_pre_trade", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 3, "total_cost": 1260}):
+             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 3, "total_cost": 1260}):
 
             mock_cc.wait_if_paused = AsyncMock()
 
@@ -366,7 +366,7 @@ class TestTradingPhaseExecutionGates:
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
              patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.pre_trade_agent.run_pre_trade", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 2, "total_cost": 1800}), \
+             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 2, "total_cost": 1800}), \
              patch("app.db.connection.get_db") as mock_get_db:
 
             mock_cc.wait_if_paused = AsyncMock()
@@ -434,7 +434,7 @@ class TestTradingPhaseExecutionGates:
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
              patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.pre_trade_agent.run_pre_trade", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 5, "total_cost": 500}):
+             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 5, "total_cost": 500}):
 
             mock_cc.wait_if_paused = AsyncMock()
 

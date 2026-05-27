@@ -1,6 +1,11 @@
 """
 Pre-Trade Execution Agent — Calculator tool chain before BUY execution.
 
+DEPRECATED: This module is superseded by app.agents.trade_execution_agent
+which handles BUY/SELL/HOLD in a single unified agent. The run_pre_trade()
+function now delegates to run_trade_execution(action="BUY") for backward
+compatibility. Direct usage of this module should be migrated.
+
 When the decision engine produces a BUY signal, this agent runs the
 position sizing and risk management tools BEFORE any buy is executed.
 This ensures the bot never buys without doing the risk math.

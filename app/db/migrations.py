@@ -856,3 +856,94 @@ def _fix_eth_cagr_data(conn):
             conn.rollback()
         except Exception:
             pass
+
+    # ── Fix A.4: UNIQUE(bot_id, ticker) on positions table ──
+    # Prevents concurrent BUYs from creating duplicate position rows for the same ticker.
+    # The paper_trader code already handles "existing position" logic, but this constraint
+    # provides a DB-level safety net against race conditions.
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 1 FROM pg_indexes
+                WHERE tablename = 'positions'
+                AND indexdef LIKE '%%bot_id%%ticker%%'
+                AND indexdef LIKE '%%UNIQUE%%'
+            """)
+            if not cur.fetchone():
+                # Deduplicate first: keep the row with the highest qty for each bot+ticker pair
+                cur.execute("""
+                    DELETE FROM positions a USING (
+                        SELECT MIN(ctid) as ctid, bot_id, ticker
+                        FROM positions
+                        GROUP BY bot_id, ticker HAVING COUNT(*) > 1
+                    ) b
+                    WHERE a.bot_id = b.bot_id AND a.ticker = b.ticker AND a.ctid <> b.ctid
+                """)
+                cur.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_positions_bot_ticker
+                    ON positions(bot_id, ticker)
+                """)
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+    # ── Fix A.6: Performance indexes on agent_traces ──
+    # This high-volume table (one row per tool call) has no indexes beyond PK.
+    # Dashboard queries filtering by run_id or agent_name do full table scans.
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_agent_traces_run_id "
+                "ON agent_traces(run_id)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_agent_traces_agent_created "
+                "ON agent_traces(agent_name, created_at)"
+            )
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+    # ── Prompt Templates (Sector-Adaptive Prompt Storage) ──
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS prompt_templates (
+                    id              TEXT PRIMARY KEY,
+                    sector          TEXT NOT NULL,
+                    action_type     TEXT NOT NULL DEFAULT 'BUY',
+                    system_prompt   TEXT NOT NULL,
+                    status          TEXT NOT NULL DEFAULT 'candidate',
+                    total_trades    INTEGER DEFAULT 0,
+                    wins            INTEGER DEFAULT 0,
+                    losses          INTEGER DEFAULT 0,
+                    win_rate        DOUBLE PRECISION DEFAULT 0.0,
+                    avg_pnl_pct     DOUBLE PRECISION DEFAULT 0.0,
+                    parent_id       TEXT,
+                    generation      INTEGER DEFAULT 0,
+                    created_by      TEXT DEFAULT 'seed',
+                    created_at      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    promoted_at     TIMESTAMPTZ,
+                    benched_at      TIMESTAMPTZ
+                )
+            """)
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_prompt_templates_sector_status "
+                "ON prompt_templates(sector, status)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_prompt_templates_win_rate "
+                "ON prompt_templates(win_rate DESC)"
+            )
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass

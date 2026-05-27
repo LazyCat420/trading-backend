@@ -118,13 +118,20 @@ class ContextBudget:
 
 
 def _effective_from_raw(raw_tokens: int) -> int:
-    """Return the raw context length up to a hard ceiling of 128K (131072 tokens).
-    This ensures that even if a model supports extremely large windows (e.g. 262K),
-    the budget slices (data context, tool results) are bounded, triggering necessary
-    head-tail truncation and history compression before the model degrades.
+    """Return the *effective* context budget — the portion of the raw context
+    window where the model maintains high-quality attention.
+
+    Research ("Lost in the Middle", Liu et al. 2024) shows open-weight models
+    degrade significantly past 50-60% of their raw max_model_len.  We apply
+    a 50% discount and cap at 65536 tokens (64K) to keep all pipeline agents
+    in the high-quality attention zone.
+
+    This triggers earlier compression and head-tail truncation, which is
+    strictly better than letting the model silently degrade or timeout.
     """
-    MAX_BUDGET_CEILING = 131072  # 128K tokens
-    return min(raw_tokens, MAX_BUDGET_CEILING)
+    EFFECTIVE_RATIO = 0.50       # 50% of raw context
+    MAX_BUDGET_CEILING = 65536   # 64K tokens hard cap
+    return min(int(raw_tokens * EFFECTIVE_RATIO), MAX_BUDGET_CEILING)
 
 
 def _compute_slice_budgets(effective: int) -> dict:
@@ -186,19 +193,19 @@ def register_model_context(model_id: str, raw_context_tokens: int) -> ContextBud
 
 
 # ── Default budget (used when model discovery hasn't run yet) ─────────
-# Default budget scaled to 100% of a 32K raw model.
+# Default budget scaled to 50% of a 32K raw model (16K effective).
 _DEFAULT_BUDGET = ContextBudget(
     model_id="default",
     raw_context_tokens=32768,
-    effective_context_tokens=32768,
-    system_prompt_budget=3276,   # 10%
-    data_context_budget=13107,   # 40%
-    tool_result_budget=6553,     # 20%
-    rag_budget=2621,             # 8%
-    memory_budget=1638,           # 5%
-    history_budget=3932,         # 12%
-    war_context_budget=983,      # 3%
-    capsule_budget=655,          # 2%
+    effective_context_tokens=16384,
+    system_prompt_budget=1638,   # 10%
+    data_context_budget=6553,    # 40%
+    tool_result_budget=3276,     # 20%
+    rag_budget=1310,             # 8%
+    memory_budget=819,           # 5%
+    history_budget=1966,         # 12%
+    war_context_budget=491,      # 3%
+    capsule_budget=327,          # 2%
 )
 
 

@@ -166,6 +166,13 @@ class PrismClient:
                 r.raise_for_status()
                 return r
             except (RequestError, HTTPStatusError) as e:
+                # Do not retry on timeouts
+                if isinstance(e, httpx.TimeoutException):
+                    logger.warning(
+                        "[PRISM] API call to %s timed out. Raising immediately to trigger fast fallback.",
+                        url,
+                    )
+                    raise
                 # Do not retry on 4xx client errors
                 if (
                     isinstance(e, HTTPStatusError)

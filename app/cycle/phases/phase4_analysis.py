@@ -90,6 +90,19 @@ async def run_phase4_analysis(
             return macro_memo.get("memo", "")
         return macro_memo or ""
 
+    async def _await_macro_memo(timeout_s: float = 5.0) -> str:
+        """Wait for the macro scout to finish (up to timeout), then read memo.
+
+        Fix B.1: Ensures analysis workers get the COMPLETE memo instead of
+        reading a partial/empty value while the scout is still writing.
+        """
+        if isinstance(macro_memo, dict) and "_ready" in macro_memo:
+            try:
+                await asyncio.wait_for(macro_memo["_ready"].wait(), timeout=timeout_s)
+            except asyncio.TimeoutError:
+                logger.info("[CYCLE] Macro memo not ready after %.0fs — proceeding without", timeout_s)
+        return _get_macro_memo()
+
     async def _worker(worker_id: int):
         nonlocal analyzed_count
         logger.info("[CYCLE] [Worker %d] Started — waiting for tickers from queue", worker_id)
@@ -170,8 +183,9 @@ async def run_phase4_analysis(
 
             _is_highly_redundant = ticker in state.get("highly_redundant_tickers", [])
 
-            # Read the macro memo at analysis time (may have been filled by scout since launch)
-            current_macro_memo = _get_macro_memo()
+            # Read the macro memo at analysis time — await readiness (up to 5s)
+            # Fix B.1: Workers wait for scout to finish instead of reading partial memo
+            current_macro_memo = await _await_macro_memo(timeout_s=5.0)
 
             result = None
             _ticker_start = time.monotonic()
@@ -351,19 +365,32 @@ async def run_phase4_analysis(
     # If every ticker produced a crash-fallback (HOLD @ 0%), the pipeline itself
     # is broken (e.g. import error, variable shadowing). Abort loudly rather than
     # silently passing 30 garbage decisions downstream.
+    # FIX: Require at least 3 tickers to trigger the all-crash gate.
+    # A single-ticker timeout is common (vLLM overload, slow model) and should
+    # NOT abort the entire cycle. For 1-2 ticker batches, we log a warning
+    # instead and let the pipeline continue with the fallback HOLD results.
     crash_count = sum(1 for r in results if r.get("is_timeout_fallback"))
     if crash_count > 0 and crash_count == len(results):
-        msg = (
-            f"CRITICAL: All {crash_count} tickers crashed during analysis. "
-            f"Pipeline is broken — aborting cycle. First error: "
-            f"{results[0].get('error', 'unknown')}"
-        )
-        logger.critical("[PIPELINE] %s", msg)
-        emit("analyzing", "all_crashed", msg, status="error")
-        cycle_summary["status"] = "error"
-        cycle_summary["primary_failure_reason"] = f"All {crash_count} tickers crashed"
-        cycle_summary["no_trade_reason"] = "all_crashed"
-        raise RuntimeError(msg)
+        if len(results) >= 3:
+            msg = (
+                f"CRITICAL: All {crash_count} tickers crashed during analysis. "
+                f"Pipeline is broken — aborting cycle. First error: "
+                f"{results[0].get('error', 'unknown')}"
+            )
+            logger.critical("[PIPELINE] %s", msg)
+            emit("analyzing", "all_crashed", msg, status="error")
+            cycle_summary["status"] = "error"
+            cycle_summary["primary_failure_reason"] = f"All {crash_count} tickers crashed"
+            cycle_summary["no_trade_reason"] = "all_crashed"
+            raise RuntimeError(msg)
+        else:
+            msg = (
+                f"WARNING: All {crash_count} ticker(s) crashed, but batch too small "
+                f"to trigger all-crash abort (need ≥3). Continuing with fallback HOLD results. "
+                f"First error: {results[0].get('error', 'unknown')}"
+            )
+            logger.warning("[PIPELINE] %s", msg)
+            emit("analyzing", "small_batch_crash", msg, status="warning")
 
     emit(
         "analyzing",

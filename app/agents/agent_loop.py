@@ -143,10 +143,15 @@ async def run_agent_loop(
 
         if hold_streak >= 3:
             enhanced_system_prompt += (
-                f"\n\n### ACTION BIAS RULE:\n"
-                f"This ticker has been held for {hold_streak} consecutive cycles. "
-                "If the evidence leans non-neutral, you MUST choose BUY or SELL rather than defaulting to HOLD. "
-                "Avoid overly conservative 'wait and see' decisions if there is actionable data."
+                f"\n\n### HOLD STREAK NOTICE ({hold_streak} cycles):\n"
+                f"This ticker has been HELD for {hold_streak} consecutive cycles. "
+                "This suggests either (a) genuine uncertainty that warrants continued monitoring, "
+                "or (b) analysis lazily defaulting to HOLD without conviction.\n"
+                "REQUIRED: If you conclude HOLD, you MUST provide a specific catalyst or "
+                "condition that would change your decision (e.g., 'HOLD until earnings on June 3' "
+                "or 'HOLD unless RSI drops below 30'). Generic 'wait and see' is NOT acceptable.\n"
+                "If the data clearly supports BUY or SELL, act on it — do not let the hold streak "
+                "make you overly cautious."
             )
 
         if lessons:
@@ -177,8 +182,11 @@ async def run_agent_loop(
 
     active_tools = tools_override if tools_override is not None else registry.schemas
 
-    # Brain-Action Split: select only needed tools when pool is large
-    if active_tools and len(active_tools) > 5:
+    # Brain-Action Split: select only needed tools when pool is large.
+    # SKIP when tools_override was explicitly provided — the caller (e.g.
+    # run_split_agent_loop) already performed selection.  Re-selecting
+    # wastes an LLM call and can over-prune the already-filtered set.
+    if tools_override is None and active_tools and len(active_tools) > 5:
         try:
             from app.agents.tool_selector import select_tools_for_task
             task_desc = f"{system_prompt[:500]}\n\nTask: {user_prompt[:1500]}"
@@ -222,6 +230,14 @@ async def run_agent_loop(
     stop_reason = "success"
 
     from app.agents.context_compressor import compress_history, summarize_tool_result
+    from app.config.context_budget import get_context_budget as _get_ctx_budget
+
+    # Aggregate tool result budget: limits TOTAL tool result tokens across
+    # all tool calls in this agent run.  Without this, 5 tool calls each
+    # at 20% of effective = 100% of context consumed by tool results alone.
+    _ctx_budget = _get_ctx_budget()
+    _aggregate_tool_budget = _ctx_budget.tool_result_budget * 2  # Allow up to 2x single-tool budget total
+    _aggregate_tool_used = 0
 
     while budget.consume_turn():
         # ── Pipeline stop check ──────────────────────────────────────
@@ -424,11 +440,24 @@ async def run_agent_loop(
             messages.append(tool_res)
             scorecard.record(tool_res.get("content", ""))
 
-            # ── Inline tool result compression ──
+            # ── Inline tool result compression (with aggregate budget) ──
             # If the tool result is oversized, truncate it NOW before
             # it inflates the context window on the next LLM call.
+            # The per-tool budget shrinks as aggregate usage grows.
             raw_content = tool_res.get("content", "")
-            compressed = summarize_tool_result(raw_content, tool_name=tool_name or "unknown")
+            _remaining_budget = max(512, _aggregate_tool_budget - _aggregate_tool_used)
+            compressed = summarize_tool_result(
+                raw_content,
+                tool_name=tool_name or "unknown",
+                budget_tokens=min(_ctx_budget.tool_result_budget, _remaining_budget),
+            )
+            _result_tokens = len(compressed) // 4  # Rough token estimate
+            _aggregate_tool_used += _result_tokens
+            if _aggregate_tool_used > _aggregate_tool_budget:
+                logger.info(
+                    "[AgentLoop] Aggregate tool budget exceeded (%d/%d tokens) for %s/%s",
+                    _aggregate_tool_used, _aggregate_tool_budget, agent_name, ticker,
+                )
             if len(compressed) < len(raw_content):
                 # Replace the content in the already-appended message
                 messages[-1] = {**messages[-1], "content": compressed}
@@ -546,7 +575,7 @@ async def run_agent_loop(
 
     # Trigger Autoresearch reflection on success AND failure for organic learning
     # We always reflect to capture what worked (success) or what failed
-    asyncio.create_task(
+    _reflect_task = asyncio.create_task(
         reflect_on_trajectory(
             agent_name=agent_name,
             ticker=ticker,
@@ -556,6 +585,17 @@ async def run_agent_loop(
             chat_history=messages,
             success=success,
             spotlight_tools=spotlight,
+        )
+    )
+    # Prevent "Task exception was never retrieved" warnings
+    _reflect_task.add_done_callback(
+        lambda t: (
+            logger.warning(
+                "[AgentLoop] reflect_on_trajectory failed for %s/%s: %s",
+                agent_name, ticker, t.exception(),
+            )
+            if t.exception()
+            else None
         )
     )
 

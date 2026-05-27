@@ -204,29 +204,30 @@ async def execute_decisions(
                 for w in gate["warnings"]:
                     logger.info("[PIPELINE]   [%s] Gate warning: %s", ticker, w)
 
-            # ── Pre-Trade Agent: run calculator tool chain before buying ──
+            # ── Trade Execution Agent: unified sizing for BUY ──
             pre_trade_decision = None
             try:
-                from app.agents.pre_trade_agent import run_pre_trade
+                from app.agents.trade_execution_agent import run_trade_execution
 
                 user_prompt_sizing = d.get("rationale", "")
                 if alloc_decision and alloc_decision.get("adjusted_size_pct", 0) > 0:
                     user_prompt_sizing += f"\nNote: The Portfolio Sizing Agent allocated {alloc_decision.get('adjusted_size_pct')}% of total portfolio value for this trade."
 
                 pre_trade_decision = await asyncio.wait_for(
-                    run_pre_trade(
+                    run_trade_execution(
                         ticker=ticker,
+                        action="BUY",
                         confidence=confidence,
                         cycle_id=cycle_id,
                         bot_id=bot_id,
                         rationale=user_prompt_sizing,
                     ),
-                    timeout=300.0,  # Hard timeout for pre-trade agent (increased to 300s)
+                    timeout=300.0,  # Hard timeout for trade execution agent
                 )
 
                 if pre_trade_decision and pre_trade_decision.get("decision") == "VETO":
                     logger.warning(
-                        "[PIPELINE]   [%s] BUY: Pre-trade agent suggested VETO: %s — PROCEEDING with Kelly fallback (advisory only)",
+                        "[PIPELINE]   [%s] BUY: Trade execution agent suggested VETO: %s — PROCEEDING with Kelly fallback (advisory only)",
                         ticker,
                         pre_trade_decision.get("veto_reason", "no reason"),
                     )
@@ -234,10 +235,10 @@ async def execute_decisions(
                     pre_trade_decision = None
 
             except asyncio.TimeoutError:
-                logger.warning("[PIPELINE]   [%s] Pre-trade agent timed out, falling back to Allocator/Kelly sizing", ticker)
+                logger.warning("[PIPELINE]   [%s] Trade execution agent timed out, falling back to Allocator/Kelly sizing", ticker)
                 pre_trade_decision = None
             except Exception as pt_err:
-                logger.warning("[PIPELINE]   [%s] Pre-trade agent failed (%s), falling back to Allocator/Kelly sizing", ticker, pt_err)
+                logger.warning("[PIPELINE]   [%s] Trade execution agent failed (%s), falling back to Allocator/Kelly sizing", ticker, pt_err)
                 pre_trade_decision = None
 
             # Sizing logic selection
@@ -354,6 +355,31 @@ async def execute_decisions(
 
             logger.debug("[PIPELINE]   [%s] EXECUTING SELL", ticker)
 
+            # ── Trade Execution Agent: advisory sizing for SELL ──
+            sell_advisory = None
+            try:
+                from app.agents.trade_execution_agent import run_trade_execution
+                sell_advisory = await asyncio.wait_for(
+                    run_trade_execution(
+                        ticker=ticker,
+                        action="SELL",
+                        confidence=confidence,
+                        cycle_id=cycle_id,
+                        bot_id=bot_id,
+                        rationale=d.get("rationale", ""),
+                    ),
+                    timeout=60.0,
+                )
+                if sell_advisory:
+                    logger.info(
+                        "[PIPELINE]   [%s] SELL advisory: sell_pct=%s%%, reason=%s",
+                        ticker,
+                        sell_advisory.get("sell_pct", 100),
+                        sell_advisory.get("exit_reason", "full_exit"),
+                    )
+            except Exception as sell_adv_err:
+                logger.debug("[PIPELINE]   [%s] SELL advisory agent skipped: %s", ticker, sell_adv_err)
+
             try:
                 result = await asyncio.wait_for(
                     sell(bot_id, ticker, cycle_id=cycle_id), timeout=20.0
@@ -420,6 +446,10 @@ async def execute_decisions(
                 except Exception as emit_err:
                     logger.debug("[TRADE] Failed to emit SELL event: %s", emit_err)
 
+                # Fix C.2: Refresh portfolio after SELL so subsequent decisions
+                # have accurate held_tickers and cash balance
+                portfolio = get_portfolio(bot_id)
+
                 # Record trade in attention tracker
                 try:
                     from app.cycle.attention_tracker import record_trade
@@ -434,6 +464,31 @@ async def execute_decisions(
                 ticker,
                 confidence,
             )
+
+            # ── Trade Execution Agent: advisory for HOLD positions ──
+            held_tickers = [p["ticker"] for p in portfolio.get("positions", [])]
+            if ticker in held_tickers:
+                try:
+                    from app.agents.trade_execution_agent import run_trade_execution
+                    hold_advisory = await asyncio.wait_for(
+                        run_trade_execution(
+                            ticker=ticker,
+                            action="HOLD",
+                            confidence=confidence,
+                            cycle_id=cycle_id,
+                            bot_id=bot_id,
+                            rationale=d.get("rationale", ""),
+                        ),
+                        timeout=60.0,
+                    )
+                    if hold_advisory and hold_advisory.get("decision") == "CONVERT_SELL":
+                        logger.warning(
+                            "[PIPELINE]   [%s] HOLD advisory suggests CONVERT_SELL — noted (advisory only, not converting)",
+                            ticker,
+                        )
+                except Exception as hold_adv_err:
+                    logger.debug("[PIPELINE]   [%s] HOLD advisory agent skipped: %s", ticker, hold_adv_err)
+
             skipped.append({"ticker": ticker, "reason": "HOLD"})
             counts["holds"] += 1
             continue

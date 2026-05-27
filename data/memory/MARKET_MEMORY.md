@@ -1,3 +1,1 @@
-[NVDA] [MEDIUM] RSI(14) < 65 + price testing 200-day SMA (201.59) + forward P/E < 1.5x sector = valid mean-reversion BUY signal (72% confidence). §
-[NVDA] [HIGH] RSI(14) < 65 + Price at 200-day SMA ($197.82) + Forward P/E < 1.5x sector = reliable BUY signal (Confidence 72%) §
-[NVDA] [HIGH] Price at 200-day SMA ($201.76) + RSI(14) 55.88 (<65) + Forward P/E 18.0 = valid BUY entry with defined risk, even amid macro crash warnings.
+[OKLO] [MEDIUM] Neutral RSI(52.76) + negative forward P/E (-81.88) signals speculative pricing; hold at entry ($68.70) until a confirmed thesis emerges or price tests $60.46 support.

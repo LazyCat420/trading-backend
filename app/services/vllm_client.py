@@ -269,6 +269,8 @@ class VLLMEndpoint:
     # Circuit breaker: track consecutive failed batches
     consecutive_batch_failures: int = field(default=0, repr=False)
     circuit_open_until: float = field(default=0.0, repr=False)
+    # Discovery failures tracking
+    consecutive_discovery_failures: int = field(default=0, repr=False)
 
     def init_concurrency(self, reserved_high: int = 1):
         """Initialize queue and semaphores. Safe to call at import time."""
@@ -2359,6 +2361,7 @@ class VLLMClient:
                 if r.status_code == 200:
                     models = r.json().get("data", [])
                     if models:
+                        ep.consecutive_discovery_failures = 0
                         new_model = models[0]["id"]
                         old_model = ep.model
 
@@ -2432,34 +2435,46 @@ class VLLMClient:
                             )
                     else:
                         # Server responded but no models loaded
-                        if ep.enabled and ep.model:
-                            ep.enabled = False
-                            ep.auto_disabled = True
-                            old_model = ep.model
-                            ep.model = None
-                            changes.append(
-                                f"{name}: no models loaded — auto-disabled (was {old_model})"
-                            )
-                            logger.warning(
-                                "[VLLM] ⚠️ Endpoint %s responded but has no models loaded — auto-disabled",
-                                name,
-                            )
-            except Exception:
+                        ep.consecutive_discovery_failures += 1
+                        logger.warning(
+                            "[VLLM] ⏳ Endpoint %s responded but has no models loaded (attempt %d/3)",
+                            name, ep.consecutive_discovery_failures
+                        )
+                        if ep.consecutive_discovery_failures >= 3:
+                            if ep.enabled and ep.model:
+                                ep.enabled = False
+                                ep.auto_disabled = True
+                                old_model = ep.model
+                                ep.model = None
+                                changes.append(
+                                    f"{name}: no models loaded — auto-disabled (was {old_model})"
+                                )
+                                logger.warning(
+                                    "[VLLM] ⚠️ Endpoint %s auto-disabled after 3 failed discovery attempts (no models loaded)",
+                                    name,
+                                )
+            except Exception as e:
                 # Endpoint unreachable
-                if ep.enabled and ep.model:
-                    ep.enabled = False
-                    ep.auto_disabled = True
-                    old_model = ep.model
-                    ep.model = None
-                    if old_model and old_model in self._model_endpoint_cache:
-                        del self._model_endpoint_cache[old_model]
-                    changes.append(
-                        f"{name}: unreachable — auto-disabled (was {old_model})"
-                    )
-                    logger.warning(
-                        "[VLLM] ⚠️ Endpoint %s at %s went offline — auto-disabled",
-                        name, ep.url,
-                    )
+                ep.consecutive_discovery_failures += 1
+                logger.warning(
+                    "[VLLM] ⏳ Discovery probe failed for %s at %s: %s (attempt %d/3)",
+                    name, ep.ep_url if hasattr(ep, 'ep_url') else ep.url, e, ep.consecutive_discovery_failures
+                )
+                if ep.consecutive_discovery_failures >= 3:
+                    if ep.enabled and ep.model:
+                        ep.enabled = False
+                        ep.auto_disabled = True
+                        old_model = ep.model
+                        ep.model = None
+                        if old_model and old_model in self._model_endpoint_cache:
+                            del self._model_endpoint_cache[old_model]
+                        changes.append(
+                            f"{name}: unreachable — auto-disabled (was {old_model})"
+                        )
+                        logger.warning(
+                            "[VLLM] ⚠️ Endpoint %s at %s went offline — auto-disabled after 3 failed discovery attempts (error: %s)",
+                            name, ep.url, e,
+                        )
 
         await asyncio.gather(
             *[_probe(name, ep) for name, ep in self._endpoints.items()]

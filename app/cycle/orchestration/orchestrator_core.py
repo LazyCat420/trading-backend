@@ -158,7 +158,16 @@ class OrchestratorCoreMixin:
 
             # Shared macro memo holder — macro scout fills this asynchronously.
             # Analysis workers read from it; if not ready yet, they proceed without.
-            macro_memo_holder = {"memo": ""}
+            # Fix B.1: Use asyncio.Event to signal memo readiness. The memo string
+            # is set via single assignment (atomic in CPython) — no more += race.
+            macro_memo_holder = {"memo": "", "_ready": asyncio.Event()}
+
+            # Pre-build edge-case prefix BEFORE launching scout (no concurrent access)
+            _edge_prefix = ""
+            if getattr(ctx, "trigger_type", "").startswith("edge_case_"):
+                logger.info("[CYCLE] Injecting edge case context: %s", ctx.trigger_type)
+                _edge_prefix = f"\n\n[URGENT] The bot has woken up specifically because an order trigger was hit: {ctx.trigger_type}. Evaluate this immediately and decide whether to execute the trade, hold, or adjust the trigger.\n\n"
+                macro_memo_holder["memo"] = _edge_prefix
 
             # ── Launch Macro Scout (background) ──
             cls._macro_task = None
@@ -167,21 +176,24 @@ class OrchestratorCoreMixin:
                     _auditor.phase_entry(ctx.cycle_id, "macro")
                     try:
                         memo = await run_phase3_macro(cls.emit)
-                        macro_memo_holder["memo"] = memo or ""
+                        # Single atomic assignment — safe for concurrent readers
+                        macro_memo_holder["memo"] = _edge_prefix + (memo or "")
                         logger.info("[CYCLE] Macro scout complete (%d chars)", len(macro_memo_holder["memo"]))
                         _auditor.phase_exit(ctx.cycle_id, "macro", message=f"Macro memo ready ({len(macro_memo_holder['memo'])} chars)")
                     except Exception as e:
                         logger.warning("[CYCLE] Macro scout failed (non-fatal): %s", e)
-                        macro_memo_holder["memo"] = ""
+                        # Keep edge prefix if present, clear the rest
+                        macro_memo_holder["memo"] = _edge_prefix
                         _auditor.phase_exit(ctx.cycle_id, "macro", severity="warning", message=f"Macro scout failed: {e}")
+                    finally:
+                        # Signal readiness regardless of success/failure
+                        macro_memo_holder["_ready"].set()
 
                 cls._macro_task = asyncio.create_task(_macro_scout_bg())
                 logger.info("[CYCLE] Launched macro scout in background")
-
-            # Inject trigger_type context if this is an edge-case trigger
-            if getattr(ctx, "trigger_type", "").startswith("edge_case_"):
-                logger.info("[CYCLE] Injecting edge case context: %s", ctx.trigger_type)
-                macro_memo_holder["memo"] += f"\n\n[URGENT] The bot has woken up specifically because an order trigger was hit: {ctx.trigger_type}. Evaluate this immediately and decide whether to execute the trade, hold, or adjust the trigger.\n\n"
+            else:
+                # No scout needed — signal immediately so workers don't wait
+                macro_memo_holder["_ready"].set()
 
             # ── Analysis Queue (tickers flow from collection → analysis) ──
             # Priority queue ensures portfolio holdings are analyzed first.
@@ -394,6 +406,15 @@ class OrchestratorCoreMixin:
                 status="ok",
                 data=cls._cycle_summary,
             )
+
+            # Fix D.2: Clear checkpoints after successful cycle to prevent unbounded growth
+            try:
+                from app.db.checkpoints import checkpoint_manager
+                cleared = checkpoint_manager.clear_cycle(ctx.cycle_id)
+                if cleared:
+                    logger.info("[CYCLE] Cleared %d checkpoints for completed cycle %s", cleared, ctx.cycle_id[:12])
+            except Exception as cp_err:
+                logger.warning("[CYCLE] Checkpoint cleanup failed (non-fatal): %s", cp_err)
 
         except asyncio.CancelledError:
             # Differentiate between User Stop and Timeout based on elapsed time

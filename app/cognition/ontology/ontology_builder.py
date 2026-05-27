@@ -263,14 +263,34 @@ class BrainGraph:
             }
         """
         with get_db() as db:
-            # Build adjacency from PostgreSQL — include evidence_count for weight boost
-            all_edges = db.execute(
-                "SELECT source_id, target_id, weight, decay, relation, evidence_count FROM ontology_edges"
-            ).fetchall()
-
-            # ── Fast Numpy GNNEngine Integration ──────
+            # Build adjacency from PostgreSQL — filter to edges reachable
+            # from seed nodes within max_hops.  Previous version loaded ALL
+            # edges which caused memory/latency issues with large graphs.
             from app.cognition.ontology.gnn_engine import GNNEngine
             import math
+
+            _seed_ids = list(seed_node_ids)
+            if _seed_ids:
+                # Recursive CTE: find all nodes reachable within max_hops
+                all_edges = db.execute(
+                    """
+                    WITH RECURSIVE reachable AS (
+                        SELECT source_id, target_id, weight, decay, relation, evidence_count, 1 AS depth
+                        FROM ontology_edges
+                        WHERE source_id = ANY(%s) OR target_id = ANY(%s)
+                      UNION
+                        SELECT e.source_id, e.target_id, e.weight, e.decay, e.relation, e.evidence_count, r.depth + 1
+                        FROM ontology_edges e
+                        JOIN reachable r ON (e.source_id = r.target_id OR e.source_id = r.source_id)
+                        WHERE r.depth < %s
+                    )
+                    SELECT DISTINCT source_id, target_id, weight, decay, relation, evidence_count
+                    FROM reachable
+                    """,
+                    [_seed_ids, _seed_ids, max_hops],
+                ).fetchall()
+            else:
+                all_edges = []
 
             nodes = list(
                 set(
@@ -285,6 +305,7 @@ class BrainGraph:
                 for src, tgt, w, _, _, ec in all_edges
             ]
 
+            graph_degraded = False
             try:
                 gnn = GNNEngine(nodes, graph_edges)
                 # Run graph convolutions
@@ -295,9 +316,10 @@ class BrainGraph:
                 )
                 hops_used = max_hops
             except Exception as e:
-                logger.error(f"[BrainGraph] GNNEngine failed, fallback to none: {e}")
+                logger.error("[BrainGraph] GNNEngine failed, fallback to seed-only: %s", e)
                 activations = {seed: 1.0 for seed in seed_node_ids}
                 hops_used = 1
+                graph_degraded = True
 
             # Prune below threshold + limit
             activated = {
@@ -353,6 +375,7 @@ class BrainGraph:
                 "total_activated": len(result_nodes),
                 "hops_used": hops_used,
                 "seed_nodes": seed_node_ids,
+                "graph_degraded": graph_degraded,
             },
         }
 

@@ -180,8 +180,24 @@ def check_portfolio_gate(
         )
         return result
 
-    # Gate 1: Position count cap (Bypassed - removed hardcap rule)
-    pass
+    # Gate 1: Position count cap — prevent spreading cash across too many tickers
+    # Fix C.1: Re-enabled with configurable limit from Trading Constitution
+    if len(positions) >= pos_cap:
+        # Allow adding to existing positions even when at cap
+        if not any(p["ticker"] == ticker for p in positions):
+            result["blocked"] = True
+            result["reason"] = (
+                f"Position count cap reached: {len(positions)}/{pos_cap} positions. "
+                f"Cannot open new position for {ticker}. "
+                f"(Adding to existing positions is still allowed.)"
+            )
+            logger.warning(
+                "[GATE] BLOCKED %s: position count %d >= cap %d",
+                ticker,
+                len(positions),
+                pos_cap,
+            )
+            return result
 
     # Gate 2: Sector concentration
     new_sector = _get_ticker_sector(ticker)

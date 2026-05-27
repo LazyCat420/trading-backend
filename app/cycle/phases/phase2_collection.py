@@ -56,6 +56,9 @@ async def run_phase2_collection(
     except Exception as e:
         logger.error("Collection crashed: %s", e)
         emit("collecting", "fatal", f"Collection crashed: {e}", status="error")
+        # Fix E.1: Signal downstream phases that collection failed so they can
+        # enforce stricter data quality gates instead of analyzing stale data.
+        state["collection_failed"] = True
         # We do not raise here, we allow the cycle to gracefully continue with what it has,
         # or fail gracefully in Phase 4 if tickers are missing data.
         return ctx.tickers
