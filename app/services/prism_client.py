@@ -381,6 +381,7 @@ class PrismClient:
             "agent": self._resolve_prism_agent_id(agent_name),
             "functionCallingEnabled": agentic_mode or bool(tools),
             "agenticLoopEnabled": agentic_mode,
+            "autoApprove": settings.PRISM_AUTO_APPROVE,
             "systemPrompt": system_prompt[:15000],
             "conversationMeta": {
                 "title": title,
@@ -465,6 +466,7 @@ class PrismClient:
             "agent": self._resolve_prism_agent_id(agent_name),
             "functionCallingEnabled": agentic_mode or bool(tools),
             "agenticLoopEnabled": agentic_mode,
+            "autoApprove": settings.PRISM_AUTO_APPROVE,
             "systemPrompt": system_prompt[:15000],
             "conversationMeta": {
                 "title": title,

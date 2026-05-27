@@ -1425,7 +1425,7 @@ class VLLMClient:
 
         # Server-to-server: skip conversation persistence, auto-approve tools
         agent_payload["skipConversation"] = settings.PRISM_SKIP_CONVERSATION
-        agent_payload["autoApprove"] = True
+        agent_payload["autoApprove"] = settings.PRISM_AUTO_APPROVE
 
         # Check if we are running in a mock context (like pytest unit tests)
         from unittest.mock import Mock

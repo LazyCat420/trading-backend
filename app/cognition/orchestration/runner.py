@@ -737,12 +737,12 @@ async def execute_v2_pipeline(
                 watchlist=watchlist or [],
                 held=held,
             ),
-            timeout=120.0,
+            timeout=300.0,
         )
     except asyncio.TimeoutError as te:
-        logger.error("[V2] Thesis generation TIMEOUT for %s (120s)", ticker)
+        logger.error("[V2] Thesis generation TIMEOUT for %s (300s)", ticker)
         emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM TIMEOUT", status="error")
-        raise RuntimeError("Thesis generation timed out after 120s") from te
+        raise RuntimeError("Thesis generation timed out after 300s") from te
     total_tokens += thesis_tokens
     ms6 = elapsed_ms(t6)
     stages.append("thesis_generation")

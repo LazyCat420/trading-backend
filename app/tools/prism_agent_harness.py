@@ -340,6 +340,7 @@ async def run_prism_agent(
 
     # Add metadata for tracking
     payload["conversationMeta"]["title"] = f"Agent: {agent_name} · {ticker}"
+    payload["autoApprove"] = settings.PRISM_AUTO_APPROVE
 
     logger.info(
         "[PrismHarness] Delegating %s to Prism /agent (model=%s, tools=%d, ticker=%s)",

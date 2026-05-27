@@ -1,0 +1,7 @@
+{
+  "action": "SELL",
+  "confidence": 85,
+  "rationale": "The position must be sold immediately as the RSI(14) is 82.14, which strictly exceeds the sell trigger of 70 defined in the trading constitution. This overbought state is confirmed by the Stochastic K value of 100.0, signaling severe exhaustion near the 52-week high. Although the forward P/E is 16.5, the negative revenue growth of -0.06 presents a fundamental risk that outweighs the modest +1.7% unrealized gain. Invalidated if RSI drops below 65 and revenue growth turns positive in the next earn",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

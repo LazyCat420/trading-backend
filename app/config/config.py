@@ -199,6 +199,7 @@ class Settings(BaseSettings):
     PRISM_MONGO_URI: str = "mongodb://10.0.0.16:27017/?directConnection=true"
     PRISM_MONGO_DB: str = "prism"
     PRISM_SKIP_CONVERSATION: bool = False
+    PRISM_AUTO_APPROVE: bool = True
 
     # ── SEC 13F Tracking ──
     SEC_USER_AGENT: str = "vllm-trading-bot analysis@example.com"

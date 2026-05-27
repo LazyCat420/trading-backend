@@ -150,7 +150,7 @@ async def _call_via_prism(
         agentic_mode=agentic_mode,
         provider=provider,
     )
-    payload["autoApprove"] = True
+    payload["autoApprove"] = settings.PRISM_AUTO_APPROVE
     payload["skipConversation"] = False
 
     logger.info(

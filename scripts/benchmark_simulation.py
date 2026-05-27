@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from app.config import settings
 from cycle_main import run_single_cycle
 from app.db.connection import get_db
+from app.services.bot_manager import get_active_bot_id, reset_bot_profile
 
 # Configure logger
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -61,6 +62,14 @@ async def run_benchmark(ticker: str = "NVDA"):
     for idx, sc in enumerate(SCENARIOS):
         logger.info("\n--- Scenario %d/%d: %s ---", idx + 1, len(SCENARIOS), sc["name"])
         
+        # Reset bot profile to clean up portfolio holdings and cash balance
+        try:
+            active_bot = get_active_bot_id()
+            logger.info("Resetting bot profile '%s' for a clean slate...", active_bot)
+            reset_bot_profile(active_bot)
+        except Exception as reset_err:
+            logger.warning("Failed to reset bot profile: %s", reset_err)
+            
         # Configure simulation parameters
         settings.SIMULATION_TREND = sc["trend"]
         settings.SIMULATION_NEWS_SENTIMENT = sc["news_sentiment"]

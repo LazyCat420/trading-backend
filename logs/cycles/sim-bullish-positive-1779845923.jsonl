@@ -1,0 +1,6 @@
+{"cycle_id": "sim-bullish-positive-1779845923", "timestamp": "2026-05-27T01:38:45.613443+00:00", "step": "v2_start", "payload": {"ticker": "NVDA", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "sim-bullish-positive-1779845923", "timestamp": "2026-05-27T01:39:16.823739+00:00", "step": "v2_data_completeness", "payload": {"ticker": "NVDA", "filled": [], "elapsed_ms": 30044}}
+{"cycle_id": "sim-bullish-positive-1779845923", "timestamp": "2026-05-27T01:39:18.569363+00:00", "step": "v2_ontology", "payload": {"ticker": "NVDA", "node_count": 50, "elapsed_ms": 1743}}
+{"cycle_id": "sim-bullish-positive-1779845923", "timestamp": "2026-05-27T01:39:33.730049+00:00", "step": "v2_evidence_build", "payload": {"ticker": "NVDA", "claims": 49, "structured_facts": 46, "sources": 10, "missing_fields": [], "teaser_risk": 0.0, "diversity": 4, "elapsed_ms": 15124}}
+{"cycle_id": "sim-bullish-positive-1779845923", "timestamp": "2026-05-27T01:39:33.743246+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "NVDA", "status": "sufficient", "blockers": [], "warnings": []}}
+{"cycle_id": "sim-bullish-positive-1779845923", "timestamp": "2026-05-27T01:39:33.808057+00:00", "step": "v2_memory_read", "payload": {"ticker": "NVDA", "episodes": 5, "rules": 0}}

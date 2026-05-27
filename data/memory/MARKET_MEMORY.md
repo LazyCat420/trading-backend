@@ -1,1 +1,3 @@
-[NVDA] [MEDIUM] Price at 200-day SMA ($203.75) + RSI(14) < 65 (46.16) = valid HOLD despite negative MACD; position safe if RSI < 70 and price > stop-loss ($183.35).
+[NVDA] [MEDIUM] Price at 200-day SMA ($203.75) + RSI(14) < 65 (46.16) = valid HOLD despite negative MACD; position safe if RSI < 70 and price > stop-loss ($183.35). §
+[NVDA] [HIGH] RSI(14) > 70 + Stoch K = 100 = immediate SELL signal, overriding low P/E when revenue growth is negative (85% confidence). §
+[NVDA] [MEDIUM] RSI(14) < 65 + Forward P/E ~18 + MACD > 0 = BUY signal, even if Stoch K/D=100 (overbought), provided price holds 200-day SMA.

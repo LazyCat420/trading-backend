@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 68,
+  "rationale": "NVDA qualifies for a BUY under the rule 'BUY only if RSI < 65' as the RSI(14) is 64.89 [technical_data], and the Forward P/E of 18.0 [fundamental_data] suggests reasonable valuation despite the stock trading at its 200-day SMA ($198.37) [technical_data]. While the Stochastic oscillator shows extreme overbought conditions (K=100, D=100) [technical_data], the positive MACD histogram (0.92) supports a continuation of the trend in the current regime. This thesis is invalidated if the RSI(14) spikes ",
+  "config_used": "v2_cognition",
+  "escalated": false
+}
