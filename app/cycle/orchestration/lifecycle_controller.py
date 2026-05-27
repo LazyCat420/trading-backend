@@ -291,23 +291,27 @@ class LifecycleControllerMixin:
         from app.services.vllm_client import llm
 
         cycle_control.stop()
-        llm.cancel_active_requests()
+        await llm.abort_active_requests()
 
         for name, task in [
             ("scout", getattr(cls, "_scout_task", None)),
             ("consumer", getattr(cls, "_consumer_task", None)),
             ("checkpoint", getattr(cls, "_checkpoint_task", None)),
+            ("macro", getattr(cls, "_macro_task", None)),
+            ("analysis", getattr(cls, "_analysis_task", None)),
         ]:
             if task and not task.done():
                 logger.info("[CYCLE] Cancelling %s task...", name)
                 task.cancel()
                 try:
-                    await asyncio.wait_for(task, timeout=5.0)
+                    await asyncio.wait_for(task, timeout=1.0)
                 except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
                     pass
         cls._scout_task = None
         cls._consumer_task = None
         cls._checkpoint_task = None
+        cls._macro_task = None
+        cls._analysis_task = None
 
         cycle_task = getattr(cls, "_cycle_task", None)
         if cycle_task is None or cycle_task.done():
@@ -319,7 +323,7 @@ class LifecycleControllerMixin:
         else:
             cycle_task.cancel()
             try:
-                await asyncio.wait_for(cycle_task, timeout=15.0)
+                await asyncio.wait_for(cycle_task, timeout=2.0)
             except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
                 pass
             cls._cycle_task = None
@@ -527,7 +531,7 @@ class LifecycleControllerMixin:
         """
         from app.services.vllm_client import llm
 
-        llm.cancel_active_requests()
+        await llm.abort_active_requests()
 
         # If cycle already completed successfully, skip all checkpoint logic.
         # This prevents uvicorn --reload from overriding "done" to "stopped".
@@ -542,12 +546,16 @@ class LifecycleControllerMixin:
                 ("scout", getattr(cls, "_scout_task", None)),
                 ("consumer", getattr(cls, "_consumer_task", None)),
                 ("checkpoint", getattr(cls, "_checkpoint_task", None)),
+                ("macro", getattr(cls, "_macro_task", None)),
+                ("analysis", getattr(cls, "_analysis_task", None)),
             ]:
                 if task and not task.done():
                     task.cancel()
             cls._scout_task = None
             cls._consumer_task = None
             cls._checkpoint_task = None
+            cls._macro_task = None
+            cls._analysis_task = None
             cls._cycle_task = None
             return
 
@@ -555,18 +563,22 @@ class LifecycleControllerMixin:
             ("scout", getattr(cls, "_scout_task", None)),
             ("consumer", getattr(cls, "_consumer_task", None)),
             ("checkpoint", getattr(cls, "_checkpoint_task", None)),
+            ("macro", getattr(cls, "_macro_task", None)),
+            ("analysis", getattr(cls, "_analysis_task", None)),
         ]:
             if task and not task.done():
                 task.cancel()
         cls._scout_task = None
         cls._consumer_task = None
         cls._checkpoint_task = None
+        cls._macro_task = None
+        cls._analysis_task = None
 
         cycle_task = getattr(cls, "_cycle_task", None)
         if cycle_task and not cycle_task.done():
             cycle_task.cancel()
             try:
-                await asyncio.wait_for(cycle_task, timeout=15.0)
+                await asyncio.wait_for(cycle_task, timeout=2.0)
             except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
                 pass
             cls._cycle_task = None

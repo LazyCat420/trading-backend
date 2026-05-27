@@ -1,1 +1,1 @@
-[NVDA] [MEDIUM] RSI(14) < 65 + Price = 200-day SMA + Forward P/E < 1.5x sector = reliable HOLD signal for profitable positions, avoiding premature exits despite bearish short-term MAs.
+[NVDA] [MEDIUM] Price at 200-day SMA ($203.75) + RSI(14) < 65 (46.16) = valid HOLD despite negative MACD; position safe if RSI < 70 and price > stop-loss ($183.35).

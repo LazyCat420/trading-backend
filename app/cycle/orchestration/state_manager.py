@@ -464,6 +464,8 @@ class PipelineStateMixin:
     _scout_task = None
     _consumer_task = None
     _checkpoint_task = None
+    _macro_task = None
+    _analysis_task = None
     _cycle_summary = {}
 
     _emit_events = []

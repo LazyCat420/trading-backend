@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 75,
+  "rationale": "The position is held because the stock is trading at its 200-day SMA ($203.75), a key technical support level, while the RSI(14) of 46.16 remains safely below the 65 overbought threshold, preventing a mandatory sell signal. Although the MACD is negative and the price is below the 50-day moving average, the current +3.0% unrealized gain keeps the position comfortably above the stop-loss at $183.35. This decision is invalidated if the price closes below the SMA_200 or if the RSI rises above 70, wh",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

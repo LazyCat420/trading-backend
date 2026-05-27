@@ -87,6 +87,8 @@ class OrchestratorCoreMixin:
                 ("scout", getattr(cls, "_scout_task", None)),
                 ("consumer", getattr(cls, "_consumer_task", None)),
                 ("checkpoint", getattr(cls, "_checkpoint_task", None)),
+                ("macro", getattr(cls, "_macro_task", None)),
+                ("analysis", getattr(cls, "_analysis_task", None)),
                 ("autoresearch", getattr(cls, "_autoresearch_task", None)),
             ]:
                 if task and not task.done():
@@ -94,6 +96,8 @@ class OrchestratorCoreMixin:
             cls._scout_task = None
             cls._consumer_task = None
             cls._checkpoint_task = None
+            cls._macro_task = None
+            cls._analysis_task = None
             cls._autoresearch_task = None
 
             # Re-pause the system so background tasks go dormant
@@ -157,7 +161,7 @@ class OrchestratorCoreMixin:
             macro_memo_holder = {"memo": ""}
 
             # ── Launch Macro Scout (background) ──
-            macro_task = None
+            cls._macro_task = None
             if ctx.collect and not _skip_collect:
                 async def _macro_scout_bg():
                     _auditor.phase_entry(ctx.cycle_id, "macro")
@@ -171,7 +175,7 @@ class OrchestratorCoreMixin:
                         macro_memo_holder["memo"] = ""
                         _auditor.phase_exit(ctx.cycle_id, "macro", severity="warning", message=f"Macro scout failed: {e}")
 
-                macro_task = asyncio.create_task(_macro_scout_bg())
+                cls._macro_task = asyncio.create_task(_macro_scout_bg())
                 logger.info("[CYCLE] Launched macro scout in background")
 
             # Inject trigger_type context if this is an edge-case trigger
@@ -192,7 +196,7 @@ class OrchestratorCoreMixin:
                 )
 
             # ── Launch Analysis Workers (background, consumes from queue) ──
-            analysis_task = None
+            cls._analysis_task = None
             if ctx.analyze and not _skip_analyze:
                 cls._state["status"] = "started"
                 cls.emit("started", "concurrent", "Starting concurrent collection + analysis", status="ok")
@@ -221,7 +225,7 @@ class OrchestratorCoreMixin:
                         ctx.cycle_id, "analyzing", results_count=len(results)
                     )
 
-                analysis_task = asyncio.create_task(_analysis_bg())
+                cls._analysis_task = asyncio.create_task(_analysis_bg())
                 logger.info("[CYCLE] Launched analysis workers in background (consuming from queue)")
 
                 # Tickers are now pushed to the analysis queue concurrently as they finish
@@ -298,17 +302,17 @@ class OrchestratorCoreMixin:
                 )
 
             # ── Wait for macro scout to finish ──
-            if macro_task is not None:
+            if cls._macro_task is not None:
                 try:
-                    await asyncio.wait_for(macro_task, timeout=330.0)  # 5.5min safety
+                    await asyncio.wait_for(cls._macro_task, timeout=330.0)  # 5.5min safety
                 except asyncio.TimeoutError:
                     logger.warning("[CYCLE] Macro scout safety timeout — proceeding without")
-                    macro_task.cancel()
+                    cls._macro_task.cancel()
 
             # ── Wait for analysis workers to finish ──
-            if analysis_task is not None:
+            if cls._analysis_task is not None:
                 cls._state["status"] = "analyzing"
-                await analysis_task
+                await cls._analysis_task
 
             # ── Phase 5: Trading (MUST wait for all analysis) ──
             trade_result = None

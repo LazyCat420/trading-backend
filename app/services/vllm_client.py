@@ -2882,6 +2882,32 @@ class VLLMClient:
             logger.info("[VLLM] Cancelled %d active background requests", cancelled_count)
         return cancelled_count
 
+    async def abort_active_requests(self) -> int:
+        """Cancel all active background requests and close HTTP clients to force socket closure."""
+        cancelled_count = self.cancel_active_requests()
+        self.drain_queues()
+        
+        # Force-close the direct HTTP client to terminate any active connections immediately.
+        # This signals to vLLM's internal server (via TCP connection drop) to abort processing.
+        if self._client and not self._client.is_closed:
+            logger.info("[VLLM] Force closing direct HTTP client to terminate active connections")
+            try:
+                await self._client.aclose()
+            except Exception as e:
+                logger.warning("[VLLM] Error closing direct client: %s", e)
+            self._client = None
+            
+        # Also close the Prism client's shared HTTP client if present.
+        if hasattr(self, "prism_client") and self.prism_client and getattr(self.prism_client, "_client", None) and not self.prism_client._client.is_closed:
+            logger.info("[PRISM] Force closing Prism HTTP client to terminate active connections")
+            try:
+                await self.prism_client._client.aclose()
+            except Exception as e:
+                logger.warning("[PRISM] Error closing Prism client: %s", e)
+            self.prism_client._client = None
+            
+        return cancelled_count
+
     # ── CRITICAL: Provider and Model Resolution ──
     # NEVER ALTER OR DELETE THESE FUNCTIONS! They govern the routing between Gold Spark and Jetson.
     # Changing them will break the agent routing, causing 122B requests to be sent to Jetson and fail.
@@ -2950,9 +2976,8 @@ class VLLMClient:
 
     async def close(self):
         """Shutdown the persistent HTTP client and dispatchers."""
-        # Cancel and drain active/queued requests first
-        self.cancel_active_requests()
-        self.drain_queues()
+        # Cancel and drain active/queued requests first, and close TCP connections
+        await self.abort_active_requests()
         # Wait for active tasks to finalize/cancel
         if self._active_tasks:
             await asyncio.gather(*self._active_tasks, return_exceptions=True)
@@ -2975,9 +3000,6 @@ class VLLMClient:
                 await self._rediscovery_task
             except asyncio.CancelledError:
                 pass
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
-            self._client = None
 
 
 # Singleton — import this everywhere
