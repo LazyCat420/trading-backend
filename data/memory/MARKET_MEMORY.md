@@ -1,1 +1,1 @@
-[AAPL] [HIGH] RSI(14) > 70 + price within 1% of 52-week high = reliable SELL signal indicating momentum exhaustion and overbought conditions.
+[NVDA] [MEDIUM] RSI(14) < 65 + Price = 200-day SMA + Forward P/E < 1.5x sector = reliable HOLD signal for profitable positions, avoiding premature exits despite bearish short-term MAs.

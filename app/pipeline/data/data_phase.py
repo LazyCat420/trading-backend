@@ -87,6 +87,33 @@ async def run(
         "failed_collectors": [],
     }
 
+    from app.config import settings
+    if getattr(settings, "EXECUTION_MODE", "production") == "simulation":
+        logger.info("[PIPELINE] [DATA PHASE] Running in SIMULATION mode.")
+        emit("collecting", "simulation_start", f"Running World Simulator for {len(tickers)} tickers...", status="running")
+        
+        # 1. Generate the simulated data
+        from app.pipeline.data.world_simulator import generate_simulated_world
+        generate_simulated_world(tickers, settings.SIMULATION_TREND, settings.SIMULATION_NEWS_SENTIMENT)
+        
+        # 2. Push tickers to analysis queue if provided
+        if analysis_queue is not None:
+            for t in tickers:
+                analysis_queue.put_nowait(t)
+            logger.info("[PIPELINE] Pushed all %d tickers to analysis queue.", len(tickers))
+            
+        _total_ms = int((time.monotonic() - start) * 1000)
+        results["total_ms"] = _total_ms
+        results["collector_ok"] = len(tickers)
+        
+        emit("collecting", "complete", f"Data simulation complete: {_total_ms / 1000:.1f}s total, {len(tickers)} tickers", data={
+            "total_ms": _total_ms,
+            "collector_count": 1,
+            "processor_count": 0,
+            "tickers": tickers,
+        })
+        return results
+
     logger.info(f"[PIPELINE] \n{'=' * 60}")
     logger.info(
         f"[PIPELINE] DATA PHASE: {len(tickers)} watchlist tickers"

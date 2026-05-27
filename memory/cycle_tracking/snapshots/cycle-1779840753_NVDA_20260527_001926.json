@@ -1,0 +1,7 @@
+{
+  "action": "BUY",
+  "confidence": 75,
+  "rationale": "The technical setup supports a BUY as 'RSI(14): 31.14' indicates the asset is oversold and well below the 65 threshold required by our rules, while the 'forward_pe: 28.0' suggests reasonable valuation relative to growth despite the 'revenue_growth: 0.22' slowing from previous hyper-growth phases. Although the market regime shows conflicting sentiment and divergent price targets, the price of $197.86 is supported by the 200-day SMA, providing a logical entry point before a potential mean reversio",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     PIPELINE_BENCHMARK_GROUP: str = "baseline"
     MACRO_SCOUT_ENABLED: bool = True  # enable/disable macro strategy scout
 
+    # ── World Simulator ──
+    EXECUTION_MODE: str = "production"  # "production" | "staging" | "simulation"
+    SIMULATION_TREND: str = "bullish"  # "bullish" | "bearish" | "neutral" | "volatile"
+    SIMULATION_NEWS_SENTIMENT: str = "positive"  # "positive" | "negative" | "neutral"
+
     # ── Queue & Utility ──
     PIPELINE_QUEUE_HIGH_WATERMARK: int = 200
     PIPELINE_QUEUE_LOW_WATERMARK: int = 100

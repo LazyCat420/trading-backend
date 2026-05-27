@@ -1,0 +1,7 @@
+{
+  "action": "HOLD",
+  "confidence": 75,
+  "rationale": "The position should be held as it is currently profitable (+3.0%) and the RSI(14) is at 44.96, which is safely below the 65 threshold required for a BUY and far from the 70 sell trigger. The current price of $203.76 aligns exactly with the 200-day SMA, providing a technical support level, while the forward P/E of 28.0 does not yet exceed the 1.5x sector average sell condition. Although short-term moving averages are bearish, the lack of overbought conditions and the presence of a stop-loss at $1",
+  "config_used": "v2_cognition",
+  "escalated": false
+}

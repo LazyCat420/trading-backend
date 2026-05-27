@@ -56,6 +56,7 @@ def run_migrations(conn):
     _safe_add_column(conn, "news_articles", "quality_status", "TEXT")
     _safe_add_column(conn, "news_articles", "quality_reason", "TEXT")
     _safe_add_column(conn, "news_articles", "quality_score", "INTEGER")
+    _safe_add_column(conn, "news_articles", "is_cluster_winner", "BOOLEAN")
     _safe_add_column(conn, "reddit_posts", "collected_at", "TIMESTAMPTZ")
     _safe_add_column(conn, "reddit_posts", "quality_status", "TEXT")
     _safe_add_column(conn, "reddit_posts", "quality_reason", "TEXT")
