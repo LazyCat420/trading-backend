@@ -99,9 +99,16 @@ async def execute_v2_pipeline(
     from app.pipeline.data.data_completeness import check_and_fill
 
     try:
-        data_report = await asyncio.wait_for(check_and_fill(ticker, emit=emit), timeout=30.0)
+        # Reduced from 30s to 10s — check_and_fill was consistently timing out
+        # at exactly 30s, adding dead time to every ticker. The evidence packet
+        # builder (Step 2) independently checks data quality and fills gaps.
+        data_report = await asyncio.wait_for(check_and_fill(ticker, emit=emit), timeout=10.0)
     except asyncio.TimeoutError:
-        logger.warning("[V2] Data completeness TIMEOUT for %s (30s) — proceeding without gap fill", ticker)
+        logger.warning(
+            "[V2] Data completeness TIMEOUT for %s (10s) — this check consistently times out. "
+            "Proceeding without gap fill; evidence packet builder will handle data quality.",
+            ticker,
+        )
         data_report = {}
     ms0 = elapsed_ms(t0)
     filled = data_report.get("filled", [])
@@ -419,16 +426,32 @@ async def execute_v2_pipeline(
             timeout=60.0,
         )
     except asyncio.TimeoutError:
-        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (60s) — proceeding without agent insights", ticker)
-        agent_insights, orch_tokens = {}, 0
-        emit("analyzing", f"v2_orchestrator_timeout_{ticker}", f"{ticker}: MetaOrchestrator TIMEOUT", status="warning")
+        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (60s) — injecting fallback context", ticker)
+        # Instead of proceeding with zero context, inject a synthetic fallback
+        # that tells the thesis agent to rely on evidence packet data only.
+        # This prevents EMPTY_SIGNAL (confidence=0, claims=0) from flowing downstream.
+        agent_insights = {
+            "orchestrator_fallback": (
+                "# ORCHESTRATOR TIMEOUT — EVIDENCE-ONLY MODE\n"
+                "The specialist agent orchestrator timed out. You MUST base your analysis "
+                "ENTIRELY on the structured facts, claims, and source summaries in the "
+                "evidence packet. Weigh the data carefully and produce a well-reasoned "
+                "thesis despite the lack of specialist agent insights.\n"
+                "Do NOT output zero claims or zero confidence — the evidence packet contains "
+                "real data that should be analyzed."
+            ),
+        }
+        orch_tokens = 0
+        emit("analyzing", f"v2_orchestrator_timeout_{ticker}", f"{ticker}: MetaOrchestrator TIMEOUT — fallback context injected", status="warning")
     total_tokens += orch_tokens
     ms_orch = elapsed_ms(t_orch)
     stages.append("meta_orchestration")
+    _orchestrator_had_agents = bool(agent_insights) and not agent_insights.get("orchestrator_fallback")
     log_manager.log_v2_cycle(cycle_id, "v2_meta_orchestration", {
         "ticker": ticker, "agent_count": len(agent_insights) if agent_insights else 0,
         "agent_keys": list(agent_insights.keys()) if agent_insights else [],
         "tokens": orch_tokens, "elapsed_ms": ms_orch,
+        "fallback": not _orchestrator_had_agents,
     })
 
     if agent_insights:
@@ -503,7 +526,28 @@ async def execute_v2_pipeline(
         logger.debug("[V2] TaskBoard read failed for %s (non-fatal): %s", ticker, tb_err)
 
     debate_result = None
-    try:
+
+    # ── Skip debate when MetaOrchestrator failed (0 real agents) ──
+    # Debate with zero agent insights is meaningless and burns 180s of GPU time.
+    # When only Jetson is available, this 180s pushes thesis generation past its
+    # 300s timeout, crashing the entire ticker. Skip debate and let thesis use
+    # the evidence packet directly.
+    _skip_debate = not _orchestrator_had_agents
+    if _skip_debate:
+        logger.info(
+            "[V2] Skipping adversarial debate for %s — MetaOrchestrator produced 0 real agents. "
+            "Saving ~180s GPU time for thesis generation.",
+            ticker,
+        )
+        emit(
+            "analyzing",
+            f"v2_debate_skip_{ticker}",
+            f"{ticker}: Debate SKIPPED — MetaOrchestrator had 0 agents (saving GPU for thesis)",
+            status="warning",
+        )
+
+    if not _skip_debate:
+      try:
         from app.cognition.debate.debate_coordinator import (
             run_adversarial_debate,
         )
@@ -576,7 +620,7 @@ async def execute_v2_pipeline(
                 f"{ticker}: Debate skipped (disabled or no analyst endpoints)",
                 status="warning",
             )
-    except Exception as e:
+      except Exception as e:
         logger.warning(
             "[V2] Adversarial debate failed for %s (non-fatal): %s", ticker, e
         )
@@ -771,7 +815,7 @@ async def execute_v2_pipeline(
         logger.warning(
             "[V2] ⚠️ EMPTY_SIGNAL for %s: action=%s confidence=0 claims=0 "
             "tokens=%d — treating as pipeline failure, NOT a valid signal. "
-            "This usually means MetaOrchestrator returned 0 agents.",
+            "Forcing HOLD fallback to prevent garbage signal from reaching trading phase.",
             ticker,
             thesis.action,
             thesis_tokens,
@@ -782,10 +826,26 @@ async def execute_v2_pipeline(
             "tokens": thesis_tokens,
             "reason": "confidence_0_no_claims",
         })
-
-    final_action = thesis.action
-    final_confidence = thesis.confidence
-    final_rationale = thesis.rationale
+        # Force HOLD fallback — EMPTY_SIGNAL is a pipeline failure, not a valid trading decision
+        from app.cognition.debate.action_gate import gate_action
+        final_action = gate_action("HOLD", held)
+        final_confidence = 0
+        final_rationale = (
+            f"⚠️ PIPELINE FAILURE (EMPTY_SIGNAL): Thesis returned confidence=0 with 0 claims. "
+            f"Original action was {thesis.action}. This is NOT a valid trading signal — "
+            f"the analysis pipeline failed to produce meaningful output. "
+            f"Defaulting to {final_action} to prevent erroneous trades."
+        )
+        emit(
+            "analyzing",
+            f"v2_empty_signal_{ticker}",
+            f"⚠️ {ticker}: EMPTY_SIGNAL detected — forced {final_action} (pipeline failure)",
+            status="error",
+        )
+    else:
+        final_action = thesis.action
+        final_confidence = thesis.confidence
+        final_rationale = thesis.rationale
 
     # \u2500\u2500 Step 6.5: Hallucination Checker (Hard Safety Gate) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     hallucination_result = None

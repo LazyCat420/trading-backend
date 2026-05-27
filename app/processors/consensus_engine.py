@@ -199,10 +199,18 @@ async def run_consensus_engine(emit: Callable | None = None, ticker: str | None 
         return ticker, result
 
     results = await asyncio.gather(*(process_ticker(t, a) for t, a in tasks))
-    
+    # Filter out None results from failed consensus generations to prevent
+    # downstream NoneType errors (e.g. "object of type 'NoneType' has no len()")
+    results = [r for r in results if r is not None]
+
+    if not results:
+        logger.info("[CONSENSUS] Complete. All consensus attempts returned empty results.")
+        emit("consensus", "finished", "Consensus finished: all attempts returned empty.", status="ok")
+        return metrics
+
     with get_db() as db:
         for res in results:
-            if not res or not res[1]:
+            if not res[1]:
                 continue
             
             ticker, consensus_data = res
