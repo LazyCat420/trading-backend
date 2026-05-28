@@ -40,6 +40,12 @@ if os.path.isdir(SHARED_CODE) and SHARED_CODE not in sys.path:
 
 logger = logging.getLogger("cycle_backend")
 
+from app.cycle.orchestration.state_manager import PipelineStateMixin
+from app.cycle.orchestration.orchestrator_core import OrchestratorCoreMixin
+
+class CycleEngine(OrchestratorCoreMixin, PipelineStateMixin):
+    pass
+
 
 async def run_single_cycle(
     tickers: list[str] | None = None,
@@ -49,13 +55,8 @@ async def run_single_cycle(
     """Execute one full trading cycle and return the summary."""
     from app.services.boot_service import BootService
     from app.cycle.core import PipelineContext
-    from app.cycle.orchestration.state_manager import PipelineStateMixin
-    from app.cycle.orchestration.orchestrator_core import OrchestratorCoreMixin
     from app.services.bot_manager import resolve_bot_id
     from unittest.mock import MagicMock
-
-    class CycleEngine(OrchestratorCoreMixin, PipelineStateMixin):
-        pass
 
     if not cycle_id:
         cycle_id = f"cycle-{int(time.time())}"
@@ -119,7 +120,7 @@ async def run_single_cycle(
             )
             return {"cycle_id": cycle_id, "status": "error", "error": str(e)}
     finally:
-        pass
+        await BootService.shutdown()
 
 
 _background_tasks = set()
@@ -161,7 +162,7 @@ async def poll_system_commands(shutdown: asyncio.Event):
                     payload = json.loads(payload_val) if isinstance(payload_val, str) else (payload_val or {})
                     result = None
                     
-                    logger.info(f"[cycle_backend] Processing command {cmd_type} ({job_id})")
+                    logger.info("[cycle_backend] Processing command %s (%s)", cmd_type, job_id)
                     
                     if cmd_type == "START_CYCLE":
                         from app.services.pipeline_service import PipelineService
@@ -275,9 +276,9 @@ async def poll_system_commands(shutdown: asyncio.Event):
                             "UPDATE system_commands SET status = 'completed', completed_at = CURRENT_TIMESTAMP, result = %s WHERE id = %s", 
                             [json.dumps(result), job_id]
                         )
-                    logger.info(f"[cycle_backend] Completed command {job_id}")
+                    logger.info("[cycle_backend] Completed command %s", job_id)
                 except BaseException as e:
-                    logger.error(f"[cycle_backend] Command {job_id} failed: {e}")
+                    logger.error("[cycle_backend] Command %s failed: %s", job_id, e)
                     with get_db() as db:
                         db.execute(
                             "UPDATE system_commands SET status = 'error', completed_at = CURRENT_TIMESTAMP, error_message = %s WHERE id = %s", 
@@ -296,22 +297,28 @@ async def poll_system_commands(shutdown: asyncio.Event):
             pass
 
 
-async def run_worker(tickers: list[str] | None = None) -> None:
+async def run_worker(
+    tickers: list[str] | None = None,
+    shutdown_event: asyncio.Event | None = None,
+) -> None:
     """Run the backend worker (scheduler + poller) until shutdown."""
     from app.services.boot_service import BootService
     
-    shutdown = asyncio.Event()
+    if shutdown_event is None:
+        shutdown = asyncio.Event()
 
-    def _request_shutdown():
-        logger.info("[cycle_backend] Shutdown requested...")
-        shutdown.set()
+        def _request_shutdown():
+            logger.info("[cycle_backend] Shutdown requested...")
+            shutdown.set()
 
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, _request_shutdown)
-        except NotImplementedError:
-            signal.signal(sig, lambda s, f: _request_shutdown())
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, _request_shutdown)
+            except NotImplementedError:
+                signal.signal(sig, lambda s, f: _request_shutdown())
+    else:
+        shutdown = shutdown_event
 
     # Start boot sequence (including DB connection & Schema init, Reset Application State, and Scheduler Start)
     await BootService.startup()
@@ -330,9 +337,16 @@ async def run_worker(tickers: list[str] | None = None) -> None:
                 task.cancel()
         await asyncio.gather(*_background_tasks, return_exceptions=True)
 
-    # Cleanup
+    # Cleanup poller task
+    poller_task.cancel()
+    try:
+        await poller_task
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.error("[cycle_backend] Error during poller task cleanup: %s", e)
+
     await BootService.shutdown()
-    await poller_task
 
 
 async def start_health_server(shutdown_event: asyncio.Event):
@@ -397,6 +411,7 @@ def main():
             shutdown = asyncio.Event()
             
             def _request_shutdown():
+                logger.info("[cycle_backend] Shutdown requested (daemon/all mode)...")
                 shutdown.set()
 
             loop = asyncio.get_running_loop()
@@ -406,7 +421,7 @@ def main():
                 except NotImplementedError:
                     pass
 
-            worker_task = asyncio.create_task(run_worker(tickers=tickers))
+            worker_task = asyncio.create_task(run_worker(tickers=tickers, shutdown_event=shutdown))
             health_task = asyncio.create_task(start_health_server(shutdown))
             
             await asyncio.gather(worker_task, health_task)

@@ -59,7 +59,7 @@ class TestSellDefensiveGuard:
 
     @pytest.mark.asyncio
     async def test_sell_skips_when_not_held(self):
-        """SELL decision for a ticker not in portfolio → skipped, counted as 'holds'."""
+        """SELL decision for a ticker not in portfolio → skipped, counted as 'sell_skipped'."""
         portfolio = _make_portfolio(positions=[], cash=100_000.0)
         decisions = [_make_decision("AAPL", action="SELL")]
 
@@ -67,8 +67,9 @@ class TestSellDefensiveGuard:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock) as mock_sell, \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(100.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
@@ -76,8 +77,8 @@ class TestSellDefensiveGuard:
 
         # sell() should never be called
         mock_sell.assert_not_called()
-        assert result["counts"]["holds"] == 1, (
-            f"Expected holds=1 for SELL of unheld ticker, got {result['counts']}"
+        assert result["counts"]["sell_skipped"] == 1, (
+            f"Expected sell_skipped=1 for SELL of unheld ticker, got {result['counts']}"
         )
         assert len(result["skipped"]) == 1
         assert "no open position" in result["skipped"][0]["reason"].lower()
@@ -95,15 +96,16 @@ class TestSellDefensiveGuard:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock) as mock_sell, \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(100.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
             result = await execute_decisions(decisions, bot_id="test-bot", cycle_id="test-sell-2")
 
         mock_sell.assert_not_called()
-        assert result["counts"]["holds"] == 1
+        assert result["counts"]["sell_skipped"] == 1
 
 
 # ============================================================================
@@ -133,12 +135,13 @@ class TestSellExecution:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock, return_value=sell_result) as mock_sell, \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(165.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
-             patch("app.pipeline.analysis.outcome_tracker.resolve_outcome", return_value={"outcome": "WIN", "pnl_pct": 10.0}), \
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
+             patch("app.cycle.trading_phase.resolve_outcome", return_value={"outcome": "WIN", "pnl_pct": 10.0}), \
              patch("app.services.pipeline_service.PipelineService.emit"), \
-             patch("app.cycle.attention_tracker.record_trade"):
+             patch("app.cycle.trading_phase.record_trade"):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
@@ -179,12 +182,13 @@ class TestSellOutcomeResolution:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock, return_value=sell_result), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(900.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
-             patch("app.pipeline.analysis.outcome_tracker.resolve_outcome", return_value={"outcome": "WIN", "pnl_pct": 12.5}) as mock_resolve, \
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
+             patch("app.cycle.trading_phase.resolve_outcome", return_value={"outcome": "WIN", "pnl_pct": 12.5}) as mock_resolve, \
              patch("app.services.pipeline_service.PipelineService.emit"), \
-             patch("app.cycle.attention_tracker.record_trade"):
+             patch("app.cycle.trading_phase.record_trade"):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
@@ -214,12 +218,13 @@ class TestSellOutcomeResolution:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock, return_value=sell_result), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(275.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
-             patch("app.pipeline.analysis.outcome_tracker.resolve_outcome", side_effect=Exception("DB connection lost")), \
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
+             patch("app.cycle.trading_phase.resolve_outcome", side_effect=Exception("DB connection lost")), \
              patch("app.services.pipeline_service.PipelineService.emit"), \
-             patch("app.cycle.attention_tracker.record_trade"):
+             patch("app.cycle.trading_phase.record_trade"):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
@@ -278,12 +283,13 @@ class TestSellPortfolioRefresh:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock, return_value=sell_result), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(165.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
-             patch("app.pipeline.analysis.outcome_tracker.resolve_outcome", return_value=None), \
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
+             patch("app.cycle.trading_phase.resolve_outcome", return_value=None), \
              patch("app.services.pipeline_service.PipelineService.emit"), \
-             patch("app.cycle.attention_tracker.record_trade"):
+             patch("app.cycle.trading_phase.record_trade"):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
@@ -316,9 +322,10 @@ class TestSellTimeout:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock, side_effect=asyncio.TimeoutError()), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(170.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
@@ -342,9 +349,10 @@ class TestSellTimeout:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock, side_effect=Exception("DB write failed")), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(500.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
@@ -373,7 +381,7 @@ class TestSellSequentialExecution:
         )
 
         sell_calls = []
-        async def track_sell(bot_id, ticker, cycle_id=""):
+        async def track_sell(bot_id, ticker, cycle_id="", qty_pct=1.0):
             sell_calls.append(ticker)
             return {
                 "ticker": ticker,
@@ -393,12 +401,13 @@ class TestSellSequentialExecution:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock, side_effect=track_sell), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(100.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
-             patch("app.pipeline.analysis.outcome_tracker.resolve_outcome", return_value=None), \
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
+             patch("app.cycle.trading_phase.resolve_outcome", return_value=None), \
              patch("app.services.pipeline_service.PipelineService.emit"), \
-             patch("app.cycle.attention_tracker.record_trade"):
+             patch("app.cycle.trading_phase.record_trade"):
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
@@ -445,12 +454,13 @@ class TestSellLowIntegrity:
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock, return_value=sell_result) as mock_sell, \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(190.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
-             patch("app.pipeline.analysis.outcome_tracker.resolve_outcome", return_value=None), \
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "sell_pct": 100}), \
+             patch("app.cycle.trading_phase.resolve_outcome", return_value=None), \
              patch("app.services.pipeline_service.PipelineService.emit"), \
-             patch("app.cycle.attention_tracker.record_trade"), \
+             patch("app.cycle.trading_phase.record_trade"), \
              patch("app.db.connection.get_db") as mock_get_db:
             mock_cc.wait_if_paused = AsyncMock()
             # Mock the quarantine DB write

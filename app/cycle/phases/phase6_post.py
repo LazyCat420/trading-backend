@@ -1,8 +1,11 @@
 import logging
 import json
 import asyncio
+import uuid
+from datetime import datetime, timezone
 from typing import Callable
 
+from app.config import settings
 from app.db.connection import get_db
 from app.services.memory.cycle_closer import cycle_closer
 from app.agents.post_mortem_auditor_agent import run_post_mortem
@@ -167,8 +170,6 @@ async def run_phase6_post(
                             stored["estimate"] = result["estimate"]
                         updates.append((json.dumps(stored), ctx.cycle_id, ticker))
                     else:
-                        import uuid
-                        from datetime import datetime, timezone
                         result_id = str(uuid.uuid4())
                         inserts.append((
                             result_id,
@@ -205,7 +206,7 @@ async def run_phase6_post(
     # 2. Purge Pass — bounded housekeeping (no more fire-and-forget zombies)
     # All background tasks are gathered with a strict timeout so they can't
     # leak and keep the event loop alive for hours after the cycle ends.
-    _HOUSEKEEPING_TIMEOUT = 300  # seconds — hard cap on all post-cycle work
+    _HOUSEKEEPING_TIMEOUT = settings.POST_CYCLE_HOUSEKEEPING_TIMEOUT_SECONDS
 
     if ctx.analyze:
         async def _bg_purge():
@@ -252,49 +253,27 @@ async def run_phase6_post(
             except Exception as bench_err:
                 logger.error("Benchmark recording failed: %s", bench_err)
 
-        # ── Housekeeping: gathered with strict timeout (no orphan tasks) ──
-        emit("purge", "start", "Launching bounded housekeeping...", status="ok")
+        # ── Housekeeping & Post-cycle agents: gathered with strict timeout (no orphan tasks) ──
+        emit("purge", "start", "Launching bounded housekeeping and post-cycle agents...", status="ok")
+        bot_id_resolved = resolve_bot_id(bot_id)
         await run_with_timeout(
             asyncio.gather(
                 _bg_purge(),
                 _bg_knowledge_purge(),
                 _bg_janitor(),
                 _bg_benchmarks(),
+                safe_agent(
+                    run_meta_audit(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
+                    "meta_audit",
+                    cycle_id=ctx.cycle_id,
+                ),
+                safe_agent(
+                    run_quant_research(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
+                    "quant_research",
+                    cycle_id=ctx.cycle_id,
+                ),
                 return_exceptions=True,
             ),
             timeout=_HOUSEKEEPING_TIMEOUT,
-            label="housekeeping",
-        )
-
-        # ── Post-cycle agents: gathered with strict timeout (no orphan tasks) ──
-        async def _run_post_cycle_agents():
-            try:
-                bot_id_resolved = resolve_bot_id(bot_id)
-
-                await asyncio.gather(
-                    safe_agent(
-                        run_meta_audit(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
-                        "meta_audit",
-                        cycle_id=ctx.cycle_id,
-                    ),
-                    safe_agent(
-                        run_quant_research(cycle_id=ctx.cycle_id, bot_id=bot_id_resolved),
-                        "quant_research",
-                        cycle_id=ctx.cycle_id,
-                    ),
-                    return_exceptions=True,
-                )
-            except Exception as agent_err:
-                logger.warning("Post-cycle agents failed (non-fatal): %s", agent_err)
-
-        emit(
-            "evaluated",
-            "post_cycle_agents",
-            "Running post-cycle agents (bounded)...",
-            status="ok",
-        )
-        await run_with_timeout(
-            _run_post_cycle_agents(),
-            timeout=_HOUSEKEEPING_TIMEOUT,
-            label="post_cycle_agents",
+            label="housekeeping_and_agents",
         )

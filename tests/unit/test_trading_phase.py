@@ -16,6 +16,7 @@ def mock_trading_deps():
          patch("app.cycle.trading_phase.buy", new_callable=AsyncMock) as mock_buy, \
          patch("app.cycle.trading_phase.sell", new_callable=AsyncMock) as mock_sell, \
          patch("app.cycle.trading_phase.check_portfolio_gate") as mock_gate, \
+         patch("app.cycle.trading_phase._get_current_price") as mock_price, \
          patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock) as mock_alloc, \
          patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock) as mock_exec:
         
@@ -26,6 +27,7 @@ def mock_trading_deps():
             "position_count": 0
         }
         mock_gate.return_value = {"blocked": False, "warnings": []}
+        mock_price.return_value = (150.0, None)
         mock_alloc.return_value = {}
         mock_exec.return_value = {"decision": "APPROVE"}
         mock_buy.return_value = {"qty": 10, "price": 150.0, "amount": 1500.0}
@@ -36,6 +38,7 @@ def mock_trading_deps():
             "buy": mock_buy,
             "sell": mock_sell,
             "gate": mock_gate,
+            "price": mock_price,
             "allocator": mock_alloc,
             "executor": mock_exec
         }

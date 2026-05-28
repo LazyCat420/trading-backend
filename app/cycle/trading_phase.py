@@ -44,8 +44,6 @@ def get_size_pct(confidence: int) -> float:
     )
 
 
-# Keep old name for internal usage
-_get_size_pct = get_size_pct
 
 
 def estimate_trade(confidence: int, cash: float, current_price: float) -> dict:
@@ -135,6 +133,7 @@ async def execute_decisions(
 
         # Always refresh portfolio at the start of each iteration to avoid stale snapshots
         portfolio = get_portfolio(bot_id)
+        held_tickers = [p["ticker"] for p in portfolio.get("positions", [])]
 
         ticker = d.get("ticker", "???")
         action = d.get("action", "HOLD")
@@ -151,7 +150,6 @@ async def execute_decisions(
             continue
 
         # ── Check HOLD advisory early to support CONVERT_SELL path ──
-        held_tickers = [p["ticker"] for p in portfolio.get("positions", [])]
         if action == "HOLD" and ticker in held_tickers:
             try:
                 hold_advisory = await run_with_timeout(
@@ -298,7 +296,7 @@ async def execute_decisions(
                     pre_trade_decision.get("risk_reward_ratio", 0),
                 )
             else:
-                size_pct = _get_size_pct(confidence)
+                size_pct = get_size_pct(confidence)
 
             logger.info(
                 "[PIPELINE]   [%s] EXECUTING BUY @ %d%% conf, %.0f%% of cash ($%.2f)",
@@ -356,7 +354,6 @@ async def execute_decisions(
         elif action == "SELL":
             # Defensive guard: verify we actually hold this ticker before selling
             # (Prevents wasted sell attempts when the LLM recommends SELL for unowned tickers)
-            held_tickers = [p["ticker"] for p in portfolio.get("positions", [])]
             if ticker not in held_tickers:
                 logger.info(
                     "[PIPELINE]   [%s] SELL skipped — not in portfolio (held: %s)",

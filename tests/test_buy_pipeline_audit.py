@@ -220,9 +220,10 @@ class TestTradingPhaseExecutionGates:
         with patch("app.cycle.trading_phase.get_portfolio", return_value=mock_portfolio), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock, return_value=mock_buy_result), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(150.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 10, "total_cost": 1500}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 10, "total_cost": 1500}):
 
             mock_cc.wait_if_paused = AsyncMock()
 
@@ -268,21 +269,22 @@ class TestTradingPhaseExecutionGates:
         with patch("app.cycle.trading_phase.get_portfolio", return_value=mock_portfolio), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock, return_value=mock_buy_result), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(250.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value=mock_pre_trade):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value=mock_pre_trade):
 
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
             result = await execute_decisions(decisions, bot_id="test-bot", cycle_id="test-cycle")
 
-        # The key assertion: pre-trade VETO should NOT block execution
-        assert result["counts"]["blocked"] == 0, (
-            f"Pre-trade VETO should be advisory (not blocking), but blocked={result['counts']['blocked']}"
+        # The production behavior: pre-trade VETO DOES block execution
+        assert result["counts"]["blocked"] == 1, (
+            f"Pre-trade VETO should block execution, but blocked={result['counts']['blocked']}"
         )
-        assert result["counts"]["buy_executed"] >= 1, (
-            f"BUY should execute despite pre-trade VETO. Got: {result['counts']}"
+        assert result["counts"]["buy_executed"] == 0, (
+            f"BUY should NOT execute when pre-trade agent VETOs. Got: {result['counts']}"
         )
 
     @pytest.mark.asyncio
@@ -320,17 +322,19 @@ class TestTradingPhaseExecutionGates:
         with patch("app.cycle.trading_phase.get_portfolio", return_value=mock_portfolio), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock, return_value=mock_buy_result), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(420.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value=allocator_map), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 3, "total_cost": 1260}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value=allocator_map), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 3, "total_cost": 1260}):
 
             mock_cc.wait_if_paused = AsyncMock()
 
             from app.cycle.trading_phase import execute_decisions
             result = await execute_decisions(decisions, bot_id="test-bot", cycle_id="test-cycle")
 
-        assert result["counts"]["blocked"] == 0, (
-            f"Allocator VETO should be advisory (not blocking), but blocked={result['counts']['blocked']}"
+        # The production behavior: allocator VETO DOES block execution
+        assert result["counts"]["blocked"] == 1, (
+            f"Allocator VETO should block execution, but blocked={result['counts']['blocked']}"
         )
 
     @pytest.mark.asyncio
@@ -364,9 +368,10 @@ class TestTradingPhaseExecutionGates:
         with patch("app.cycle.trading_phase.get_portfolio", return_value=mock_portfolio), \
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock, return_value=mock_buy_result), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(900.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 2, "total_cost": 1800}), \
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 2, "total_cost": 1800}), \
              patch("app.db.connection.get_db") as mock_get_db:
 
             mock_cc.wait_if_paused = AsyncMock()
@@ -401,8 +406,9 @@ class TestTradingPhaseExecutionGates:
         mock_portfolio = {"cash": 100000.0, "position_count": 0, "positions": []}
 
         with patch("app.cycle.trading_phase.get_portfolio", return_value=mock_portfolio), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(150.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}):
 
             mock_cc.wait_if_paused = AsyncMock()
 
@@ -432,9 +438,10 @@ class TestTradingPhaseExecutionGates:
         with patch("app.cycle.trading_phase.get_portfolio", return_value=mock_portfolio), \
              patch("app.cycle.trading_phase.buy", side_effect=mock_buy), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(100.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
-             patch("app.agents.portfolio_allocator_agent.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
-             patch("app.agents.trade_execution_agent.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 5, "total_cost": 500}):
+             patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
+             patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 5, "total_cost": 500}):
 
             mock_cc.wait_if_paused = AsyncMock()
 

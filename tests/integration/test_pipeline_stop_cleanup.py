@@ -84,7 +84,7 @@ async def test_pipeline_abort_mid_analysis():
                 
             # Test that new pipeline requests are rejected after stop
             with patch("app.pipeline.orchestration.cycle_control.cycle_control", control):
-                with pytest.raises(asyncio.CancelledError, match="Pipeline stopped"):
+                with pytest.raises(asyncio.CancelledError, match="Cycle stopped by user"):
                     await client.chat(
                         system="system",
                         user="user",

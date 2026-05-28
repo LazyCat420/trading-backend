@@ -45,6 +45,7 @@ async def run_phase4_analysis(
       - dict: {"memo": str} holder filled asynchronously by macro scout.
         Workers read the current value when analyzing each ticker.
     """
+    state = state or {}
     if not ctx.analyze:
         return []
 
@@ -93,6 +94,7 @@ async def run_phase4_analysis(
 
     analyzed_count = 0
     count_lock = asyncio.Lock()
+    active_workers = worker_count
     _worker_start_time = time.monotonic()
     _seen_tickers: set[str] = set()  # Dedup: prevents double-analysis when tickers arrive from multiple sources
 
@@ -145,6 +147,13 @@ async def run_phase4_analysis(
                     status="ok",
                     data={"worker_id": worker_id, "tickers_processed": tickers_processed},
                 )
+                nonlocal active_workers
+                active_workers -= 1
+                if active_workers > 0:
+                    try:
+                        work_queue.put_nowait(None)
+                    except Exception:
+                        pass
                 work_queue.task_done()
                 break
 
@@ -166,21 +175,22 @@ async def run_phase4_analysis(
             )
 
             # ── Dedup gate: skip if another worker already processed this ticker ──
-            if ticker in _seen_tickers:
-                logger.info(
-                    "[CYCLE] [Worker %d] Skipping %s — already analyzed by another worker",
-                    worker_id, ticker,
-                )
-                emit(
-                    "analyzing",
-                    f"worker_dedup_{ticker}",
-                    f"Worker {worker_id}: {ticker} skipped (already analyzed)",
-                    status="skipped",
-                    data={"worker_id": worker_id, "ticker": ticker},
-                )
-                work_queue.task_done()
-                continue
-            _seen_tickers.add(ticker)
+            async with count_lock:
+                if ticker in _seen_tickers:
+                    logger.info(
+                        "[CYCLE] [Worker %d] Skipping %s — already analyzed by another worker",
+                        worker_id, ticker,
+                    )
+                    emit(
+                        "analyzing",
+                        f"worker_dedup_{ticker}",
+                        f"Worker {worker_id}: {ticker} skipped (already analyzed)",
+                        status="skipped",
+                        data={"worker_id": worker_id, "ticker": ticker},
+                    )
+                    work_queue.task_done()
+                    continue
+                _seen_tickers.add(ticker)
 
             await cycle_control.wait_if_paused()
 

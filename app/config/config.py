@@ -96,6 +96,7 @@ class Settings(BaseSettings):
     ANALYSIS_WORKER_TIMEOUT_SECONDS: int = (
         360  # 6-min hard cap per ticker — debate skipped when orchestrator fails, saving ~180s
     )
+    POST_CYCLE_HOUSEKEEPING_TIMEOUT_SECONDS: int = 300
     BOT_ID: str = "lazy-trader-v4"
     COLLECTION_MAX_CONCURRENT: int = 5  # parallel per-ticker scrapers
 

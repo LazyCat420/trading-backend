@@ -107,6 +107,7 @@ class TestTradingPhaseDedup:
              patch("app.cycle.trading_phase.buy", new_callable=AsyncMock, side_effect=track_buy), \
              patch("app.cycle.trading_phase.sell", new_callable=AsyncMock), \
              patch("app.cycle.trading_phase.check_portfolio_gate", return_value={"blocked": False, "warnings": []}), \
+             patch("app.cycle.trading_phase._get_current_price", return_value=(150.0, None)), \
              patch("app.cycle.orchestration.cycle_control.cycle_control") as mock_cc, \
              patch("app.cycle.trading_phase.run_portfolio_allocator", new_callable=AsyncMock, return_value={}), \
              patch("app.cycle.trading_phase.run_trade_execution", new_callable=AsyncMock, return_value={"decision": "APPROVE", "shares": 10, "total_cost": 1500}):

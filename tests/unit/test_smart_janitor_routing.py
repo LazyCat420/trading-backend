@@ -56,6 +56,12 @@ async def test_smart_janitor_article_routing(monkeypatch, mock_db):
     mock_registry.is_known.side_effect = lambda t: t == "ADBE"
     monkeypatch.setattr("app.processors.ticker_extractor.get_registry", lambda: mock_registry)
     
+    # Mock is_banned to prevent real DB access from watchlist module
+    monkeypatch.setattr("app.trading.watchlist.is_banned", lambda t: False)
+    
+    # Mock _get_article_id to prevent news_collector DB access
+    monkeypatch.setattr("app.collectors.news_collector._get_article_id", lambda title, ticker: f"janitor_{ticker}_{hash(title)}")
+    
     # Run smart janitor
     result = await run_smart_janitor_for_article("art_123")
     assert result is True
@@ -126,6 +132,9 @@ async def test_smart_janitor_reddit_routing(monkeypatch, mock_db):
     mock_registry = MagicMock()
     mock_registry.is_known.side_effect = lambda t: t == "ADBE"
     monkeypatch.setattr("app.processors.ticker_extractor.get_registry", lambda: mock_registry)
+    
+    # Mock is_banned to prevent real DB access from watchlist module
+    monkeypatch.setattr("app.trading.watchlist.is_banned", lambda t: False)
     
     # Run smart janitor
     result = await run_smart_janitor_for_reddit("post_123_HIMS")

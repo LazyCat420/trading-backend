@@ -263,3 +263,23 @@
 {"cycle_id": "battle-gap", "timestamp": "2026-05-27T22:22:32.743098+00:00", "step": "v2_ontology", "payload": {"ticker": "AAPL", "node_count": 0, "elapsed_ms": 0}}
 {"cycle_id": "battle-gap", "timestamp": "2026-05-27T22:22:32.743244+00:00", "step": "v2_evidence_build", "payload": {"ticker": "AAPL", "claims": 1, "structured_facts": 1, "sources": 1, "missing_fields": [], "teaser_risk": 0.0, "diversity": 3, "elapsed_ms": 0}}
 {"cycle_id": "battle-gap", "timestamp": "2026-05-27T22:22:32.743356+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "AAPL", "status": "critical_gap", "blockers": ["price_history"], "warnings": []}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:11:38.361569+00:00", "step": "v2_start", "payload": {"ticker": "AAPL", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:11:38.362657+00:00", "step": "v2_data_completeness", "payload": {"ticker": "AAPL", "filled": [], "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:11:38.362917+00:00", "step": "v2_ontology", "payload": {"ticker": "AAPL", "node_count": 0, "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:11:38.363092+00:00", "step": "v2_evidence_build", "payload": {"ticker": "AAPL", "claims": 1, "structured_facts": 1, "sources": 1, "missing_fields": [], "teaser_risk": 0.0, "diversity": 3, "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:11:38.363214+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "AAPL", "status": "critical_gap", "blockers": ["price_history"], "warnings": []}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:20:07.076562+00:00", "step": "v2_start", "payload": {"ticker": "AAPL", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:20:07.076761+00:00", "step": "v2_data_completeness", "payload": {"ticker": "AAPL", "filled": [], "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:20:07.076937+00:00", "step": "v2_ontology", "payload": {"ticker": "AAPL", "node_count": 0, "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:20:07.077195+00:00", "step": "v2_evidence_build", "payload": {"ticker": "AAPL", "claims": 1, "structured_facts": 1, "sources": 1, "missing_fields": [], "teaser_risk": 0.0, "diversity": 3, "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:20:07.077303+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "AAPL", "status": "critical_gap", "blockers": ["price_history"], "warnings": []}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:24:43.748417+00:00", "step": "v2_start", "payload": {"ticker": "AAPL", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:24:43.748585+00:00", "step": "v2_data_completeness", "payload": {"ticker": "AAPL", "filled": [], "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:24:43.748745+00:00", "step": "v2_ontology", "payload": {"ticker": "AAPL", "node_count": 0, "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:24:43.748905+00:00", "step": "v2_evidence_build", "payload": {"ticker": "AAPL", "claims": 1, "structured_facts": 1, "sources": 1, "missing_fields": [], "teaser_risk": 0.0, "diversity": 3, "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:24:43.749020+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "AAPL", "status": "critical_gap", "blockers": ["price_history"], "warnings": []}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:27:22.416274+00:00", "step": "v2_start", "payload": {"ticker": "AAPL", "held": false, "position_context": {"held": false}}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:27:22.416717+00:00", "step": "v2_data_completeness", "payload": {"ticker": "AAPL", "filled": [], "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:27:22.416897+00:00", "step": "v2_ontology", "payload": {"ticker": "AAPL", "node_count": 0, "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:27:22.417046+00:00", "step": "v2_evidence_build", "payload": {"ticker": "AAPL", "claims": 1, "structured_facts": 1, "sources": 1, "missing_fields": [], "teaser_risk": 0.0, "diversity": 3, "elapsed_ms": 0}}
+{"cycle_id": "battle-gap", "timestamp": "2026-05-28T01:27:22.417157+00:00", "step": "v2_sufficiency_gate", "payload": {"ticker": "AAPL", "status": "critical_gap", "blockers": ["price_history"], "warnings": []}}
