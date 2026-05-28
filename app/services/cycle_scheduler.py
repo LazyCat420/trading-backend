@@ -75,9 +75,12 @@ class SchedulerService:
     async def execute_schedule(schedule_id: str):
         """Callback fired by APScheduler when it's time to run a cycle."""
         if cycle_control.is_paused:
-            logger.info("[SCHEDULER] Skipping schedule %s: System is PAUSED.", schedule_id)
-            SchedulerService._sync_next_run_to_db(schedule_id)
-            return
+            logger.info(
+                "[SCHEDULER] System is PAUSED but scheduled cycle overrides — "
+                "auto-resuming for schedule %s",
+                schedule_id,
+            )
+            cycle_control.resume()
 
         logger.info(
             "[SCHEDULER] ====== TRIGGER FIRED for schedule %s ======", schedule_id

@@ -248,6 +248,11 @@ class Settings(BaseSettings):
     DGX_SPARK_HERMES_HOST: str = _config.get("DGX_SPARK_HERMES_HOST", "10.0.0.141")
     DGX_SPARK_HERMES_PORT: int = 8642
 
+    # Dedicated Hermes API key — independent from API_SERVER_KEY.
+    # When empty, Hermes requests skip the Authorization header entirely
+    # (most local vLLM/Hermes setups don't require auth).
+    HERMES_API_KEY: str = _config.get("HERMES_API_KEY", "")
+
     API_SERVER_KEY: str = "change-me-local-dev"
 
     @model_validator(mode="after")
