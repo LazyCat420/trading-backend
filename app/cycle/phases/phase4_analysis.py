@@ -63,39 +63,6 @@ async def run_phase4_analysis(
 
     worker_count = settings.V2_TICKER_CONCURRENCY or 3
 
-    # ── Fix 4: Dynamic worker count — reduce concurrency if vLLM capacity is limited ──
-    try:
-        from app.services.vllm_client import llm
-        active_endpoints = [ep for ep in llm._endpoints.values() if ep.enabled and ep.model]
-        total_slots = sum(ep.max_concurrent for ep in active_endpoints)
-        if not active_endpoints:
-            # Fix 6: No endpoints available — fail fast instead of burning 600s × N tickers
-            msg = "No vLLM endpoints available — skipping analysis phase"
-            logger.error("[PIPELINE] %s", msg)
-            emit("analyzing", "no_endpoints", msg, status="error")
-            cycle_summary["status"] = "error"
-            cycle_summary["primary_failure_reason"] = msg
-            cycle_summary["no_trade_reason"] = "no_llm_endpoints"
-            raise RuntimeError(msg)
-        elif total_slots <= 4:  # Only Jetson available (4 slots)
-            worker_count = 1
-            logger.warning(
-                "[CYCLE] Only %d LLM slots across %d endpoint(s) — reducing to 1 analysis worker",
-                total_slots, len(active_endpoints),
-            )
-        elif total_slots <= 8:
-            worker_count = min(worker_count, 2)
-            logger.info(
-                "[CYCLE] Limited LLM capacity (%d slots) — capping to %d workers",
-                total_slots, worker_count,
-            )
-    except ImportError:
-        pass  # vllm_client not available yet
-    except RuntimeError:
-        raise  # Re-raise the "no endpoints" RuntimeError
-    except Exception as ep_err:
-        logger.debug("[CYCLE] vLLM capacity check failed (non-fatal): %s", ep_err)
-
     # Determine which queue to use
     is_queue_mode = analysis_queue is not None
     if is_queue_mode:
