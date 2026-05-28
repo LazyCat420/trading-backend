@@ -70,9 +70,9 @@ class MetaOrchestrator:
             return {}, 0
 
         # Execute selected agents in parallel with per-agent timeouts.
-        # Each agent gets 20s — prevents one hung LLM call from blocking
-        # the entire orchestration (which has a 60s outer timeout).
-        PER_AGENT_TIMEOUT = 20.0
+        # Each agent gets 180s — prevents one hung LLM call from blocking
+        # the entire orchestration (which has a 300s outer timeout).
+        PER_AGENT_TIMEOUT = 180.0
         logger.info(f"[{entity_id}] MetaOrchestrator: Dispatching {labels} (timeout={PER_AGENT_TIMEOUT}s each)")
         results = {}
         total_tokens = 0

@@ -175,7 +175,7 @@ async def execute_decisions(
                         bot_id=bot_id,
                         rationale=d.get("rationale", ""),
                     ),
-                    timeout=60.0,
+                    timeout=180.0,
                     label=f"hold_advisory_{ticker}",
                 )
                 if hold_advisory and hold_advisory.get("decision") == "CONVERT_SELL":
@@ -396,7 +396,7 @@ async def execute_decisions(
                     bot_id=bot_id,
                     rationale=d.get("rationale", ""),
                 ),
-                timeout=60.0,
+                timeout=180.0,
                 label=f"sell_advisory_{ticker}",
             )
             if sell_advisory:
