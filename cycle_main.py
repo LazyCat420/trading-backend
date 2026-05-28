@@ -171,7 +171,13 @@ async def poll_system_commands(shutdown: asyncio.Event):
                         # a previous failed attempt) will reject the command even
                         # though the DB has been reset to 'idle'.
                         PipelineService.load_state()
-                        result = await PipelineService.start_cycle(tickers=payload.get("tickers", []))
+                        result = await PipelineService.start_cycle(
+                            tickers=payload.get("tickers", []),
+                            collect=payload.get("collect", True),
+                            analyze=payload.get("analyze", True),
+                            trade=payload.get("trade", True),
+                            max_tickers=payload.get("max_tickers"),
+                        )
                     elif cmd_type == "ANALYZE_TICKER":
                         from app.pipeline.analysis.decision_engine import analyze_ticker
                         result = await analyze_ticker(payload.get("ticker"), cycle_id="manual_run")
@@ -292,7 +298,7 @@ async def poll_system_commands(shutdown: asyncio.Event):
                 raise
             
         try:
-            await asyncio.wait_for(shutdown.wait(), timeout=2.0)
+            await asyncio.wait_for(shutdown.wait(), timeout=0.2)
         except asyncio.TimeoutError:
             pass
 

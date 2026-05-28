@@ -62,7 +62,7 @@ class TickerSelector:
 
         Returns a TickerSelectionResult with separate position / non-position lists.
         """
-        if cap is None or cap <= 0:
+        if cap is None or cap < 0:
             cap = 50
 
         requested = set(t.upper().strip() for t in requested_tickers if t.strip())
