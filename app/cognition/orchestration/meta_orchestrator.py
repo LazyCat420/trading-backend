@@ -69,14 +69,26 @@ class MetaOrchestrator:
             )
             return {}, 0
 
-        # Execute selected agents in parallel
-        logger.info(f"[{entity_id}] MetaOrchestrator: Dispatching {labels}")
+        # Execute selected agents in parallel with per-agent timeouts.
+        # Each agent gets 20s — prevents one hung LLM call from blocking
+        # the entire orchestration (which has a 60s outer timeout).
+        PER_AGENT_TIMEOUT = 20.0
+        logger.info(f"[{entity_id}] MetaOrchestrator: Dispatching {labels} (timeout={PER_AGENT_TIMEOUT}s each)")
         results = {}
         total_tokens = 0
         try:
-            outputs = await asyncio.gather(*tasks, return_exceptions=True)
+            wrapped_tasks = [
+                asyncio.wait_for(task, timeout=PER_AGENT_TIMEOUT)
+                for task in tasks
+            ]
+            outputs = await asyncio.gather(*wrapped_tasks, return_exceptions=True)
             for label, out in zip(labels, outputs):
-                if isinstance(out, Exception):
+                if isinstance(out, asyncio.TimeoutError):
+                    logger.warning(
+                        f"[{entity_id}] MetaOrchestrator: {label} TIMED OUT after {PER_AGENT_TIMEOUT}s"
+                    )
+                    results[label] = f"Error: Agent timed out after {PER_AGENT_TIMEOUT}s"
+                elif isinstance(out, Exception):
                     logger.error(
                         f"[{entity_id}] MetaOrchestrator task {label} failed: {out}"
                     )

@@ -64,5 +64,69 @@ class LogManager:
         file_path = self.AB_DIR / f"ab_{cycle_id}.jsonl"
         self._write_jsonl(file_path, log_entry)
 
+    def detect_abandoned_cycles(self, max_age_hours: int = 24) -> list[dict]:
+        """Scan v2 cycle logs and identify abandoned cycles.
+
+        An abandoned cycle has v2_start but neither v2_pipeline_complete
+        nor v2_error. Returns a list of dicts with cycle_id, ticker,
+        start_time, and last_step for monitoring.
+        """
+        import glob
+        from datetime import timedelta
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+        abandoned = []
+
+        for path in sorted(self.CYCLE_DIR.glob("*.jsonl")):
+            if path.name.startswith("ab_"):
+                continue  # Skip A/B result files
+
+            steps = set()
+            first_entry = None
+            last_entry = None
+            ticker = "?"
+
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        entry = json.loads(line)
+                        steps.add(entry.get("step", ""))
+                        if first_entry is None:
+                            first_entry = entry
+                        last_entry = entry
+                        if entry.get("payload", {}).get("ticker"):
+                            ticker = entry["payload"]["ticker"]
+            except Exception:
+                continue
+
+            if not first_entry:
+                continue
+
+            # Skip if cycle completed or has error logged
+            if "v2_pipeline_complete" in steps or "v2_error" in steps:
+                continue
+
+            # Only flag if cycle is old enough (not still running)
+            ts_str = first_entry.get("timestamp", "")
+            try:
+                cycle_start = datetime.fromisoformat(ts_str)
+                if cycle_start > cutoff:
+                    continue  # Too recent, might still be running
+            except Exception:
+                continue
+
+            abandoned.append({
+                "cycle_id": first_entry.get("cycle_id", path.stem),
+                "ticker": ticker,
+                "start_time": ts_str,
+                "last_step": last_entry.get("step", "?") if last_entry else "?",
+                "file": str(path),
+            })
+
+        return abandoned
+
 
 log_manager = LogManager()

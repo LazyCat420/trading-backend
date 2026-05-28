@@ -96,9 +96,9 @@ async def execute_v2_pipeline(
 
     # ── Step 0.5: Data completeness (shared with V1) ─────────────────
     t0 = time.monotonic()
-    from app.pipeline.data.data_completeness import check_and_fill
 
     try:
+        from app.pipeline.data.data_completeness import check_and_fill
         # Reduced from 30s to 10s — check_and_fill was consistently timing out
         # at exactly 30s, adding dead time to every ticker. The evidence packet
         # builder (Step 2) independently checks data quality and fills gaps.
@@ -109,6 +109,9 @@ async def execute_v2_pipeline(
             "Proceeding without gap fill; evidence packet builder will handle data quality.",
             ticker,
         )
+        data_report = {}
+    except Exception as dc_err:
+        logger.warning("[V2] Data completeness FAILED for %s: %s — proceeding without", ticker, dc_err)
         data_report = {}
     ms0 = elapsed_ms(t0)
     filled = data_report.get("filled", [])
@@ -171,6 +174,11 @@ async def execute_v2_pipeline(
     except asyncio.TimeoutError as te:
         logger.error("[V2] Evidence packet build TIMEOUT for %s (30s)", ticker)
         emit("analyzing", f"v2_evidence_timeout_{ticker}", f"{ticker}: Evidence build TIMEOUT", status="error")
+        log_manager.log_v2_cycle(cycle_id, "v2_error", {
+            "ticker": ticker, "error": "Evidence packet build timed out after 30s",
+            "error_type": "TimeoutError", "stages_completed": stages,
+            "elapsed_ms": elapsed_ms(t2),
+        })
         raise RuntimeError("Evidence packet build timed out after 30s") from te
     ms2 = elapsed_ms(t2)
     stages.append("evidence_build")
@@ -786,6 +794,11 @@ async def execute_v2_pipeline(
     except asyncio.TimeoutError as te:
         logger.error("[V2] Thesis generation TIMEOUT for %s (300s)", ticker)
         emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM TIMEOUT", status="error")
+        log_manager.log_v2_cycle(cycle_id, "v2_error", {
+            "ticker": ticker, "error": "Thesis generation timed out after 300s",
+            "error_type": "TimeoutError", "stages_completed": stages,
+            "elapsed_ms": elapsed_ms(start),
+        })
         raise RuntimeError("Thesis generation timed out after 300s") from te
     total_tokens += thesis_tokens
     ms6 = elapsed_ms(t6)

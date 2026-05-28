@@ -5,7 +5,8 @@ from app.agents.base_agent import run_agent, _OUTCOME_CONTEXT_AGENTS
 
 @pytest.fixture
 def mock_run_agent_loop():
-    with patch("app.agents.agent_loop.run_agent_loop") as mock_loop:
+    with patch("app.agents.agent_loop.run_agent_loop") as mock_loop, \
+         patch("app.agents.agent_loop.run_split_agent_loop") as mock_split_loop:
         # Default success response
         mock_loop.return_value = {
             "final_text": '{"result": "success"}',

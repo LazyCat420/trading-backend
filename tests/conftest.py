@@ -53,6 +53,10 @@ def real_db(real_test_db_engine):
         cursor = PooledCursor(conn)
         yield cursor
 
+        # Explicitly close the cursor BEFORE cleanup to prevent
+        # [DB LEAK] warnings from PooledCursor.__del__
+        cursor.close()
+
         try:
             tables = conn.execute(
                 "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
