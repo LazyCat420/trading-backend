@@ -90,6 +90,13 @@ from app.tools.precision_rag import (
     search_database_facts,
 )
 
+# Phase 13: Agentic Risk Assessment Tools (Composite)
+from app.tools.risk_tools import (
+    get_market_regime_tool,
+    query_brain_graph_tool,
+    assess_risk_environment_tool,
+)
+
 __all__ = [
     "registry",
     "PermissionLevel",
@@ -157,4 +164,8 @@ __all__ = [
     "query_financial_metrics",
     "query_technical_indicator",
     "search_database_facts",
+    # Phase 13: Agentic Risk Assessment Tools
+    "get_market_regime_tool",
+    "query_brain_graph_tool",
+    "assess_risk_environment_tool",
 ]

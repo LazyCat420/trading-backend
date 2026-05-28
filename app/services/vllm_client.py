@@ -1613,10 +1613,10 @@ class VLLMClient:
         now = time.monotonic()
         for name, ep in self._endpoints.items():
             result[name] = {
-                "active": ep.requests_running if ep.requests_running > 0 else ep.active_count,
+                "active": max(ep.active_count, ep.requests_running),
                 "max_concurrent": ep.max_concurrent,
                 "batch_size": ep.batch_size,
-                "queued": ep.requests_waiting if ep.requests_waiting > 0 else (ep.queue.qsize() if ep.queue else 0),
+                "queued": max(ep.queue.qsize() if ep.queue else 0, ep.requests_waiting),
                 "pipeline_max": max(1, ep.max_concurrent - self.RESERVED_HIGH_SLOTS),
                 "model": ep.model,
                 "role": ep.role,

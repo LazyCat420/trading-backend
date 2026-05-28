@@ -589,6 +589,8 @@ async def stream_hermes_chat(
             yield f"Error: Failed to connect to Hermes stream. All endpoints unreachable. Last error: {last_error}"
             return
 
+        # If no tool calls this turn, we're done — the LLM just gave a text response
+        if not tool_calls_this_turn:
             return
 
         # We had tool calls! Append the assistant's action to messages

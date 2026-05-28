@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import threading
+import time
 from datetime import datetime, timezone
 
 from app.db import connection
@@ -501,6 +502,8 @@ class PipelineStateMixin:
     _emit_events = []
     _emit_timer = None
     _emit_lock = threading.Lock()
+    _cached_states = {}
+    _cache_lock = threading.Lock()
 
     @classmethod
     def load_state(cls, summary_only: bool = False):
@@ -514,6 +517,14 @@ class PipelineStateMixin:
 
     @classmethod
     def get_current_state(cls, summary_only: bool = False) -> dict:
+        now = time.time()
+        with cls._cache_lock:
+            cached = cls._cached_states.get(summary_only)
+            if cached:
+                cache_ts, cached_state = cached
+                if now - cache_ts < 0.25:  # 250ms TTL
+                    return cached_state
+
         state = PipelineStateDB.get_state(summary_only=summary_only)
         try:
             from app.services.vllm_client import llm
@@ -523,9 +534,9 @@ class PipelineStateMixin:
             queued_requests = 0
             per_box = {}
             for ep in llm._endpoints.values():
-                # Use container metrics if available, fallback to client state
-                ep_active = ep.requests_running if ep.requests_running > 0 else ep.active_count
-                ep_queued = ep.requests_waiting if ep.requests_waiting > 0 else (ep.queue.qsize() if ep.queue else 0)
+                # Use client-side state combined with container metrics for real-time responsiveness
+                ep_active = max(ep.active_count, ep.requests_running)
+                ep_queued = max(ep.queue.qsize() if ep.queue else 0, ep.requests_waiting)
                 active_requests += ep_active
                 queued_requests += ep_queued
                 per_box[ep.name] = {
@@ -582,6 +593,9 @@ class PipelineStateMixin:
         # Ensure total_steps is never smaller than step_count (to prevent >100% progress)
         step_count = state.get("step_count", 0)
         state["total_steps"] = max(dynamic_total, step_count + 1)
+
+        with cls._cache_lock:
+            cls._cached_states[summary_only] = (now, state)
 
         return state
 

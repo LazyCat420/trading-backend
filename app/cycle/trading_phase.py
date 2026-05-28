@@ -5,9 +5,14 @@ Takes BUY/SELL/HOLD decisions from the hybrid analysis pipeline
 and executes them EXCLUSIVELY through the paper trader. This project does
 not support live trading execution by design; all flows are simulated.
 
-Position sizing (Kelly-inspired):
-  - Linear scale: 2% at confidence=70 → 10% at confidence=100
-  - Sub-70 confidence: minimum 2% (shouldn't reach here due to escalation)
+Position sizing authority:
+  PRIMARY: Portfolio Allocator Agent (agentic, regime-aware, constitution-driven)
+  FALLBACK: get_size_pct() (deterministic Kelly formula, used only if agent crashes)
+
+The allocator agent calls the composite `assess_risk_environment` tool
+to get regime, portfolio state, brain graph, and constitution rules in
+one shot, then makes informed sizing decisions. If the agent fails,
+get_size_pct() provides a safe minimum-viable sizing.
 
 Portfolio Gate:
   - Checks sector concentration, position count cap, and correlation
@@ -32,7 +37,16 @@ logger = logging.getLogger(__name__)
 
 
 def get_size_pct(confidence: int) -> float:
-    """Kelly-inspired: scale 2%→10% linearly for confidence 70→100."""
+    """FALLBACK Kelly-inspired sizing: scale 2%→10% linearly for confidence 70→100.
+
+    This is the FALLBACK sizing formula, used ONLY when the Portfolio Allocator
+    Agent fails to produce valid allocations (crash, timeout, parse error).
+    The primary sizing authority is the agentic allocator which uses regime,
+    constitution rules, and brain graph data.
+
+    This formula is intentionally conservative — it does NOT factor in
+    market regime, correlations, or adaptive constitution parameters.
+    """
     MIN_SIZE, MAX_SIZE = 0.02, 0.10
     MIN_CONF, MAX_CONF = 70, 100
     if confidence <= MIN_CONF:
@@ -297,6 +311,11 @@ async def execute_decisions(
                 )
             else:
                 size_pct = get_size_pct(confidence)
+                logger.warning(
+                    "[PIPELINE]   [%s] FALLBACK SIZING: Neither allocator nor pre-trade agent provided sizing. "
+                    "Using deterministic get_size_pct(%d) = %.1f%%. This means the agentic allocator failed.",
+                    ticker, confidence, size_pct * 100,
+                )
 
             logger.info(
                 "[PIPELINE]   [%s] EXECUTING BUY @ %d%% conf, %.0f%% of cash ($%.2f)",

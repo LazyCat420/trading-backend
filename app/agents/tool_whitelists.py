@@ -158,6 +158,9 @@ AGENT_TOOL_WHITELISTS: dict[str, list[str]] = {
     ],
     # ── Portfolio Sizing Agent ──
     "portfolio_allocator": [
+        "assess_risk_environment",
+        "get_market_regime",
+        "query_brain_graph",
         "calculate_portfolio_allocation",
         "calculate_stop_loss",
         "calculate_position_size",
