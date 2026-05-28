@@ -397,6 +397,14 @@ class VLLMClient:
         # Active background tasks representing running requests
         self._active_tasks: set[asyncio.Task] = set()
 
+        # ── Global concurrency cap ──────────────────────────────────────
+        # Hard limit on total in-flight LLM requests across ALL endpoints.
+        # At 20+ concurrent requests, vLLM TPS collapses from ~30 to ~3.
+        # This semaphore prevents that cliff by capping total dispatched
+        # requests. Per-endpoint semaphores still apply within this cap.
+        self._global_slots = asyncio.Semaphore(24)
+        self._global_slots_total = 24
+
     # ── Endpoint configuration ─────────────────────────────────────────
 
     def _active_endpoints(self) -> list[VLLMEndpoint]:
@@ -842,15 +850,27 @@ class VLLMClient:
                     continue
 
                 # ── Smart Queue memory protection ──────────────────────
-                while ep.cache_usage >= 0.90:
+                while ep.cache_usage >= 0.80:
                     logger.warning(
-                        "[QUEUE] 🚨 %s KV cache at %.1f%% (>90%%). Smart Queue pausing dispatch...",
+                        "[QUEUE] 🚨 %s KV cache at %.1f%% (>80%%). Smart Queue pausing dispatch...",
                         ep.name,
                         ep.cache_usage * 100,
                     )
                     await asyncio.sleep(2.0)
 
-                # Acquire the concurrency slot semaphore
+                # ── Global concurrency cap ───────────────────────────────
+                # Acquire global semaphore BEFORE per-endpoint slot.
+                # This prevents total in-flight requests from exceeding
+                # 24 across all boxes (prevents TPS cliff at 20+).
+                _global_in_flight = self._global_slots_total - self._global_slots._value
+                if self._global_slots._value <= 2:
+                    logger.info(
+                        "[QUEUE] 🌍 Global slots near cap: %d/%d in-flight. %s waiting...",
+                        _global_in_flight, self._global_slots_total, ep.name,
+                    )
+                await self._global_slots.acquire()
+
+                # Acquire the per-endpoint concurrency slot semaphore
                 await ep.slots.acquire()
 
                 # Get the highest-priority item from queue
@@ -858,6 +878,7 @@ class VLLMClient:
                     item = await ep.queue.get()
                 except Exception:
                     ep.slots.release()
+                    self._global_slots.release()
                     raise
 
                 # Check stop again after waking from queue.get()
@@ -868,6 +889,7 @@ class VLLMClient:
                             item.future.cancel()
                         ep.queue.task_done()
                         ep.slots.release()
+                        self._global_slots.release()
                         continue
                 except ImportError:
                     pass
@@ -875,6 +897,7 @@ class VLLMClient:
                 if item.future.cancelled():
                     ep.queue.task_done()
                     ep.slots.release()
+                    self._global_slots.release()
                     continue
 
                 # Run execute_item in background, and release semaphore when finished
@@ -917,6 +940,7 @@ class VLLMClient:
                     finally:
                         ep.queue.task_done()
                         ep.slots.release()
+                        self._global_slots.release()
 
                 task = asyncio.create_task(run_and_release())
                 self._active_tasks.add(task)

@@ -63,6 +63,39 @@ async def run_phase4_analysis(
 
     worker_count = settings.V2_TICKER_CONCURRENCY or 3
 
+    # ── Fix 4: Dynamic worker count — reduce concurrency if vLLM capacity is limited ──
+    try:
+        from app.services.vllm_client import llm
+        active_endpoints = [ep for ep in llm._endpoints.values() if ep.enabled and ep.model]
+        total_slots = sum(ep.max_concurrent for ep in active_endpoints)
+        if not active_endpoints:
+            # Fix 6: No endpoints available — fail fast instead of burning 600s × N tickers
+            msg = "No vLLM endpoints available — skipping analysis phase"
+            logger.error("[PIPELINE] %s", msg)
+            emit("analyzing", "no_endpoints", msg, status="error")
+            cycle_summary["status"] = "error"
+            cycle_summary["primary_failure_reason"] = msg
+            cycle_summary["no_trade_reason"] = "no_llm_endpoints"
+            raise RuntimeError(msg)
+        elif total_slots <= 4:  # Only Jetson available (4 slots)
+            worker_count = 1
+            logger.warning(
+                "[CYCLE] Only %d LLM slots across %d endpoint(s) — reducing to 1 analysis worker",
+                total_slots, len(active_endpoints),
+            )
+        elif total_slots <= 8:
+            worker_count = min(worker_count, 2)
+            logger.info(
+                "[CYCLE] Limited LLM capacity (%d slots) — capping to %d workers",
+                total_slots, worker_count,
+            )
+    except ImportError:
+        pass  # vllm_client not available yet
+    except RuntimeError:
+        raise  # Re-raise the "no endpoints" RuntimeError
+    except Exception as ep_err:
+        logger.debug("[CYCLE] vLLM capacity check failed (non-fatal): %s", ep_err)
+
     # Determine which queue to use
     is_queue_mode = analysis_queue is not None
     if is_queue_mode:
@@ -297,7 +330,14 @@ async def run_phase4_analysis(
         status="running",
         data={"worker_count": worker_count, "timeout_per_ticker": settings.ANALYSIS_WORKER_TIMEOUT_SECONDS},
     )
-    workers = [asyncio.create_task(_worker(i)) for i in range(worker_count)]
+    # Fix 7: Stagger worker creation to prevent instant queue spike on vLLM.
+    # Launching all workers simultaneously creates N * (4 agents + debate + thesis)
+    # concurrent requests in the first second, overwhelming the dispatcher.
+    workers = []
+    for i in range(worker_count):
+        workers.append(asyncio.create_task(_worker(i)))
+        if i < worker_count - 1:
+            await asyncio.sleep(2)  # 2s stagger between workers
 
     # ── Progress heartbeat — logs status every 15 seconds while analysis is running ──
     async def _progress_heartbeat():
@@ -370,19 +410,37 @@ async def run_phase4_analysis(
     # NOT abort the entire cycle. For 1-2 ticker batches, we log a warning
     # instead and let the pipeline continue with the fallback HOLD results.
     crash_count = sum(1 for r in results if r.get("is_timeout_fallback"))
+    timeout_crash_count = sum(1 for r in results if r.get("error_type") == "timeout")
     if crash_count > 0 and crash_count == len(results):
         if len(results) >= 3:
-            msg = (
-                f"CRITICAL: All {crash_count} tickers crashed during analysis. "
-                f"Pipeline is broken — aborting cycle. First error: "
-                f"{results[0].get('error', 'unknown')}"
-            )
-            logger.critical("[PIPELINE] %s", msg)
-            emit("analyzing", "all_crashed", msg, status="error")
-            cycle_summary["status"] = "error"
-            cycle_summary["primary_failure_reason"] = f"All {crash_count} tickers crashed"
-            cycle_summary["no_trade_reason"] = "all_crashed"
-            raise RuntimeError(msg)
+            # Fix 3: Distinguish timeout crashes from real pipeline errors.
+            # If ALL crashes are timeouts, it's likely transient vLLM saturation,
+            # not a broken pipeline. Continue with degraded HOLD results instead
+            # of aborting — the next cycle will likely succeed once vLLM recovers.
+            if timeout_crash_count == crash_count:
+                msg = (
+                    f"WARNING: All {crash_count} tickers TIMED OUT during analysis. "
+                    f"This is likely transient vLLM saturation, not a broken pipeline. "
+                    f"Continuing with fallback HOLD results. "
+                    f"First error: {results[0].get('error', 'unknown')}"
+                )
+                logger.critical("[PIPELINE] %s", msg)
+                emit("analyzing", "all_timeout", msg, status="error")
+                cycle_summary["primary_failure_reason"] = f"All {crash_count} tickers timed out (vLLM saturation)"
+                cycle_summary["no_trade_reason"] = "all_timeout"
+                # Don't abort — let fallback HOLD results flow to trading phase
+            else:
+                msg = (
+                    f"CRITICAL: All {crash_count} tickers crashed during analysis. "
+                    f"Pipeline is broken — aborting cycle. First error: "
+                    f"{results[0].get('error', 'unknown')}"
+                )
+                logger.critical("[PIPELINE] %s", msg)
+                emit("analyzing", "all_crashed", msg, status="error")
+                cycle_summary["status"] = "error"
+                cycle_summary["primary_failure_reason"] = f"All {crash_count} tickers crashed"
+                cycle_summary["no_trade_reason"] = "all_crashed"
+                raise RuntimeError(msg)
         else:
             msg = (
                 f"WARNING: All {crash_count} ticker(s) crashed, but batch too small "

@@ -431,10 +431,10 @@ async def execute_v2_pipeline(
             MetaOrchestrator.orchestrate(
                 ticker, packet, sufficiency, cycle_id, bot_id, is_highly_redundant
             ),
-            timeout=60.0,
+            timeout=45.0,
         )
     except asyncio.TimeoutError:
-        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (60s) — injecting fallback context", ticker)
+        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (45s) — injecting fallback context", ticker)
         # Instead of proceeding with zero context, inject a synthetic fallback
         # that tells the thesis agent to rely on evidence packet data only.
         # This prevents EMPTY_SIGNAL (confidence=0, claims=0) from flowing downstream.
@@ -541,7 +541,27 @@ async def execute_v2_pipeline(
     # 300s timeout, crashing the entire ticker. Skip debate and let thesis use
     # the evidence packet directly.
     _skip_debate = not _orchestrator_had_agents
-    if _skip_debate:
+
+    # Fix 5: Budget-aware debate skip — if the pipeline has already consumed
+    # most of the worker timeout, skip debate to preserve time for thesis.
+    if not _skip_debate:
+        from app.config import settings as _settings
+        _elapsed_so_far = time.monotonic() - start
+        _remaining_budget = float(_settings.ANALYSIS_WORKER_TIMEOUT_SECONDS) - _elapsed_so_far
+        if _remaining_budget < 200:
+            _skip_debate = True
+            logger.warning(
+                "[V2] Skipping debate for %s — only %.0fs remaining in worker budget (need 200s minimum)",
+                ticker, _remaining_budget,
+            )
+            emit(
+                "analyzing",
+                f"v2_debate_budget_skip_{ticker}",
+                f"{ticker}: Debate SKIPPED — only {_remaining_budget:.0f}s left in worker budget",
+                status="warning",
+            )
+
+    if _skip_debate and _orchestrator_had_agents is False:
         logger.info(
             "[V2] Skipping adversarial debate for %s — MetaOrchestrator produced 0 real agents. "
             "Saving ~180s GPU time for thesis generation.",
@@ -569,8 +589,9 @@ async def execute_v2_pipeline(
         )
         await cycle_control.wait_if_paused()
         t_debate = time.monotonic()
-        # Add a granular timeout (3 minutes) to ensure a hung debate agent doesn't consume the entire cycle timeout.
-        # With FAST_DEBATE_MODE and DEBATE_MAX_TOOL_TURNS=1, debates should complete in ~2 minutes.
+        # Timeout reduced from 180s to 120s: with FAST_DEBATE_MODE and rebalanced
+        # sub-timeouts, debates should complete in ~90s. 120s provides margin
+        # while keeping total pipeline within the 600s worker budget.
         debate_result = await asyncio.wait_for(
             run_adversarial_debate(
                 ticker=ticker,
@@ -581,7 +602,7 @@ async def execute_v2_pipeline(
                 position_context=position_context,
                 portfolio_dashboard=portfolio_dashboard,
             ),
-            timeout=180.0,
+            timeout=120.0,
         )
         ms_debate = elapsed_ms(t_debate)
 
@@ -778,6 +799,9 @@ async def execute_v2_pipeline(
     await cycle_control.wait_if_paused()
     t6 = time.monotonic()
     try:
+        # Timeout reduced from 300s to 180s: thesis is a single LLM call.
+        # If it takes >180s, the vLLM server is dead/saturated and waiting
+        # longer won't help. Keeps total pipeline within 600s worker budget.
         thesis, thesis_tokens = await asyncio.wait_for(
             generate_thesis(
                 entity_id=ticker,
@@ -789,17 +813,17 @@ async def execute_v2_pipeline(
                 watchlist=watchlist or [],
                 held=held,
             ),
-            timeout=300.0,
+            timeout=180.0,
         )
     except asyncio.TimeoutError as te:
-        logger.error("[V2] Thesis generation TIMEOUT for %s (300s)", ticker)
+        logger.error("[V2] Thesis generation TIMEOUT for %s (180s)", ticker)
         emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM TIMEOUT", status="error")
         log_manager.log_v2_cycle(cycle_id, "v2_error", {
-            "ticker": ticker, "error": "Thesis generation timed out after 300s",
+            "ticker": ticker, "error": "Thesis generation timed out after 180s",
             "error_type": "TimeoutError", "stages_completed": stages,
             "elapsed_ms": elapsed_ms(start),
         })
-        raise RuntimeError("Thesis generation timed out after 300s") from te
+        raise RuntimeError("Thesis generation timed out after 180s") from te
     total_tokens += thesis_tokens
     ms6 = elapsed_ms(t6)
     stages.append("thesis_generation")

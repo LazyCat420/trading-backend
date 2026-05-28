@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     JETSON_BATCH_SIZE: int = 4       # Jetson Orin AGX 64GB — aligned with concurrent max
     DGX_BATCH_SIZE: int = 8            # DGX Spark — matched to max_concurrent
     BATCH_TIMEOUT: int = 60           # 60s per batch (Jetson inference is 5-20s; prevents queue backup)
-    BATCH_CIRCUIT_BREAKER_THRESHOLD: int = 3  # consecutive failed batches → disable endpoint 60s
+    BATCH_CIRCUIT_BREAKER_THRESHOLD: int = 5  # consecutive failed batches → disable endpoint 60s (raised from 3: burst patterns hit 3 too easily)
 
     # ── Adaptive Concurrency (caller-side LLM throttling) ──
     ADAPTIVE_MIN_CONCURRENCY: int = 4   # floor when KV cache pressure is high (>80%)
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     )
     VLLM_FUTURE_TIMEOUT: int = 300  # seconds before a hung LLM future is killed (aligned with batch timeout)
     ANALYSIS_WORKER_TIMEOUT_SECONDS: int = (
-        360  # 6-min hard cap per ticker — debate skipped when orchestrator fails, saving ~180s
+        600  # 10-min hard cap per ticker — must exceed V2 sub-timeout sum (~400s after rebalance)
     )
     POST_CYCLE_HOUSEKEEPING_TIMEOUT_SECONDS: int = 300
     BOT_ID: str = "lazy-trader-v4"
