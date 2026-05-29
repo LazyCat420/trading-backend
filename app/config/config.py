@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     MIN_MARKET_CAP: float = 50_000_000  # $50M floor — reject OTC/penny
     CYCLE_TIMEOUT_MINUTES: int = 120  # 2-hour hard cap per cycle
     V2_TICKER_CONCURRENCY: int = (
-        3  # parallel tickers — sized for Jetson (3 tickers × ~44 calls ≈ 12 in-flight, fits 24 slots)
+        2  # parallel tickers — reduced from 3 to prevent GPU saturation (2 tickers × ~8 calls = 16 in-flight, split across Jetson + DGX)
     )
     VLLM_FUTURE_TIMEOUT: int = 300  # seconds before a hung LLM future is killed (aligned with batch timeout)
     ANALYSIS_WORKER_TIMEOUT_SECONDS: int = (

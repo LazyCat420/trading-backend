@@ -190,6 +190,12 @@ VALID_ROLES = ("collector", "analyst", "trader", "training")
 # ── Role-Based Routing Taxonomy ─────────────────────────────────────────
 # Maps agent names to their required hardware role/tier.
 # 'collector' = Jetson (35B), 'analyst' / 'trader' = DGX Spark (120B)
+#
+# NOTE: Specialist agents (sentiment, fundamentals, macro_risk) produce
+# short 256-token outputs. They run fine on the 35B Jetson and MUST be
+# collector-tier to prevent DGX saturation during concurrent analysis.
+# See: cycle-1780038350 / cycle-1780046037 where 93% of tickers hit
+# MetaOrchestrator fallback because all agents queued on DGX.
 AGENT_ROLE_ROUTING = {
     # Lightweight tasks -> Jetson
     "hermes_research": "collector",
@@ -200,11 +206,17 @@ AGENT_ROLE_ROUTING = {
     "user_chat": "collector",
     "collector": "collector",
     "tool_selector": "collector",  # Brain-Action split: lightweight tool routing
+
+    # Specialist agents -> Jetson (short 256-token outputs, don't need 120B)
+    "sentiment": "collector",
+    "sentiment_agent": "collector",
+    "fundamental": "collector",
+    "fundamental_agent": "collector",
+    "macro_risk_agent": "collector",
+    "deep_research_agent": "collector",
     
-    # Complex reasoning -> DGX Spark
+    # Complex reasoning -> DGX Spark (thesis, debate, trading decisions)
     "technical": "analyst",
-    "fundamental": "analyst",
-    "sentiment": "analyst",
     "fund_flow": "analyst",
     "risk": "analyst",
     "comparative": "analyst",

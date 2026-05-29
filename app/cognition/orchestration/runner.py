@@ -432,10 +432,10 @@ async def execute_v2_pipeline(
             MetaOrchestrator.orchestrate(
                 ticker, packet, sufficiency, cycle_id, bot_id, is_highly_redundant
             ),
-            timeout=45.0,
+            timeout=90.0,
         )
     except asyncio.TimeoutError:
-        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (45s) — injecting fallback context", ticker)
+        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (90s) — injecting fallback context", ticker)
         # Instead of proceeding with zero context, inject a synthetic fallback
         # that tells the thesis agent to rely on evidence packet data only.
         # This prevents EMPTY_SIGNAL (confidence=0, claims=0) from flowing downstream.
