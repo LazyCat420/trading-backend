@@ -27,6 +27,10 @@ PRE_BUILD() {
 EXTRA_SSH_SYNC() {
   info "Syncing master .env from vault-service on remote host..."
   ssh "$DEPLOY_SSH_HOST" "cp '${DEPLOY_COMPOSE_ROOT}/vault-service/env/.env' '${DEPLOY_COMPOSE_DIR}/.env'"
+  info "Appending concurrency overrides to remote .env..."
+  ssh "$DEPLOY_SSH_HOST" "echo 'V2_TICKER_CONCURRENCY=2' >> '${DEPLOY_COMPOSE_DIR}/.env'"
+  ssh "$DEPLOY_SSH_HOST" "echo 'JETSON_MAX_CONCURRENT=4' >> '${DEPLOY_COMPOSE_DIR}/.env'"
+  ssh "$DEPLOY_SSH_HOST" "echo 'DGX_MAX_CONCURRENT=8' >> '${DEPLOY_COMPOSE_DIR}/.env'"
   ssh "$DEPLOY_SSH_HOST" "mkdir -p '${DEPLOY_COMPOSE_DIR}/logs' 2>/dev/null || sudo mkdir -p '${DEPLOY_COMPOSE_DIR}/logs'"
 }
 
