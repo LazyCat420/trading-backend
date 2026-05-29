@@ -101,7 +101,7 @@ async def run_ticker_processors(ticker: str, emit) -> None:
             "type": "function",
             "function": {
                 "name": "generate_trading_chart",
-                "arguments": json.dumps({"symbol": ticker})
+                "arguments": json.dumps({"symbol": ticker, "period": "1y"})
             }
         }
         await registry.execute_tool_call(tool_call, skip_permission_check=True)
