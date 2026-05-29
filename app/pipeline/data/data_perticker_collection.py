@@ -101,7 +101,7 @@ async def run_ticker_processors(ticker: str, emit) -> None:
             "type": "function",
             "function": {
                 "name": "generate_trading_chart",
-                "arguments": json.dumps({"symbol": ticker, "period": "1y"})
+                "arguments": json.dumps({"ticker": ticker, "period": "1y"})
             }
         }
         await registry.execute_tool_call(tool_call, skip_permission_check=True)
@@ -318,7 +318,7 @@ async def run_perticker_collection(
                         "SELECT COUNT(*) FROM price_history WHERE ticker = %s", [ticker]
                     ).fetchone()[0]
 
-                if _p_count >= 20:
+                if _p_count >= 250:
                     # Emit per-source "skipped" events so frontend shows
                     # data exists for each source (otherwise x/6 reads 0/6)
                     for _src_key in [
@@ -395,7 +395,7 @@ async def run_perticker_collection(
                             "SELECT COUNT(*) FROM price_history WHERE ticker = %s",
                             [ticker],
                         ).fetchone()[0]
-                    needs_collection = existing_prices < 20 or should_collect(
+                    needs_collection = existing_prices < 250 or should_collect(
                         "fundamentals", ticker
                     )
 
