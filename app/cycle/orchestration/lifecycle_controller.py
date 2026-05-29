@@ -32,6 +32,7 @@ class LifecycleControllerMixin:
         trigger_type: str = "manual",
         schedule_id: str | None = None,
         max_tickers: int | None = None,
+        discovered_tickers: int | None = None,
         pipeline_version: str | None = None,
         benchmark_group: str | None = None,
     ):
@@ -86,6 +87,7 @@ class LifecycleControllerMixin:
                 trigger_type=trigger_type,
                 schedule_id=schedule_id,
                 max_tickers=max_tickers,
+                discovered_tickers=discovered_tickers,
                 pipeline_version=pipeline_version,
                 benchmark_group=benchmark_group,
                 cycle_id=cycle_id,
@@ -108,6 +110,7 @@ class LifecycleControllerMixin:
         trigger_type: str,
         schedule_id: str | None,
         max_tickers: int | None,
+        discovered_tickers: int | None,
         pipeline_version: str | None,
         benchmark_group: str | None,
         cycle_id: str,
@@ -143,7 +146,7 @@ class LifecycleControllerMixin:
 
 
 
-            selection = TickerSelector.select_tickers_for_cycle_v2(tickers, cap)
+            selection = TickerSelector.select_tickers_for_cycle_v2(tickers, cap, discovered_tickers=discovered_tickers)
             tickers = selection.all_tickers
 
             if not tickers:

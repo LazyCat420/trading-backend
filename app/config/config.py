@@ -250,8 +250,8 @@ class Settings(BaseSettings):
 
     # Dedicated Hermes API key — independent from API_SERVER_KEY.
     # When empty, Hermes requests skip the Authorization header entirely
-    # (most local vLLM/Hermes setups don't require auth).
-    HERMES_API_KEY: str = _config.get("HERMES_API_KEY", "")
+    # (most local vLLM/Hermes setups don't require auth, but if they do, fallback to API_SERVER_KEY).
+    HERMES_API_KEY: str = _config.get("HERMES_API_KEY") or _config.get("API_SERVER_KEY", "")
 
     API_SERVER_KEY: str = "change-me-local-dev"
 
