@@ -156,11 +156,13 @@ async def collect_fund_holdings(
             # Upsert filer to ensure it exists
             db.execute(
                 """
-                INSERT INTO sec_13f_filers (cik, filer_name)
-                VALUES (%s, %s)
-                ON CONFLICT (cik) DO UPDATE SET filer_name = EXCLUDED.filer_name
+                INSERT INTO sec_13f_filers (cik, filer_name, latest_quarter)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (cik) DO UPDATE SET 
+                    filer_name = EXCLUDED.filer_name,
+                    latest_quarter = GREATEST(sec_13f_filers.latest_quarter, EXCLUDED.latest_quarter)
                 """,
-                [cik, filer_name],
+                [cik, filer_name, filing_quarter],
             )
 
             for h in holdings:
@@ -257,11 +259,13 @@ async def collect_ticker_institutional(ticker: str) -> int:
                 # Upsert filer
                 db.execute(
                     """
-                    INSERT INTO sec_13f_filers (cik, filer_name)
-                    VALUES (%s, %s)
-                    ON CONFLICT (cik) DO UPDATE SET filer_name = EXCLUDED.filer_name
+                    INSERT INTO sec_13f_filers (cik, filer_name, latest_quarter)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (cik) DO UPDATE SET 
+                        filer_name = EXCLUDED.filer_name,
+                        latest_quarter = GREATEST(sec_13f_filers.latest_quarter, EXCLUDED.latest_quarter)
                     """,
-                    [pseudo_cik, holder],
+                    [pseudo_cik, holder, quarter],
                 )
 
                 # Insert holdings
