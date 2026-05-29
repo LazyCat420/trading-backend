@@ -91,6 +91,35 @@ async def run_ticker_processors(ticker: str, emit) -> None:
     except Exception as e:
         logger.warning("[PIPELINE] Per-ticker narrative curation failed for %s: %s", ticker, e)
 
+    # ── Per-ticker technical chart generation ──
+    try:
+        from app.tools import registry
+        import json
+        logger.info("[PIPELINE] Generating technical chart for %s via lazy-tool-service", ticker)
+        tool_call = {
+            "id": f"call_chart_{ticker}",
+            "type": "function",
+            "function": {
+                "name": "generate_trading_chart",
+                "arguments": json.dumps({"symbol": ticker})
+            }
+        }
+        await registry.execute_tool_call(tool_call, skip_permission_check=True)
+        emit(
+            "collecting",
+            f"chart_{ticker}",
+            f"{ticker}: Technical chart generated successfully",
+            status="ok"
+        )
+    except Exception as e:
+        logger.warning("[PIPELINE] Per-ticker chart generation failed for %s: %s", ticker, e)
+        emit(
+            "collecting",
+            f"chart_{ticker}",
+            f"{ticker}: Technical chart generation skipped/failed - {e}",
+            status="skipped"
+        )
+
 
 async def run_perticker_collection(
     tickers: list[str],
