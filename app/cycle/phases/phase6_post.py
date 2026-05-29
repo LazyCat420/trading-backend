@@ -203,6 +203,39 @@ async def run_phase6_post(
     except Exception as e:
         logger.warning("Results enrichment failed: %s", e)
 
+    # 1.5. Generate Per-Ticker Reports — comprehensive audit trail for human review
+    try:
+        from app.services.ticker_report_generator import report_generator
+
+        report_result = report_generator.save_reports(
+            cycle_id=ctx.cycle_id,
+            results=results,
+            cycle_summary=cycle_summary,
+        )
+        logger.info(
+            "[REPORT] Phase 6 report generation: %d ticker reports, summary=%s, errors=%d",
+            report_result.get("ticker_reports", 0),
+            report_result.get("summary", False),
+            len(report_result.get("errors", [])),
+        )
+        if report_result.get("errors"):
+            for err in report_result["errors"][:5]:
+                logger.warning("[REPORT] Generation error: %s", err)
+
+        emit(
+            "purge", "reports_generated",
+            f"Generated {report_result['ticker_reports']} ticker reports for cycle {ctx.cycle_id}",
+            status="ok",
+        )
+
+        # Clean up transient _report_data from results to free memory
+        # (it's large and not needed downstream)
+        for result in results:
+            result.pop("_report_data", None)
+    except Exception as report_err:
+        logger.warning("Report generation failed (non-fatal): %s", report_err)
+
+
     # 2. Purge Pass — bounded housekeeping (no more fire-and-forget zombies)
     # All background tasks are gathered with a strict timeout so they can't
     # leak and keep the event loop alive for hours after the cycle ends.

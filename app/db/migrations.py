@@ -982,3 +982,38 @@ def _fix_eth_cagr_data(conn):
         except Exception:
             pass
 
+    # ── Ticker Reports (Per-Ticker Cycle Audit Reports) ──
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ticker_reports (
+                    id              TEXT PRIMARY KEY,
+                    cycle_id        TEXT NOT NULL,
+                    ticker          TEXT NOT NULL,
+                    action          TEXT,
+                    confidence      INTEGER,
+                    report_markdown TEXT,
+                    result_summary  JSONB,
+                    is_summary      BOOLEAN DEFAULT FALSE,
+                    created_at      TIMESTAMPTZ DEFAULT NOW(),
+                    UNIQUE(cycle_id, ticker)
+                )
+            """)
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ticker_reports_cycle "
+                "ON ticker_reports(cycle_id)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ticker_reports_ticker "
+                "ON ticker_reports(ticker)"
+            )
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ticker_reports_created "
+                "ON ticker_reports(created_at DESC)"
+            )
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass

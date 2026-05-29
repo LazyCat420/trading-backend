@@ -901,6 +901,7 @@ async def execute_v2_pipeline(
     # When thesis has confidence=0, claims=0, this is a pipeline failure
     # (e.g. MetaOrchestrator timed out producing 0 agents/0 tokens).
     # Flag it so it doesn't silently flow through as a valid SELL/HOLD.
+    _failure_diagnosis = None  # Will be populated on failure for reports
     if thesis.confidence == 0 and not thesis.core_claims:
         logger.warning(
             "[V2] ⚠️ EMPTY_SIGNAL for %s: action=%s confidence=0 claims=0 "
@@ -932,6 +933,23 @@ async def execute_v2_pipeline(
             f"⚠️ {ticker}: EMPTY_SIGNAL detected — forced {final_action} (pipeline failure)",
             status="error",
         )
+        # Build failure diagnosis for the report
+        _failure_diagnosis = {
+            "failure_type": "EMPTY_SIGNAL",
+            "stages_completed": list(stages),
+            "stages_failed": [s for s in ["thesis_generation"] if s not in stages],
+            "meta_orchestrator_agents": len(agent_insights) if agent_insights else 0,
+            "tokens_per_stage": dict(stage_timings),
+            "error_chain": [
+                f"Thesis returned confidence=0 with 0 claims",
+                f"Original thesis action was {thesis.action}",
+                f"Total tokens consumed: {thesis_tokens}",
+                f"MetaOrchestrator had agents: {_orchestrator_had_agents}",
+            ],
+            "data_available": f"{len(packet.structured_facts)} structured facts, "
+                             f"{len(packet.claims)} claims, "
+                             f"missing: {packet.missing_fields}",
+        }
     else:
         final_action = thesis.action
         final_confidence = thesis.confidence
@@ -1124,6 +1142,36 @@ async def execute_v2_pipeline(
         memory_context=memory_context,
         debate_result=debate_result,
     )
+
+    # ── Attach transient report data for phase6_post report generation ──
+    # This is cleaned up after reports are generated (it's large and not
+    # needed downstream by trading phase or DB logging).
+    try:
+        _structured_facts = []
+        for fact in packet.structured_facts[:100]:
+            _structured_facts.append({
+                "field_name": getattr(fact, "field_name", str(fact)),
+                "value": getattr(fact, "value", None),
+                "source": getattr(fact, "source", "unknown"),
+            })
+    except Exception:
+        _structured_facts = []
+
+    result["_report_data"] = {
+        "agent_insights": agent_insights or {},
+        "debate_result": debate_result,
+        "thesis": thesis,
+        "sufficiency": sufficiency,
+        "stages": list(stages),
+        "stage_timings": dict(stage_timings),
+        "hallucination_result": hallucination_result,
+        "memory_brief": memory_context.get("memory_brief", "") if memory_context else "",
+        "present_sources": [],  # V2 doesn't track these the same way
+        "missing_sources": packet.missing_fields if packet else [],
+        "freshness_summary": packet.freshness_summary if packet else None,
+        "structured_facts": _structured_facts,
+        "failure_diagnosis": _failure_diagnosis,
+    }
 
     # ── Step 9: Log decision to analysis_results (V1 parity) ──────────
     # DB writes are serialized via db_semaphore to avoid conflicts
