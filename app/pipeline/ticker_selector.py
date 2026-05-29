@@ -51,6 +51,7 @@ class TickerSelector:
     def select_tickers_for_cycle_v2(
         requested_tickers: List[str],
         cap: int,
+        discovered_tickers: int | None = None,
     ) -> TickerSelectionResult:
         """
         Build the cycle ticker list with a hard total cap.
@@ -164,6 +165,8 @@ class TickerSelector:
         # ── 3. Discovery fill (only if non-position set is under its slot allocation) ──
         if len(non_position) < non_position_slots:
             remaining_slots = non_position_slots - len(non_position)
+            if discovered_tickers is not None:
+                remaining_slots = min(remaining_slots, discovered_tickers)
 
             large_slots = max(1, int(remaining_slots * 0.40))
             mid_slots = max(1, int(remaining_slots * 0.40))

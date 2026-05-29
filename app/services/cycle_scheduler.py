@@ -89,7 +89,7 @@ class SchedulerService:
             # Load latest config from DB to ensure it wasn't deleted or paused
             row = db.execute(
                 "SELECT id, name, schedule_type, cron_expression, interval_hours, "
-                "collect, \"analyze\", trade, tickers, max_tickers, market_hours_only, "
+                "collect, \"analyze\", trade, tickers, max_tickers, discovered_tickers, market_hours_only, "
                 "is_active, last_run_at, next_run_at, run_count, last_status, last_error, "
                 "created_at, updated_at FROM cycle_schedules WHERE id = %s", [schedule_id]
             ).fetchone()
@@ -115,6 +115,7 @@ class SchedulerService:
                 "trade",
                 "tickers",
                 "max_tickers",
+                "discovered_tickers",
                 "market_hours_only",
                 "is_active",
                 "last_run_at",
@@ -156,6 +157,7 @@ class SchedulerService:
                 "analyze": bool(s["analyze"]),
                 "trade": bool(s["trade"]) if s["trade"] is not None else True,
                 "max_tickers": s.get("max_tickers"),
+                "discovered_tickers": s.get("discovered_tickers"),
             }
 
             run_status = "ok"
@@ -244,7 +246,7 @@ class SchedulerService:
         with get_db() as db:
             rows = db.execute(
                 "SELECT id, name, schedule_type, cron_expression, interval_hours, "
-                "collect, \"analyze\", trade, tickers, max_tickers, market_hours_only, "
+                "collect, \"analyze\", trade, tickers, max_tickers, discovered_tickers, market_hours_only, "
                 "is_active, last_run_at, next_run_at, run_count, last_status, last_error, "
                 "created_at, updated_at FROM cycle_schedules WHERE is_active = TRUE"
             ).fetchall()
@@ -260,6 +262,7 @@ class SchedulerService:
                 "trade",
                 "tickers",
                 "max_tickers",
+                "discovered_tickers",
                 "market_hours_only",
                 "is_active",
                 "last_run_at",
@@ -340,7 +343,7 @@ class SchedulerService:
         with get_db() as db:
             row = db.execute(
                 "SELECT id, name, schedule_type, cron_expression, interval_hours, "
-                "collect, \"analyze\", trade, tickers, max_tickers, market_hours_only, "
+                "collect, \"analyze\", trade, tickers, max_tickers, discovered_tickers, market_hours_only, "
                 "is_active, last_run_at, next_run_at, run_count, last_status, last_error, "
                 "created_at, updated_at FROM cycle_schedules WHERE id = %s", [schedule_id]
             ).fetchone()
@@ -360,6 +363,7 @@ class SchedulerService:
                 "trade",
                 "tickers",
                 "max_tickers",
+                "discovered_tickers",
                 "market_hours_only",
                 "is_active",
                 "last_run_at",

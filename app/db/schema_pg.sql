@@ -344,6 +344,7 @@ CREATE TABLE IF NOT EXISTS cycle_schedules (
     trade           BOOLEAN,                  -- NULL = use armed state
     tickers         TEXT,                  -- JSONB array
     max_tickers     INTEGER,                  -- NULL = use .env default
+    discovered_tickers INTEGER DEFAULT 0,
     market_hours_only BOOLEAN DEFAULT FALSE,
     is_active       BOOLEAN DEFAULT TRUE,
     last_run_at     TIMESTAMP,
