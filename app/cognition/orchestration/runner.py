@@ -39,6 +39,7 @@ async def execute_v2_pipeline(
     macro_memo: str = "",
     watchlist: list[str] | None = None,
     db_semaphore: asyncio.Semaphore | None = None,
+    thesis_semaphore: asyncio.Semaphore | None = None,
     is_highly_redundant: bool = False,
 ) -> dict[str, Any]:
     """Run the full V2 cognition pipeline for a single ticker.
@@ -798,12 +799,25 @@ async def execute_v2_pipeline(
 
     await cycle_control.wait_if_paused()
     t6 = time.monotonic()
-    try:
-        # Timeout reduced from 300s to 180s: thesis is a single LLM call.
-        # If it takes >180s, the vLLM server is dead/saturated and waiting
-        # longer won't help. Keeps total pipeline within 600s worker budget.
-        thesis, thesis_tokens = await asyncio.wait_for(
-            generate_thesis(
+
+    # Fix 2: Gate thesis generation behind a semaphore to prevent all workers
+    # from slamming the GPU simultaneously. Without this, 4 workers each
+    # sending thesis requests creates GPU queue saturation → mass timeouts.
+    async def _guarded_thesis():
+        if thesis_semaphore:
+            async with thesis_semaphore:
+                return await generate_thesis(
+                    entity_id=ticker,
+                    packet=packet,
+                    bias="neutral",
+                    cycle_id=cycle_id,
+                    bot_id=bot_id,
+                    extra_context=extra_context,
+                    watchlist=watchlist or [],
+                    held=held,
+                )
+        else:
+            return await generate_thesis(
                 entity_id=ticker,
                 packet=packet,
                 bias="neutral",
@@ -812,18 +826,57 @@ async def execute_v2_pipeline(
                 extra_context=extra_context,
                 watchlist=watchlist or [],
                 held=held,
-            ),
-            timeout=180.0,
-        )
-    except asyncio.TimeoutError as te:
-        logger.error("[V2] Thesis generation TIMEOUT for %s (180s)", ticker)
-        emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM TIMEOUT", status="error")
-        log_manager.log_v2_cycle(cycle_id, "v2_error", {
-            "ticker": ticker, "error": "Thesis generation timed out after 180s",
-            "error_type": "TimeoutError", "stages_completed": stages,
-            "elapsed_ms": elapsed_ms(start),
-        })
-        raise RuntimeError("Thesis generation timed out after 180s") from te
+            )
+
+    # Fix 1: Retry thesis once on timeout — GPU may drain between attempts.
+    # First attempt gets 180s, then 30s cooldown, then 120s retry.
+    # This would have saved ~12 tickers in the cycle-1780038350 crash cascade.
+    _thesis_timeouts = [180.0, 120.0]
+    _thesis_max_attempts = len(_thesis_timeouts)
+    thesis = None
+    thesis_tokens = 0
+    for _thesis_attempt in range(_thesis_max_attempts):
+        _attempt_timeout = _thesis_timeouts[_thesis_attempt]
+        try:
+            thesis, thesis_tokens = await asyncio.wait_for(
+                _guarded_thesis(),
+                timeout=_attempt_timeout,
+            )
+            if _thesis_attempt > 0:
+                logger.info(
+                    "[V2] Thesis generation SUCCEEDED for %s on retry attempt %d/%d",
+                    ticker, _thesis_attempt + 1, _thesis_max_attempts,
+                )
+            break  # success
+        except asyncio.TimeoutError:
+            if _thesis_attempt < _thesis_max_attempts - 1:
+                logger.warning(
+                    "[V2] Thesis TIMEOUT for %s (attempt %d/%d, %.0fs) — waiting 30s for GPU queue drain before retry",
+                    ticker, _thesis_attempt + 1, _thesis_max_attempts, _attempt_timeout,
+                )
+                emit(
+                    "analyzing",
+                    f"v2_thesis_retry_{ticker}",
+                    f"{ticker}: Thesis TIMEOUT (attempt {_thesis_attempt + 1}/{_thesis_max_attempts}) — retrying after 30s cooldown",
+                    status="warning",
+                )
+                await asyncio.sleep(30)  # Let GPU queue drain
+            else:
+                logger.error(
+                    "[V2] Thesis generation TIMEOUT for %s after %d attempts",
+                    ticker, _thesis_max_attempts,
+                )
+                emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM TIMEOUT (all {_thesis_max_attempts} attempts exhausted)", status="error")
+                log_manager.log_v2_cycle(cycle_id, "v2_error", {
+                    "ticker": ticker,
+                    "error": f"Thesis generation timed out after {_thesis_max_attempts} attempts",
+                    "error_type": "TimeoutError", "stages_completed": stages,
+                    "elapsed_ms": elapsed_ms(start),
+                    "attempts": _thesis_max_attempts,
+                })
+                raise RuntimeError(
+                    f"Thesis generation timed out after {_thesis_max_attempts} attempts"
+                ) from None
     total_tokens += thesis_tokens
     ms6 = elapsed_ms(t6)
     stages.append("thesis_generation")

@@ -139,6 +139,7 @@ async def execute_decisions(
         "blocked": 0,
         "passes": 0,
         "sell_skipped": 0,
+        "crash_fallbacks": 0,
     }
 
 
@@ -161,6 +162,20 @@ async def execute_decisions(
             )
             skipped.append({"ticker": ticker, "reason": "human_review"})
             counts["human_review"] += 1
+            continue
+
+        # Fix 4: Skip crash-fallback decisions — these are HOLD@0% results
+        # generated when analysis timed out or crashed. They are NOT real
+        # trading decisions and should NOT be processed (wastes GPU time on
+        # HOLD advisory agents and inflates the meta-audit's HOLD ratio).
+        if d.get("is_timeout_fallback"):
+            logger.warning(
+                "[PIPELINE]   [%s] CRASH FALLBACK — analysis timed out (error: %s). "
+                "Not a real decision, skipping entirely.",
+                ticker, d.get("error", "unknown")[:100],
+            )
+            skipped.append({"ticker": ticker, "reason": "CRASH_FALLBACK"})
+            counts["crash_fallbacks"] += 1
             continue
 
         # ── Check HOLD advisory early to support CONVERT_SELL path ──

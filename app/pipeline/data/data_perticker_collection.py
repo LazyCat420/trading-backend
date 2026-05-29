@@ -582,6 +582,10 @@ async def run_perticker_collection(
                             collect_for_ticker as reddit_snipe,
                         )
 
+                        # Fix 3: Apply timeout INSIDE the rate limiter to prevent
+                        # the semaphore acquire from inflating the timeout duration.
+                        # Previously, wait_for wrapped both acquire+fetch, so if
+                        # acquire waited 120s the actual fetch got 0s budget.
                         async with rate_limiter.acquire("reddit"):
                             reddit_t = await asyncio.wait_for(
                                 reddit_snipe(ticker), timeout=SOURCE_TIMEOUT
@@ -612,14 +616,18 @@ async def run_perticker_collection(
                         logger.info(f"[PIPELINE]   [Reddit] {ticker} fresh, skipping")
                 except asyncio.TimeoutError:
                     ms = elapsed_ms(t0)
+                    actual_s = (time.monotonic() - t0)
                     emit(
                         "collecting",
                         f"reddit_{ticker}",
-                        f"{ticker}: Reddit TIMEOUT ({SOURCE_TIMEOUT}s)",
+                        f"{ticker}: Reddit TIMEOUT ({SOURCE_TIMEOUT}s configured, {actual_s:.0f}s actual)",
                         status="timeout",
                         elapsed_ms=ms,
                     )
-                    logger.error(f"[PIPELINE]   [Reddit] {ticker} TIMEOUT")
+                    logger.error(
+                        "[PIPELINE]   [Reddit] %s TIMEOUT (configured=%ss, actual=%.0fs)",
+                        ticker, SOURCE_TIMEOUT, actual_s,
+                    )
                 except Exception as e:
                     _log_err("reddit", e, ticker)
                     ms = elapsed_ms(t0)

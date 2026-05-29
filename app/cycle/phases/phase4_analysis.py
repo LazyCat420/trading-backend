@@ -98,6 +98,12 @@ async def run_phase4_analysis(
     _worker_start_time = time.monotonic()
     _seen_tickers: set[str] = set()  # Dedup: prevents double-analysis when tickers arrive from multiple sources
 
+    # Fix 2: Thesis semaphore — caps concurrent thesis LLM calls to prevent
+    # GPU queue saturation. Without this, all 4 workers hit thesis generation
+    # simultaneously, flooding the vLLM queue and causing mass 180s timeouts.
+    # Cap at 2: allows overlap while keeping GPU queue manageable.
+    thesis_semaphore = asyncio.Semaphore(2)
+
     def _get_macro_memo() -> str:
         """Read the current macro memo, whether it's a string or a dict holder."""
         if isinstance(macro_memo, dict):
@@ -221,6 +227,7 @@ async def run_phase4_analysis(
                         bot_id=bot_id,
                         emit=emit,
                         macro_memo=current_macro_memo,
+                        thesis_semaphore=thesis_semaphore,
                         is_highly_redundant=_is_highly_redundant,
                     ),
                     timeout=_ticker_timeout,
@@ -367,6 +374,22 @@ async def run_phase4_analysis(
     tally_results(results, cycle_summary)
 
     cycle_summary["analysis_results_count"] = len(results)
+
+    # Fix 6: Explicit crash/timeout/real counts for accurate observability.
+    # Without these, the meta-audit agent sees "83% HOLD ratio" when the real
+    # issue is "83% crash rate". Crash-fallback HOLDs are NOT real decisions.
+    _crash_count = sum(1 for r in results if r.get("is_timeout_fallback"))
+    _timeout_count = sum(1 for r in results if r.get("error_type") == "timeout")
+    _real_count = len(results) - _crash_count
+    cycle_summary["analysis_crashes"] = _crash_count
+    cycle_summary["analysis_timeouts"] = _timeout_count
+    cycle_summary["analysis_real_results"] = _real_count
+    if _crash_count > 0:
+        logger.info(
+            "[CYCLE] Analysis quality: %d real results, %d crashes (%d timeouts). "
+            "Crash-fallback HOLDs will be filtered in trading phase.",
+            _real_count, _crash_count, _timeout_count,
+        )
 
     # ── All-Crash Detection Gate ──
     # If every ticker produced a crash-fallback (HOLD @ 0%), the pipeline itself
