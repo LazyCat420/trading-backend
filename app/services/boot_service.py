@@ -16,6 +16,9 @@ class BootService:
         cls._run_stage("Vector Store Indexes", cls._init_vector_indices, required=True)
         cls._run_stage("Reset Application State", cls._reset_app_state, required=True)
 
+        # --- Crash Recovery Detection ---
+        cls._run_stage("Crash Recovery Scan", cls._detect_crashed_cycles, required=False)
+
         # --- Optional / Degraded Boot Stages ---
         cls._run_stage("Scheduler Start", cls._start_scheduler, required=False)
         cls._run_stage("Embedding Warmup", cls._warmup_models, required=False)
@@ -127,6 +130,30 @@ class BootService:
             from app.pipeline.orchestration.cycle_control import cycle_control
             cycle_control.pause()
             logger.info("[Boot] System starts PAUSED — LLM tasks gated until user resumes or starts a cycle.")
+
+    @classmethod
+    def _detect_crashed_cycles(cls):
+        """Scan cycle logs for incomplete cycles from previous container runs."""
+        from app.log_manager import log_manager
+
+        crashed = log_manager.detect_and_log_crashed_cycles(max_age_hours=48)
+        if crashed:
+            logger.warning(
+                "[Boot] CRASH RECOVERY: Found %d interrupted cycle(s) from previous runs:",
+                len(crashed),
+            )
+            for c in crashed:
+                logger.warning(
+                    "[Boot]   → %s: last_step=%s, last_ticker=%s, "
+                    "%d/%d tickers abandoned",
+                    c["cycle_id"],
+                    c["last_step"],
+                    c.get("last_ticker", "?"),
+                    len(c.get("abandoned", [])),
+                    c.get("total_tickers", 0),
+                )
+        else:
+            logger.info("[Boot] No crashed cycles detected from previous runs.")
 
     @classmethod
     def _start_scheduler(cls):

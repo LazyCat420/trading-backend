@@ -8,6 +8,7 @@ from typing import Any
 from app.config import settings
 from app.cycle.orchestration.state_manager import PipelineStateDB
 from app.services.logging.cycle_auditor import CycleAuditor
+from app.log_manager import log_manager
 
 from app.cycle.phases.phase1_health import run_phase1_health
 from app.cycle.phases.phase2_collection import run_phase2_collection
@@ -397,6 +398,12 @@ class OrchestratorCoreMixin:
             except Exception as ar_err:
                 logger.warning("[CYCLE] Failed to trigger AutoResearch: %s", ar_err)
 
+            # ── Write cycle summary to centralized JSONL log ──
+            try:
+                log_manager.log_cycle_summary(ctx.cycle_id, dict(cls._cycle_summary))
+            except Exception as log_err:
+                logger.debug("[CYCLE] Failed to write cycle summary to JSONL: %s", log_err)
+
             cls.emit(
                 "closed",
                 "cycle_done",
@@ -425,12 +432,24 @@ class OrchestratorCoreMixin:
                 f"[CYCLE] PIPELINE CANCELLED ({cancel_reason})."
             )
             cls._cycle_summary["status"] = "stopped"
+            cls._cycle_summary["primary_failure_reason"] = cls._cycle_summary.get("primary_failure_reason", cancel_reason)
             cls._state["status"] = "stopped"
             cls._state["finished_at"] = datetime.now(timezone.utc).isoformat()
             cls.save_state()
 
-            if "primary_failure_reason" not in cls._cycle_summary:
-                cls._cycle_summary["primary_failure_reason"] = cancel_reason
+            # Write cancellation to JSONL so it survives container restarts
+            try:
+                log_manager.log_cycle_error(
+                    ctx.cycle_id,
+                    "cycle_cancelled",
+                    error=cancel_reason,
+                    stage=cls._cycle_summary.get("status", "unknown"),
+                    elapsed_ms=int(elapsed_sec * 1000),
+                )
+                log_manager.log_cycle_summary(ctx.cycle_id, dict(cls._cycle_summary))
+            except Exception:
+                pass
+
             cls.emit(
                 "trading",
                 "cancelled",
@@ -439,8 +458,6 @@ class OrchestratorCoreMixin:
             )
 
             try:
-                # If a checkpoint exists, it's an interrupted cycle, not a failed one.
-                # But we definitely want to log it so we know *why* it stopped.
                 PipelineStateDB.safe_log_execution_error(
                     cycle_id=ctx.cycle_id,
                     phase=cls._cycle_summary.get("status", "unknown"),
@@ -455,12 +472,29 @@ class OrchestratorCoreMixin:
             logger.error("[CYCLE] FATAL PIPELINE ERROR: %s", e)
             logger.debug(traceback.format_exc())
             cls._cycle_summary["status"] = "error"
+            cls._cycle_summary["primary_failure_reason"] = cls._cycle_summary.get(
+                "primary_failure_reason", f"Fatal Error: {e}"
+            )
             cls._state["status"] = "error"
             cls._state["finished_at"] = datetime.now(timezone.utc).isoformat()
             cls.save_state()
 
-            if "primary_failure_reason" not in cls._cycle_summary:
-                cls._cycle_summary["primary_failure_reason"] = f"Fatal Error: {e}"
+            # Write crash to JSONL FIRST — before DB, before emit.
+            # If the container dies during DB write, at least the JSONL has it.
+            try:
+                elapsed_sec = (time.monotonic() - cls._start_time) if hasattr(cls, "_start_time") else 0
+                log_manager.log_cycle_error(
+                    ctx.cycle_id,
+                    "fatal_pipeline_crash",
+                    error=str(e),
+                    stack_trace=traceback.format_exc(),
+                    stage=cls._cycle_summary.get("status", "unknown"),
+                    elapsed_ms=int(elapsed_sec * 1000),
+                )
+                log_manager.log_cycle_summary(ctx.cycle_id, dict(cls._cycle_summary))
+            except Exception:
+                pass
+
             cls.emit("trading", "error", f"Cycle failed: {e}", status="error")
 
             try:

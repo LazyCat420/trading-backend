@@ -397,10 +397,34 @@ async def start_health_server(shutdown_event: asyncio.Event):
 
 
 def main():
+    # Force a clean logging setup with stdout handler.
+    # Without force=True, basicConfig is a no-op if ANY handler already exists
+    # (e.g., from early imports that trigger logging). This was causing all
+    # Python logs to disappear from Docker stdout.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
+        force=True,  # Remove existing handlers and set up fresh
+        handlers=[
+            logging.StreamHandler(sys.stdout),  # Explicitly target stdout for Docker
+        ],
     )
+    # Ensure stdout is unbuffered so Docker sees logs immediately
+    sys.stdout.reconfigure(line_buffering=True)
+
+    # Startup banner — helps identify which code version is running
+    logger.info("=" * 60)
+    logger.info("[cycle_backend] Trading Cycle Backend starting...")
+    try:
+        import subprocess
+        _git_hash = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL, timeout=2,
+        ).decode().strip()
+        logger.info("[cycle_backend] Git commit: %s", _git_hash)
+    except Exception:
+        logger.info("[cycle_backend] Git commit: unknown (not in git repo)")
+    logger.info("=" * 60)
 
     ap = argparse.ArgumentParser(description="Trading Cycle Backend")
     ap.add_argument("--once", action="store_true", help="Run one cycle and exit")

@@ -860,6 +860,19 @@ async def execute_v2_pipeline(
                     "[V2] Thesis %s for %s (attempt %d/%d, %.0fs) — waiting 30s before retry. Err: %s",
                     err_msg, ticker, _thesis_attempt + 1, _thesis_max_attempts, _attempt_timeout, err
                 )
+                log_manager.log_cycle_error(
+                    cycle_id,
+                    f"thesis_{err_msg.lower()}_retry",
+                    ticker=ticker,
+                    error=str(err),
+                    stage="thesis_generation",
+                    elapsed_ms=elapsed_ms(t6),
+                    extra={
+                        "attempt": _thesis_attempt + 1,
+                        "max_attempts": _thesis_max_attempts,
+                        "timeout_s": _attempt_timeout,
+                    },
+                )
                 emit(
                     "analyzing",
                     f"v2_thesis_retry_{ticker}",

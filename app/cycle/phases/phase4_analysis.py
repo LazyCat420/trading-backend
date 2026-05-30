@@ -10,6 +10,7 @@ from app.services.logging.cycle_auditor import auditor
 from app.cycle.context import CycleContext
 from app.utils.emit import noop_emit
 from app.cycle.summary import tally_results
+from app.log_manager import log_manager
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +259,15 @@ async def run_phase4_analysis(
                     status="error",
                     data={"worker_id": worker_id, "ticker": ticker, "elapsed_ms": _ticker_elapsed_ms},
                 )
+                log_manager.log_cycle_error(
+                    ctx.cycle_id,
+                    "analysis_timeout",
+                    ticker=ticker,
+                    error=err_str,
+                    stage="analyzing",
+                    elapsed_ms=_ticker_elapsed_ms,
+                    extra={"worker_id": worker_id},
+                )
                 fallback_result = {
                     "ticker": ticker,
                     "action": "HOLD",
@@ -280,6 +290,17 @@ async def run_phase4_analysis(
                     f"💥 Worker {worker_id}: {ticker} CRASHED — {err_str[:100]}",
                     status="error",
                     data={"worker_id": worker_id, "ticker": ticker, "error": err_str[:300], "elapsed_ms": _ticker_elapsed_ms},
+                )
+                import traceback as _tb
+                log_manager.log_cycle_error(
+                    ctx.cycle_id,
+                    "analysis_crash",
+                    ticker=ticker,
+                    error=err_str,
+                    stack_trace=_tb.format_exc(),
+                    stage="analyzing",
+                    elapsed_ms=_ticker_elapsed_ms,
+                    extra={"worker_id": worker_id, "error_type": type(e).__name__},
                 )
                 fallback_result = {
                     "ticker": ticker,
