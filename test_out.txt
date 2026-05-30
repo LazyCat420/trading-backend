@@ -1,0 +1,304 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/lazycat/github/projects/sun/trading-service
+configfile: pytest.ini
+plugins: anyio-4.13.0, deepeval-4.0.2, rerunfailures-16.2, repeat-0.9.4, xdist-3.8.0, cov-7.1.0, typeguard-4.5.2, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 2 items
+
+tests/integration/test_circuit_breaker_resilience.py F.                  [100%]Running teardown with pytest sessionfinish...
+
+
+=================================== FAILURES ===================================
+_____________________ test_circuit_breaker_race_conditions _____________________
+
+mocked_vllm_cb = (<app.services.vllm_client.VLLMClient object at 0x7be7fd7cd250>, <AsyncMock id='136236320478544'>)
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_race_conditions(mocked_vllm_cb):
+        """Test concurrent failures increment failure count safely and trip exactly once."""
+        print("\n[DEBUG] Starting test_circuit_breaker_race_conditions")
+        client, mock_http = mocked_vllm_cb
+    
+        ep = client._endpoints["jetson"]
+        ep.enabled = True
+        ep.model = "test-model"
+        ep.max_concurrent = 50
+        ep.batch_size = 50
+        ep.queue = None
+        ep.slots = None
+        ep.pipeline_slots = None
+        ep.init_concurrency()
+        client._roles_discovered = True
+    
+        from httpx import RequestError, Request
+    
+        # 50 simultaneous requests hitting a network error
+        async def fail_post(*args, **kwargs):
+            await asyncio.sleep(0.01)
+            raise RequestError("Connection reset", request=Request("POST", "http://test"))
+    
+        mock_http.post.side_effect = fail_post
+    
+        with patch("app.services.vllm_client.tracker") as mock_tracker:
+            mock_tracker.record = AsyncMock()
+    
+            # Fire 50 requests
+            print("[DEBUG] Enqueueing 50 requests...")
+            tasks = []
+            for i in range(50):
+                tasks.append(
+                    asyncio.create_task(client.chat(system="system", user=f"msg {i}"))
+                )
+            print("[DEBUG] 50 requests enqueued.")
+    
+            print("[DEBUG] Starting manual dispatcher task...")
+            dispatcher_task = asyncio.create_task(client._dispatch_loop(client._endpoints["jetson"]))
+            print("[DEBUG] Manual dispatcher task started.")
+    
+            # Wait for all to fail
+            print("[DEBUG] Gathering 50 request tasks...")
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            print(f"[DEBUG] Gathering complete. Results size: {len(results)}")
+            dispatcher_task.cancel()
+            # Yield control to let the background run_and_release tasks finish processing their errors
+            await asyncio.sleep(0.2)
+    
+            # All 50 should be RequestError (raised up from the dispatcher)
+            for r in results:
+>               assert isinstance(r, RequestError)
+E               AssertionError: assert False
+E                +  where False = isinstance(RuntimeError('vLLM future timeout (60.0s): unknown/ on jetson'), <class 'httpx.RequestError'>)
+
+tests/integration/test_circuit_breaker_resilience.py:83: AssertionError
+----------------------------- Captured stdout call -----------------------------
+
+[DEBUG] Starting test_circuit_breaker_race_conditions
+[DEBUG] Enqueueing 50 requests...
+[DEBUG] 50 requests enqueued.
+[DEBUG] Starting manual dispatcher task...
+[DEBUG] Manual dispatcher task started.
+[DEBUG] Gathering 50 request tasks...
+[DEBUG] Gathering complete. Results size: 50
+------------------------------ Captured log call -------------------------------
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:756 [VLLM] Re-initializing global slots semaphore due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing jetson queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:765 [VLLM] Re-initializing dgx_spark queue and semaphores due to event loop change
+WARNING  app.services.vllm_client:vllm_client.py:1299 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 1/3): RequestError('Connection reset'). Retrying in 1.0s...
+WARNING  app.services.vllm_client:vllm_client.py:1299 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed (attempt 2/3): RequestError('Connection reset'). Retrying in 2.0s...
+ERROR    app.services.vllm_client:vllm_client.py:1292 [VLLM] API call to http://10.0.0.30:8000/v1/chat/completions failed after 3 attempts: RequestError('Connection reset')
+ERROR    app.services.vllm_client:vllm_client.py:967 [VLLM] Request failed for agent=unknown ticker=: Connection reset
+Traceback (most recent call last):
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 941, in run_and_release
+    raise item.future.exception()
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1064, in _execute_item
+    content, total_tokens, elapsed_ms = await self._call_vllm_direct(
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1422, in _call_vllm_direct
+    r = await self._call_endpoint(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/../app/services/vllm_client.py", line 1276, in _call_endpoint
+    r = await client.post(
+        ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 2273, in _execute_mock_call
+    result = await effect(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/lazycat/github/projects/sun/trading-service/tests/integration/test_circuit_breaker_resilience.py", line 53, in fail_post
+    raise RequestError("Connection reset", request=Request("POST", "http://test"))
+httpx.RequestError: Connection reset
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s
+ERROR    app.services.vllm_client:vllm_client.py:1807 [VLLM] ⏰ Future TIMEOUT after 60s | agent=unknown ticker= endpoint=jetson | active=0/50 queued=0 | PENALTY applied for 30s

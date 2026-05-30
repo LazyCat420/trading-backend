@@ -1161,6 +1161,24 @@ class VLLMClient:
                 }
                 item.future.set_result(result_dict)
 
+            # --- TRACE STORE ---
+            try:
+                from app.services.logging.trace_store import log_trace
+                log_trace(
+                    cycle_id=meta.get("cycle_id", ""),
+                    bot_id=meta.get("bot_id", ""),
+                    ticker=meta.get("ticker", ""),
+                    agent_name=meta.get("agent_name", "unknown"),
+                    system_prompt=meta.get("system_prompt", ""),
+                    user_prompt=meta.get("user_prompt", ""),
+                    response_text=content,
+                    temperature=item.payload.get("temperature", 0.3),
+                    tokens=total_tokens,
+                    elapsed_ms=elapsed_ms
+                )
+            except Exception as trace_err:
+                logger.debug("Failed to log trace: %s", trace_err)
+
             # Log to DB for DeepEval benchmarking
             # Skip internal auditor/evaluator agents to prevent circular logging
             # (DeepEval judge calls would be re-evaluated as "pending decisions")

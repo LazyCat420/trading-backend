@@ -30,6 +30,7 @@ from app.cognition.reflection_utils import generate_critique_prompt
 from app.cognition.debate.debate_judge import judge_debate
 from app.cognition.contracts.retrieval import SourceDocRef
 from app.services.adaptive_concurrency import concurrency_controller
+from app.services.logging.tracer import trace_span
 
 logger = logging.getLogger(__name__)
 
@@ -835,6 +836,7 @@ def _extract_claims_from_turns(
     return claims
 
 
+@trace_span("debate_coordinator.run_adversarial_debate")
 async def run_adversarial_debate(
     ticker: str,
     packet: EvidencePacket,

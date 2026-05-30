@@ -1,0 +1,1000 @@
+2026-05-30 13:59:37,383 [app.pipeline.data.data_completeness] INFO [PIPELINE]   📋 HIMS: Checking data completeness...
+2026-05-30 13:59:37,397 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_HIMS: 📰 HIMS: News recently collected, skipping JIT fetch. (info)
+2026-05-30 13:59:37,398 [app.pipeline.data.data_completeness] INFO [PIPELINE]   📰 HIMS: News recently collected, skipping JIT fetch.
+2026-05-30 13:59:37,398 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_HIMS: 🟠 HIMS: Reddit recently collected, skipping JIT fetch. (info)
+2026-05-30 13:59:37,399 [app.pipeline.data.data_completeness] INFO [PIPELINE]   🟠 HIMS: Reddit recently collected, skipping JIT fetch.
+2026-05-30 13:59:37,400 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_HIMS: 🔴 HIMS: YouTube recently collected, skipping JIT fetch. (info)
+2026-05-30 13:59:37,400 [app.pipeline.data.data_completeness] INFO [PIPELINE]   🔴 HIMS: YouTube recently collected, skipping JIT fetch.
+2026-05-30 13:59:37,400 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_HIMS: ✅ HIMS: 685 data points across 7 categories (all up to date) (info)
+2026-05-30 13:59:37,400 [app.pipeline.data.data_completeness] INFO [PIPELINE]   ✅ HIMS: 685 data points across 7 categories (all up to date)
+2026-05-30 13:59:37,404 [app.pipeline.data.data_completeness] INFO [DATA CHECK] HIMS JIT required: unsummarized news=30, yt=3, reddit=0
+2026-05-30 13:59:37,732 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/summarize: All scraped data already has summaries for ticker HIMS (ok)
+2026-05-30 13:59:37,733 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] consensus/started: Starting news consensus and outlier detection for ticker HIMS (running)
+2026-05-30 13:59:37,733 [app.processors.consensus_engine] INFO [CONSENSUS] Starting News Consensus Engine... for ticker HIMS
+2026-05-30 13:59:37,739 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 13:59:37,740 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing consensus_engine → Prism /agent (agent=CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT, ticker=N/A, tools=0)
+2026-05-30 13:59:44,411 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: [], tickers: {'analyzing': 1})
+2026-05-30 13:59:44,412 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 0 errors, queue=21, workers=2/2, elapsed=1003s (running)
+2026-05-30 13:59:44,710 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 13:59:44,977 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 13:59:47,384 [app.cognition.orchestration.runner] WARNING [V2] Data completeness TIMEOUT for HIMS (10s) — this check consistently times out. Proceeding without gap fill; evidence packet builder will handle data quality.
+2026-05-30 13:59:47,384 [cognition.OntologyBuilder] INFO [OntologyBuilder] Executing logic...
+2026-05-30 13:59:47,808 [app.cognition.ontology.ontology_builder] INFO [BrainGraph] Seeded 25 nodes+edges for HIMS
+2026-05-30 13:59:48,031 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_ontology_HIMS: HIMS: Ontology built (50 nodes) (ok)
+2026-05-30 13:59:48,071 [app.services.adaptive_concurrency] INFO [CONCURRENCY] packet_builder: dispatching 74 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 13:59:48,106 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing pillar_adjuster → Prism /agent (agent=CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT, ticker=HIMS, tools=0)
+2026-05-30 13:59:57,119 [app.tools.registry] ERROR [ToolRegistry] Tool execution failed for generate_trading_chart
+Traceback (most recent call last):
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_async/connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_async/http11.py", line 136, in handle_async_request
+    raise exc
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_async/http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_async/http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_async/http11.py", line 217, in _receive_event
+    data = await self._network_stream.read(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_backends/anyio.py", line 32, in read
+    with map_exceptions(exc_map):
+  File "/usr/local/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/opt/venv/lib/python3.11/site-packages/httpcore/_exceptions.py", line 14, in map_exceptions
+    raise to_exc(exc) from exc
+httpcore.ReadTimeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/app/tools/registry.py", line 499, in execute_tool_call
+    resp = await client.post(url, json=kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+  File "/usr/local/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/opt/venv/lib/python3.11/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ReadTimeout
+2026-05-30 13:59:57,139 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/chart_MSCI: MSCI: Technical chart generated successfully (ok)
+2026-05-30 13:59:59,413 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 0 errors, queue=21, workers=2/2, elapsed=1018s (running)
+2026-05-30 14:00:14,431 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:00:14,432 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 0 errors, queue=21, workers=2/2, elapsed=1033s (running)
+2026-05-30 14:00:14,732 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:00:14,997 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:00:23,814 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:01:23 PDT)" (scheduled at 2026-05-30 14:00:23.813260-07:00)
+2026-05-30 14:00:23,824 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:01:23 PDT)" executed successfully
+2026-05-30 14:00:25,585 [app.services.vllm_client] WARNING [VLLM] 🛑 Task cancelled while waiting for future | agent=thesis_agent ticker=UBS endpoint=dgx_spark
+2026-05-30 14:00:25,585 [app.cognition.orchestration.runner] ERROR [V2] Thesis generation TIMEOUT for UBS after 2 attempts. Err: 
+2026-05-30 14:00:25,585 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_thesis_timeout_UBS: UBS: Thesis LLM TIMEOUT (all 2 attempts exhausted) (error)
+2026-05-30 14:00:25,586 [app.cycle.phases.phase4_analysis] ERROR Analysis crashed for UBS: Thesis generation timed out after 2 attempts (worker 0, 1023521ms)
+2026-05-30 14:00:25,586 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/worker_crash_UBS: 💥 Worker 0: UBS CRASHED — Thesis generation timed out after 2 attempts (error)
+2026-05-30 14:00:25,599 [app.services.logging.cycle_auditor] WARNING [AUDITOR] UBS: 2 issues — Empty rationale; Error in result: Thesis generation timed out after 2 attempts
+2026-05-30 14:00:25,599 [app.cycle.phases.phase4_analysis] INFO [CYCLE] [Worker 0] Got LTM (waited 0ms, 20 remaining in queue)
+2026-05-30 14:00:25,599 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/worker_got_LTM: Worker 0 → LTM (queue: 20 remaining, waited 0ms) (running)
+2026-05-30 14:00:25,600 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_start_LTM: LTM: V2 cognition pipeline starting (running)
+2026-05-30 14:00:25,623 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_LTM: 📋 LTM: Checking data completeness... (running)
+2026-05-30 14:00:25,623 [app.pipeline.data.data_completeness] INFO [PIPELINE]   📋 LTM: Checking data completeness...
+2026-05-30 14:00:25,629 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_LTM: 📰 LTM: News recently collected, skipping JIT fetch. (info)
+2026-05-30 14:00:25,629 [app.pipeline.data.data_completeness] INFO [PIPELINE]   📰 LTM: News recently collected, skipping JIT fetch.
+2026-05-30 14:00:25,630 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_LTM: 🟠 LTM: Reddit recently collected, skipping JIT fetch. (info)
+2026-05-30 14:00:25,630 [app.pipeline.data.data_completeness] INFO [PIPELINE]   🟠 LTM: Reddit recently collected, skipping JIT fetch.
+2026-05-30 14:00:25,630 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_LTM: 🔴 LTM: YouTube recently collected, skipping JIT fetch. (info)
+2026-05-30 14:00:25,630 [app.pipeline.data.data_completeness] INFO [PIPELINE]   🔴 LTM: YouTube recently collected, skipping JIT fetch.
+2026-05-30 14:00:25,631 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_LTM: ✅ LTM: 562 data points across 7 categories (all up to date) (info)
+2026-05-30 14:00:25,631 [app.pipeline.data.data_completeness] INFO [PIPELINE]   ✅ LTM: 562 data points across 7 categories (all up to date)
+2026-05-30 14:00:25,635 [app.pipeline.data.data_completeness] INFO [DATA CHECK] LTM JIT required: unsummarized news=3, yt=0, reddit=0
+2026-05-30 14:00:25,672 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/summarize: All scraped data already has summaries for ticker LTM (ok)
+2026-05-30 14:00:25,672 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] consensus/started: Starting news consensus and outlier detection for ticker LTM (running)
+2026-05-30 14:00:25,672 [app.processors.consensus_engine] INFO [CONSENSUS] Starting News Consensus Engine... for ticker LTM
+2026-05-30 14:00:25,680 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:00:25,680 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing narrative_curator → Prism /agent (agent=CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT, ticker=LTM, tools=0)
+2026-05-30 14:00:29,433 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1048s (running)
+2026-05-30 14:00:35,624 [app.cognition.orchestration.runner] WARNING [V2] Data completeness TIMEOUT for LTM (10s) — this check consistently times out. Proceeding without gap fill; evidence packet builder will handle data quality.
+2026-05-30 14:00:35,625 [cognition.OntologyBuilder] INFO [OntologyBuilder] Executing logic...
+2026-05-30 14:00:36,030 [app.cognition.ontology.ontology_builder] INFO [BrainGraph] Seeded 25 nodes+edges for LTM
+2026-05-30 14:00:36,083 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_ontology_LTM: LTM: Ontology built (43 nodes) (ok)
+2026-05-30 14:00:36,132 [app.services.adaptive_concurrency] INFO [CONCURRENCY] packet_builder: dispatching 69 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:00:36,144 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing pillar_adjuster → Prism /agent (agent=CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT, ticker=LTM, tools=0)
+2026-05-30 14:00:44,451 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:00:44,451 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1063s (running)
+2026-05-30 14:00:44,754 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:00:45,023 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:00:48,107 [app.cognition.evidence.packet_builder] WARNING [PACKET] Qualitative pillar adjustment failed for HIMS: 
+2026-05-30 14:00:48,107 [app.cognition.orchestration.runner] INFO [V2] [EVIDENCE] HIMS: 66 claims, 59 structured facts, 15 sources, missing=none, teaser_risk=0.20, diversity=4
+2026-05-30 14:00:48,107 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_evidence_HIMS: HIMS: Evidence packet — 66 claims, 59 facts, 0 missing, teaser_risk=20%, diversity=4 (ok)
+2026-05-30 14:00:48,108 [app.cognition.verification.sufficiency_gate] INFO [SUFFICIENCY] HIMS → sufficient | claims=66, facts=59, missing=none, blockers=none, warnings=0
+2026-05-30 14:00:48,128 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_orchestrator_HIMS: HIMS: MetaOrchestrator determining sub-agent routing... (running)
+2026-05-30 14:00:48,128 [app.cognition.orchestration.meta_orchestrator] INFO [HIMS] MetaOrchestrator: Dispatching ['macro_risk', 'sentiment', 'fundamentals'] (timeout=600.0s each)
+2026-05-30 14:00:48,128 [app.services.adaptive_concurrency] INFO [CONCURRENCY] meta_orchestrator: dispatching 3 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:00:48,129 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing macro_risk_agent → Prism /agent (agent=CUSTOM_MACRO_RISK_AGENT, ticker=HIMS, tools=0)
+2026-05-30 14:00:48,130 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing sentiment_agent → Prism /agent (agent=CUSTOM_SENTIMENT_AGENT, ticker=HIMS, tools=0)
+2026-05-30 14:00:48,132 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing fundamental_agent → Prism /agent (agent=CUSTOM_FUNDAMENTAL_AGENT, ticker=HIMS, tools=0)
+2026-05-30 14:00:48,585 [app.services.vllm_client] WARNING [VLLM] 🛑 Active request cancelled for agent=thesis_agent ticker=UBS
+2026-05-30 14:00:55,175 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:00:55,176 [app.services.prism_agent_caller] INFO [PrismAgentCaller] sentiment_agent completed via Prism (agent=CUSTOM_SENTIMENT_AGENT, tokens=3029, 7045ms)
+2026-05-30 14:00:58,293 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:00:58,294 [app.services.prism_agent_caller] INFO [PrismAgentCaller] macro_risk_agent completed via Prism (agent=CUSTOM_MACRO_RISK_AGENT, tokens=3027, 10165ms)
+2026-05-30 14:00:59,043 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:00:59,044 [app.services.prism_agent_caller] INFO [PrismAgentCaller] fundamental_agent completed via Prism (agent=CUSTOM_FUNDAMENTAL_AGENT, tokens=3049, 10911ms)
+2026-05-30 14:00:59,044 [app.agents.task_board] INFO [TaskBoard] macro_risk_agent posted finding f-0007 (fact): HIMS exhibits severe fundamental deterioration in 2026, marked by a sharp revers
+2026-05-30 14:00:59,044 [app.agents.task_board] INFO [TaskBoard] sentiment_agent posted finding f-0008 (fact): Classification: Mildly Bearish
+Score: -0.5
+Color: HSL(30, 100%, 40%)
+Rationale: 
+2026-05-30 14:00:59,045 [app.agents.task_board] INFO [TaskBoard] fundamentals_agent posted finding f-0009 (fact): The company exhibits a severe deterioration in profitability, swinging from a ne
+2026-05-30 14:00:59,045 [app.cognition.orchestration.meta_orchestrator] INFO [HIMS] MetaOrchestrator: Posted 3 specialist findings to TaskBoard
+2026-05-30 14:00:59,045 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_orchestrator_done_HIMS: HIMS: MetaOrchestrator completed 3 specialist agents (ok)
+2026-05-30 14:00:59,046 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_position_HIMS: HIMS: Bot HOLDS position — entry=$23.85, P&L=+3.4%, held 3d. Debate will include sell-thesis framing. (ok)
+2026-05-30 14:00:59,047 [app.cognition.orchestration.runner] INFO [V2] [COLLAB] Injected 3 team findings for HIMS into debate context
+2026-05-30 14:00:59,047 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_team_findings_HIMS: HIMS: 3 team findings injected into debate context (ok)
+2026-05-30 14:00:59,047 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_debate_HIMS: HIMS: Starting adversarial debate (HOLD-vs-SELL)... (running)
+2026-05-30 14:00:59,047 [app.cognition.debate.debate_coordinator] INFO [DEBATE] ══════════════════════════════════════════════════
+2026-05-30 14:00:59,048 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Starting HOLD-vs-SELL debate for HIMS
+2026-05-30 14:00:59,048 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Swarm load-balancing mode active for all personas.
+2026-05-30 14:00:59,050 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Attempt 1 / 3
+2026-05-30 14:00:59,050 [app.services.adaptive_concurrency] INFO [CONCURRENCY] debate_personas: dispatching 3 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:00:59,051 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Fundamental gets 24/59 facts (filtered)
+2026-05-30 14:00:59,052 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Technical gets 18/59 facts (filtered)
+2026-05-30 14:00:59,052 [app.cognition.debate.debate_coordinator] WARNING [DEBATE] Evidence filter for Macro_Sentiment matched 0/59 facts — using full packet
+2026-05-30 14:00:59,052 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Macro_Sentiment gets 59/59 facts (filtered)
+2026-05-30 14:00:59,059 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:00:59,061 [app.services.vllm_client] INFO [PRISM] Agent call for bull_fundamental_t1_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:00:59,064 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:00:59,075 [app.services.vllm_client] INFO [PRISM] Agent call for bull_macro_sentiment_t1_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:00:59,078 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:00:59,079 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t1_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:00:59,147 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:00:59,148 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:00:59,152 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:00:59,452 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1078s (running)
+2026-05-30 14:01:02,569 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/10 tools for 'bull_fundamental_t1_agent_selector' (HIMS) — 1053 selector tokens used. Tools: ['search_trading_skills', 'read_team_findings', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:01:02,570 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_fundamental_t1_agent → ['search_trading_skills', 'read_team_findings', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:01:02,596 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_fundamental_t1_agent agentic loop to Prism /agent
+2026-05-30 14:01:02,632 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_fundamental_t1_agent in Prism
+2026-05-30 14:01:02,634 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bull_macro_sentiment_t1_agent_selector' (HIMS) — 1124 selector tokens used. Tools: ['get_finnhub_news', 'search_web', 'query_hermes', 'read_team_findings', 'search_database_facts']
+2026-05-30 14:01:02,635 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_macro_sentiment_t1_agent → ['get_finnhub_news', 'search_web', 'query_hermes', 'read_team_findings', 'search_database_facts']
+2026-05-30 14:01:02,709 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_macro_sentiment_t1_agent agentic loop to Prism /agent
+2026-05-30 14:01:02,712 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_macro_sentiment_t1_agent in Prism
+2026-05-30 14:01:02,801 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:01:02,804 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_MACRO_SENTIMENT_T1_AGENT (db_id: 6a15063ef623804f353ddd90)
+2026-05-30 14:01:02,806 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:01:02,810 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_FUNDAMENTAL_T1_AGENT (db_id: 6a15063ff623804f353ddd94)
+2026-05-30 14:01:02,857 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ff623804f353ddd94 "HTTP/1.1 200 OK"
+2026-05-30 14:01:02,951 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_fundamental_t1_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=HIMS)
+2026-05-30 14:01:02,954 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ef623804f353ddd90 "HTTP/1.1 200 OK"
+2026-05-30 14:01:03,048 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_macro_sentiment_t1_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=HIMS)
+2026-05-30 14:01:14,480 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:01:14,480 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1093s (running)
+2026-05-30 14:01:14,775 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:01:15,062 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:01:21,964 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:01:21,965 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bull_technical_t1_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:01:21,967 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_technical_t1_agent agentic loop to Prism /agent
+2026-05-30 14:01:21,968 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t1_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:01:22,088 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:01:23,814 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:02:23 PDT)" (scheduled at 2026-05-30 14:01:23.813260-07:00)
+2026-05-30 14:01:23,829 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:02:23 PDT)" executed successfully
+2026-05-30 14:01:29,482 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1108s (running)
+2026-05-30 14:01:36,135 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:01:36,136 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:01:36,147 [app.cognition.evidence.packet_builder] WARNING [PACKET] Qualitative pillar adjustment failed for LTM: 
+2026-05-30 14:01:36,148 [app.cognition.orchestration.runner] INFO [V2] [EVIDENCE] LTM: 64 claims, 59 structured facts, 10 sources, missing=none, teaser_risk=0.00, diversity=3
+2026-05-30 14:01:36,148 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_evidence_LTM: LTM: Evidence packet — 64 claims, 59 facts, 0 missing, teaser_risk=0%, diversity=3 (ok)
+2026-05-30 14:01:36,148 [app.cognition.verification.sufficiency_gate] INFO [SUFFICIENCY] LTM → sufficient | claims=64, facts=59, missing=none, blockers=none, warnings=0
+2026-05-30 14:01:36,184 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_orchestrator_LTM: LTM: MetaOrchestrator determining sub-agent routing... (running)
+2026-05-30 14:01:36,184 [app.cognition.orchestration.meta_orchestrator] INFO [LTM] MetaOrchestrator: Dispatching ['macro_risk', 'sentiment', 'fundamentals'] (timeout=600.0s each)
+2026-05-30 14:01:36,184 [app.services.adaptive_concurrency] INFO [CONCURRENCY] meta_orchestrator: dispatching 3 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:01:36,190 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:01:36,190 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing macro_risk_agent → Prism /agent (agent=CUSTOM_MACRO_RISK_AGENT, ticker=LTM, tools=0)
+2026-05-30 14:01:36,192 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:01:36,193 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:01:36,193 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing sentiment_agent → Prism /agent (agent=CUSTOM_SENTIMENT_AGENT, ticker=LTM, tools=0)
+2026-05-30 14:01:36,195 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing fundamental_agent → Prism /agent (agent=CUSTOM_FUNDAMENTAL_AGENT, ticker=LTM, tools=0)
+2026-05-30 14:01:44,462 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:01:44,462 [app.tools.prism_agent_harness] INFO [PrismHarness] Tool selection: 8 tools selected for bull_technical_t1_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:01:44,466 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_technical_t1_agent in Prism
+2026-05-30 14:01:44,512 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:01:44,512 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1123s (running)
+2026-05-30 14:01:44,592 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:01:44,594 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_TECHNICAL_T1_AGENT (db_id: 6a15063ef623804f353ddd8b)
+2026-05-30 14:01:44,635 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ef623804f353ddd8b "HTTP/1.1 200 OK"
+2026-05-30 14:01:44,716 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_technical_t1_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=8, ticker=HIMS)
+2026-05-30 14:01:44,812 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:01:45,101 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:01:45,901 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:01:45,902 [app.services.prism_agent_caller] INFO [PrismAgentCaller] sentiment_agent completed via Prism (agent=CUSTOM_SENTIMENT_AGENT, tokens=3057, 9708ms)
+2026-05-30 14:01:48,351 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:01:48,352 [app.services.prism_agent_caller] INFO [PrismAgentCaller] macro_risk_agent completed via Prism (agent=CUSTOM_MACRO_RISK_AGENT, tokens=3014, 12161ms)
+2026-05-30 14:01:49,176 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:01:49,177 [app.services.prism_agent_caller] INFO [PrismAgentCaller] fundamental_agent completed via Prism (agent=CUSTOM_FUNDAMENTAL_AGENT, tokens=3037, 12981ms)
+2026-05-30 14:01:49,177 [app.agents.task_board] INFO [TaskBoard] macro_risk_agent posted finding f-0010 (fact): The entity exhibits severe financial distress despite strong top-line growth, ch
+2026-05-30 14:01:49,177 [app.agents.task_board] INFO [TaskBoard] sentiment_agent posted finding f-0011 (fact): Classification: Mildly Bullish
+Score: 0.5
+Color: HSL(90, 100%, 40%)
+Rationale: T
+2026-05-30 14:01:49,177 [app.agents.task_board] INFO [TaskBoard] fundamentals_agent posted finding f-0012 (fact): The company trades at an attractive valuation with a P/E of 9.29 and a forward P
+2026-05-30 14:01:49,177 [app.cognition.orchestration.meta_orchestrator] INFO [LTM] MetaOrchestrator: Posted 3 specialist findings to TaskBoard
+2026-05-30 14:01:49,178 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_orchestrator_done_LTM: LTM: MetaOrchestrator completed 3 specialist agents (ok)
+2026-05-30 14:01:49,178 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_position_LTM: LTM: Bot HOLDS position — entry=$52.26, P&L=+2.9%, held 2d. Debate will include sell-thesis framing. (ok)
+2026-05-30 14:01:49,178 [app.cognition.orchestration.runner] INFO [V2] [COLLAB] Injected 3 team findings for LTM into debate context
+2026-05-30 14:01:49,178 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_team_findings_LTM: LTM: 3 team findings injected into debate context (ok)
+2026-05-30 14:01:49,178 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_debate_LTM: LTM: Starting adversarial debate (HOLD-vs-SELL)... (running)
+2026-05-30 14:01:49,179 [app.cognition.debate.debate_coordinator] INFO [DEBATE] ══════════════════════════════════════════════════
+2026-05-30 14:01:49,179 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Starting HOLD-vs-SELL debate for LTM
+2026-05-30 14:01:49,179 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Swarm load-balancing mode active for all personas.
+2026-05-30 14:01:49,189 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Attempt 1 / 3
+2026-05-30 14:01:49,189 [app.services.adaptive_concurrency] INFO [CONCURRENCY] debate_personas: dispatching 3 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:01:49,190 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Fundamental gets 24/59 facts (filtered)
+2026-05-30 14:01:49,191 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Technical gets 18/59 facts (filtered)
+2026-05-30 14:01:49,192 [app.cognition.debate.debate_coordinator] WARNING [DEBATE] Evidence filter for Macro_Sentiment matched 0/59 facts — using full packet
+2026-05-30 14:01:49,192 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Macro_Sentiment gets 59/59 facts (filtered)
+2026-05-30 14:01:49,194 [app.services.vllm_client] INFO [PRISM] Agent call for bull_fundamental_t1_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:01:49,196 [app.services.vllm_client] INFO [PRISM] Agent call for bull_macro_sentiment_t1_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:01:49,199 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t1_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:01:49,216 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:01:49,222 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:01:49,224 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:01:53,863 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bull_macro_sentiment_t1_agent_selector' (LTM) — 1124 selector tokens used. Tools: ['get_finnhub_news', 'search_web', 'search_internal_database', 'search_trading_skills', 'read_team_findings']
+2026-05-30 14:01:53,864 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_macro_sentiment_t1_agent → ['get_finnhub_news', 'search_web', 'search_internal_database', 'search_trading_skills', 'read_team_findings']
+2026-05-30 14:01:53,864 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_macro_sentiment_t1_agent agentic loop to Prism /agent
+2026-05-30 14:01:53,867 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_macro_sentiment_t1_agent in Prism
+2026-05-30 14:01:53,911 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/10 tools for 'bull_fundamental_t1_agent_selector' (LTM) — 1054 selector tokens used. Tools: ['search_trading_skills', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:01:53,911 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_fundamental_t1_agent → ['search_trading_skills', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:01:53,936 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_fundamental_t1_agent agentic loop to Prism /agent
+2026-05-30 14:01:53,938 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_fundamental_t1_agent in Prism
+2026-05-30 14:01:54,018 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:01:54,020 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:01:54,022 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_MACRO_SENTIMENT_T1_AGENT (db_id: 6a15063ef623804f353ddd90)
+2026-05-30 14:01:54,024 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_FUNDAMENTAL_T1_AGENT (db_id: 6a15063ff623804f353ddd94)
+2026-05-30 14:01:54,050 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ef623804f353ddd90 "HTTP/1.1 200 OK"
+2026-05-30 14:01:54,137 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_macro_sentiment_t1_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=LTM)
+2026-05-30 14:01:54,139 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ff623804f353ddd94 "HTTP/1.1 200 OK"
+2026-05-30 14:01:54,229 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_fundamental_t1_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=LTM)
+2026-05-30 14:01:59,513 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1138s (running)
+2026-05-30 14:02:06,372 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:02:06,373 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_fundamental_t1_agent completed via Prism in 63744ms (0 tokens)
+2026-05-30 14:02:06,457 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_fundamental_t1_agent
+2026-05-30 14:02:06,464 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:02:06,465 [app.services.vllm_client] INFO [PRISM] Agent call for bear_fundamental_t2_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:02:06,469 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:02:13,381 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/10 tools for 'bear_fundamental_t2_agent_selector' (HIMS) — 1040 selector tokens used. Tools: ['search_trading_skills', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:02:13,382 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bear_fundamental_t2_agent → ['search_trading_skills', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:02:13,383 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_fundamental_t2_agent agentic loop to Prism /agent
+2026-05-30 14:02:13,388 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_fundamental_t2_agent in Prism
+2026-05-30 14:02:13,399 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:02:13,401 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_FUNDAMENTAL_T2_AGENT (db_id: 6a1506c9f623804f353dddf6)
+2026-05-30 14:02:13,439 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506c9f623804f353dddf6 "HTTP/1.1 200 OK"
+2026-05-30 14:02:13,477 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_fundamental_t2_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=HIMS)
+2026-05-30 14:02:14,529 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:02:14,530 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1153s (running)
+2026-05-30 14:02:14,836 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:02:15,131 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:02:23,128 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:02:23,128 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bull_technical_t1_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:02:23,128 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_technical_t1_agent agentic loop to Prism /agent
+2026-05-30 14:02:23,135 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t1_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:02:23,140 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:02:23,816 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:03:23 PDT)" (scheduled at 2026-05-30 14:02:23.813260-07:00)
+2026-05-30 14:02:23,836 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:03:23 PDT)" executed successfully
+2026-05-30 14:02:23,837 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:02:23,838 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_macro_sentiment_t1_agent completed via Prism in 81127ms (0 tokens)
+2026-05-30 14:02:23,985 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_macro_sentiment_t1_agent
+2026-05-30 14:02:23,988 [app.services.vllm_client] INFO [PRISM] Agent call for bear_macro_sentiment_t2_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:02:24,048 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:02:27,554 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bear_macro_sentiment_t2_agent_selector' (HIMS) — 1119 selector tokens used. Tools: ['get_market_data', 'get_finnhub_news', 'search_internal_database', 'search_trading_skills', 'read_team_findings']
+2026-05-30 14:02:27,555 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bear_macro_sentiment_t2_agent → ['get_market_data', 'get_finnhub_news', 'search_internal_database', 'search_trading_skills', 'read_team_findings']
+2026-05-30 14:02:27,558 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_macro_sentiment_t2_agent agentic loop to Prism /agent
+2026-05-30 14:02:27,560 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_macro_sentiment_t2_agent in Prism
+2026-05-30 14:02:27,627 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:02:27,629 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_MACRO_SENTIMENT_T2_AGENT (db_id: 6a1506cff623804f353dddfa)
+2026-05-30 14:02:27,730 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506cff623804f353dddfa "HTTP/1.1 200 OK"
+2026-05-30 14:02:27,763 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_macro_sentiment_t2_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=HIMS)
+2026-05-30 14:02:29,053 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bull_technical_t1 timed out after 90s for Technical/HIMS
+2026-05-30 14:02:29,053 [app.services.vllm_client] INFO [PRISM] Agent call for bear_technical_t2_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:02:29,057 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:02:29,531 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1168s (running)
+2026-05-30 14:02:44,548 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:02:44,548 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1183s (running)
+2026-05-30 14:02:44,844 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/8 tools for 'bear_technical_t2_agent_selector' (HIMS) — 979 selector tokens used. Tools: ['get_technical_indicators', 'read_team_findings', 'query_technical_indicator']
+2026-05-30 14:02:44,845 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bear_technical_t2_agent → ['get_technical_indicators', 'read_team_findings', 'query_technical_indicator']
+2026-05-30 14:02:44,849 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:02:44,850 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_technical_t2_agent agentic loop to Prism /agent
+2026-05-30 14:02:44,852 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_technical_t2_agent in Prism
+2026-05-30 14:02:44,856 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:02:44,858 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_macro_sentiment_t1_agent completed via Prism in 50991ms (0 tokens)
+2026-05-30 14:02:44,946 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_macro_sentiment_t1_agent
+2026-05-30 14:02:44,975 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:02:44,976 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:02:44,981 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_TECHNICAL_T2_AGENT (db_id: 6a1506c2f623804f353dddf1)
+2026-05-30 14:02:44,983 [app.services.vllm_client] INFO [PRISM] Agent call for bear_macro_sentiment_t2_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:02:45,021 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:02:45,036 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506c2f623804f353dddf1 "HTTP/1.1 200 OK"
+2026-05-30 14:02:45,064 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_technical_t2_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=3, ticker=HIMS)
+2026-05-30 14:02:45,172 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:02:47,716 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bear_macro_sentiment_t2_agent_selector' (LTM) — 1080 selector tokens used. Tools: ['get_market_data', 'get_finnhub_news', 'search_web', 'post_finding', 'read_team_findings']
+2026-05-30 14:02:47,716 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bear_macro_sentiment_t2_agent → ['get_market_data', 'get_finnhub_news', 'search_web', 'post_finding', 'read_team_findings']
+2026-05-30 14:02:47,717 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_macro_sentiment_t2_agent agentic loop to Prism /agent
+2026-05-30 14:02:47,718 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_macro_sentiment_t2_agent in Prism
+2026-05-30 14:02:47,821 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:02:47,823 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_MACRO_SENTIMENT_T2_AGENT (db_id: 6a1506cff623804f353dddfa)
+2026-05-30 14:02:47,924 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506cff623804f353dddfa "HTTP/1.1 200 OK"
+2026-05-30 14:02:47,958 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_macro_sentiment_t2_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=LTM)
+2026-05-30 14:02:56,127 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:02:56,128 [app.tools.prism_agent_harness] INFO [PrismHarness] Tool selection: 8 tools selected for bull_technical_t1_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:02:56,130 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_technical_t1_agent in Prism
+2026-05-30 14:02:56,142 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:02:56,144 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_TECHNICAL_T1_AGENT (db_id: 6a15063ef623804f353ddd8b)
+2026-05-30 14:02:56,261 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ef623804f353ddd8b "HTTP/1.1 200 OK"
+2026-05-30 14:02:56,373 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_technical_t1_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=8, ticker=LTM)
+2026-05-30 14:02:57,467 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:02:57,468 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_fundamental_t1_agent completed via Prism in 63531ms (0 tokens)
+2026-05-30 14:02:57,549 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_fundamental_t1_agent
+2026-05-30 14:02:57,550 [app.services.vllm_client] INFO [PRISM] Agent call for bear_fundamental_t2_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:02:57,554 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:02:59,233 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/10 tools for 'bear_fundamental_t2_agent_selector' (LTM) — 1003 selector tokens used. Tools: ['get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:02:59,234 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bear_fundamental_t2_agent → ['get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:02:59,234 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_fundamental_t2_agent agentic loop to Prism /agent
+2026-05-30 14:02:59,236 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_fundamental_t2_agent in Prism
+2026-05-30 14:02:59,244 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:02:59,246 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_FUNDAMENTAL_T2_AGENT (db_id: 6a1506c9f623804f353dddf6)
+2026-05-30 14:02:59,295 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506c9f623804f353dddf6 "HTTP/1.1 200 OK"
+2026-05-30 14:02:59,337 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_fundamental_t2_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=3, ticker=LTM)
+2026-05-30 14:02:59,549 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1198s (running)
+2026-05-30 14:03:14,563 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:03:14,563 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1213s (running)
+2026-05-30 14:03:14,997 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:03:15,219 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:03:19,193 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bull_technical_t1 timed out after 90s for Technical/LTM
+2026-05-30 14:03:19,196 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:03:19,197 [app.services.vllm_client] INFO [PRISM] Agent call for bear_technical_t2_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:03:19,206 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:03:22,439 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:03:22,440 [app.tools.prism_agent_harness] INFO [PrismHarness] bear_fundamental_t2_agent completed via Prism in 69053ms (0 tokens)
+2026-05-30 14:03:22,533 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bear_fundamental_t2_agent
+2026-05-30 14:03:22,536 [app.services.vllm_client] INFO [PRISM] Agent call for bull_fundamental_t3_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:03:22,553 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:03:23,814 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:04:23 PDT)" (scheduled at 2026-05-30 14:03:23.813260-07:00)
+2026-05-30 14:03:23,830 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:04:23 PDT)" executed successfully
+2026-05-30 14:03:24,296 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/10 tools for 'bull_fundamental_t3_agent_selector' (HIMS) — 1018 selector tokens used. Tools: ['get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:03:24,296 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bull_fundamental_t3_agent → ['get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:03:24,297 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_fundamental_t3_agent agentic loop to Prism /agent
+2026-05-30 14:03:24,298 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_fundamental_t3_agent in Prism
+2026-05-30 14:03:24,311 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:03:24,313 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_FUNDAMENTAL_T3_AGENT (db_id: 6a15079df623804f353dde36)
+2026-05-30 14:03:24,374 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15079df623804f353dde36 "HTTP/1.1 200 OK"
+2026-05-30 14:03:24,399 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_fundamental_t3_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=3, ticker=HIMS)
+2026-05-30 14:03:29,566 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1228s (running)
+2026-05-30 14:03:36,150 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:03:36,150 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:03:36,771 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:03:36,774 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bear_technical_t2_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:03:36,774 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_technical_t2_agent agentic loop to Prism /agent
+2026-05-30 14:03:36,775 [app.services.vllm_client] INFO [PRISM] Agent call for bear_technical_t2_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:03:36,781 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:03:42,174 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:03:42,176 [app.tools.prism_agent_harness] INFO [PrismHarness] bear_macro_sentiment_t2_agent completed via Prism in 54458ms (0 tokens)
+2026-05-30 14:03:42,336 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bear_macro_sentiment_t2_agent
+2026-05-30 14:03:42,338 [app.services.vllm_client] INFO [PRISM] Agent call for bull_macro_sentiment_t3_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:03:42,385 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:03:44,597 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bull_macro_sentiment_t3_agent_selector' (LTM) — 1106 selector tokens used. Tools: ['get_market_data', 'get_finnhub_news', 'search_web', 'search_trading_skills', 'search_database_facts']
+2026-05-30 14:03:44,598 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_macro_sentiment_t3_agent → ['get_market_data', 'get_finnhub_news', 'search_web', 'search_trading_skills', 'search_database_facts']
+2026-05-30 14:03:44,620 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:03:44,620 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1243s (running)
+2026-05-30 14:03:44,621 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_macro_sentiment_t3_agent agentic loop to Prism /agent
+2026-05-30 14:03:44,659 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_macro_sentiment_t3_agent in Prism
+2026-05-30 14:03:44,739 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:03:44,741 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_MACRO_SENTIMENT_T3_AGENT (db_id: 6a15078cf623804f353dde2b)
+2026-05-30 14:03:44,820 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15078cf623804f353dde2b "HTTP/1.1 200 OK"
+2026-05-30 14:03:44,843 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_macro_sentiment_t3_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=LTM)
+2026-05-30 14:03:45,024 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:03:45,264 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:03:53,988 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bear_macro_sentiment_t2 timed out after 90s for Macro_Sentiment/HIMS
+2026-05-30 14:03:53,993 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:03:53,994 [app.services.vllm_client] INFO [PRISM] Agent call for bull_macro_sentiment_t3_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:03:54,013 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:03:55,810 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:03:55,810 [app.tools.prism_agent_harness] INFO [PrismHarness] Tool selection: 8 tools selected for bear_technical_t2_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:03:55,813 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_technical_t2_agent in Prism
+2026-05-30 14:03:55,821 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:03:55,824 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_TECHNICAL_T2_AGENT (db_id: 6a1506c2f623804f353dddf1)
+2026-05-30 14:03:55,913 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506c2f623804f353dddf1 "HTTP/1.1 200 OK"
+2026-05-30 14:03:55,946 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_technical_t2_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=8, ticker=LTM)
+2026-05-30 14:03:56,086 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/13 tools for 'bull_macro_sentiment_t3_agent_selector' (HIMS) — 1078 selector tokens used. Tools: ['get_market_data', 'get_finnhub_news', 'search_internal_database']
+2026-05-30 14:03:56,087 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bull_macro_sentiment_t3_agent → ['get_market_data', 'get_finnhub_news', 'search_internal_database']
+2026-05-30 14:03:56,088 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_macro_sentiment_t3_agent agentic loop to Prism /agent
+2026-05-30 14:03:56,092 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_macro_sentiment_t3_agent in Prism
+2026-05-30 14:03:56,157 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:03:56,159 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_MACRO_SENTIMENT_T3_AGENT (db_id: 6a15078cf623804f353dde2b)
+2026-05-30 14:03:56,303 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15078cf623804f353dde2b "HTTP/1.1 200 OK"
+2026-05-30 14:03:56,327 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_macro_sentiment_t3_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=3, ticker=HIMS)
+2026-05-30 14:03:59,062 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bear_technical_t2 timed out after 90s for Technical/HIMS
+2026-05-30 14:03:59,063 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t3_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:03:59,076 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:03:59,621 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1258s (running)
+2026-05-30 14:04:10,416 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:04:10,418 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_fundamental_t3_agent completed via Prism in 46120ms (0 tokens)
+2026-05-30 14:04:10,468 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 3 tools as active for Prism-routed agent bull_fundamental_t3_agent
+2026-05-30 14:04:10,469 [app.services.vllm_client] INFO [PRISM] Agent call for bear_fundamental_t4_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:04:10,476 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:04:12,776 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/10 tools for 'bear_fundamental_t4_agent_selector' (HIMS) — 1034 selector tokens used. Tools: ['post_finding', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:04:12,779 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bear_fundamental_t4_agent → ['post_finding', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:04:12,780 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_fundamental_t4_agent agentic loop to Prism /agent
+2026-05-30 14:04:12,782 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_fundamental_t4_agent in Prism
+2026-05-30 14:04:12,796 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:04:12,825 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_FUNDAMENTAL_T4_AGENT (db_id: 6a1511a8f623804f353de295)
+2026-05-30 14:04:12,885 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1511a8f623804f353de295 "HTTP/1.1 200 OK"
+2026-05-30 14:04:12,919 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_fundamental_t4_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=HIMS)
+2026-05-30 14:04:14,641 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:04:14,642 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1273s (running)
+2026-05-30 14:04:15,050 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:04:15,317 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:04:23,814 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:05:23 PDT)" (scheduled at 2026-05-30 14:04:23.813260-07:00)
+2026-05-30 14:04:23,828 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:05:23 PDT)" executed successfully
+2026-05-30 14:04:27,551 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bear_fundamental_t2 timed out after 90s for Fundamental/LTM
+2026-05-30 14:04:27,554 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:04:27,555 [app.services.vllm_client] INFO [PRISM] Agent call for bull_fundamental_t3_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:04:27,559 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:04:29,643 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1288s (running)
+2026-05-30 14:04:31,451 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:04:31,455 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bull_technical_t3_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:04:31,456 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_technical_t3_agent agentic loop to Prism /agent
+2026-05-30 14:04:31,457 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t3_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:04:31,465 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:04:31,991 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/10 tools for 'bull_fundamental_t3_agent_selector' (LTM) — 1023 selector tokens used. Tools: ['search_trading_skills', 'post_finding', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:04:31,995 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_fundamental_t3_agent → ['search_trading_skills', 'post_finding', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:04:31,995 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_fundamental_t3_agent agentic loop to Prism /agent
+2026-05-30 14:04:31,998 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_fundamental_t3_agent in Prism
+2026-05-30 14:04:32,006 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:04:32,009 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_FUNDAMENTAL_T3_AGENT (db_id: 6a15079df623804f353dde36)
+2026-05-30 14:04:32,055 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15079df623804f353dde36 "HTTP/1.1 200 OK"
+2026-05-30 14:04:32,092 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_fundamental_t3_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=LTM)
+2026-05-30 14:04:44,666 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:04:44,667 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1303s (running)
+2026-05-30 14:04:45,091 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:04:45,393 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:04:49,196 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bear_technical_t2 timed out after 90s for Technical/LTM
+2026-05-30 14:04:49,196 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t3_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:04:49,205 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:04:51,643 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: {"selected_tools": ["get_technical_
+2026-05-30 14:04:51,645 [app.tools.prism_agent_harness] INFO [PrismHarness] Tool selection: 8 tools selected for bull_technical_t3_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:04:51,647 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_technical_t3_agent in Prism
+2026-05-30 14:04:51,658 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:04:51,703 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_TECHNICAL_T3_AGENT (db_id: 6a15075bf623804f353dde19)
+2026-05-30 14:04:51,736 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15075bf623804f353dde19 "HTTP/1.1 200 OK"
+2026-05-30 14:04:51,772 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_technical_t3_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=8, ticker=HIMS)
+2026-05-30 14:04:55,839 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:04:55,841 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_macro_sentiment_t3_agent completed via Prism in 71185ms (0 tokens)
+2026-05-30 14:04:55,949 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_macro_sentiment_t3_agent
+2026-05-30 14:04:55,952 [app.services.vllm_client] INFO [PRISM] Agent call for bear_macro_sentiment_t4_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:04:55,959 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:04:59,236 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bear_macro_sentiment_t4_agent_selector' (LTM) — 1112 selector tokens used. Tools: ['get_market_data', 'get_finnhub_news', 'search_web', 'read_team_findings', 'search_database_facts']
+2026-05-30 14:04:59,236 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bear_macro_sentiment_t4_agent → ['get_market_data', 'get_finnhub_news', 'search_web', 'read_team_findings', 'search_database_facts']
+2026-05-30 14:04:59,252 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:04:59,254 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_macro_sentiment_t4_agent agentic loop to Prism /agent
+2026-05-30 14:04:59,256 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_macro_sentiment_t4_agent in Prism
+2026-05-30 14:04:59,319 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:04:59,321 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_MACRO_SENTIMENT_T4_AGENT (db_id: 6a1511a8f623804f353de298)
+2026-05-30 14:04:59,346 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1511a8f623804f353de298 "HTTP/1.1 200 OK"
+2026-05-30 14:04:59,386 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_macro_sentiment_t4_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=LTM)
+2026-05-30 14:04:59,668 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1318s (running)
+2026-05-30 14:05:10,219 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:05:10,219 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bull_technical_t3_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:05:10,220 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_technical_t3_agent agentic loop to Prism /agent
+2026-05-30 14:05:10,220 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t3_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:05:10,225 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:05:14,687 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:05:14,687 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1333s (running)
+2026-05-30 14:05:15,114 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:05:15,498 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:05:19,204 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:05:19,205 [app.tools.prism_agent_harness] INFO [PrismHarness] bear_fundamental_t4_agent completed via Prism in 66423ms (0 tokens)
+2026-05-30 14:05:19,479 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bear_fundamental_t4_agent
+2026-05-30 14:05:23,814 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:06:23 PDT)" (scheduled at 2026-05-30 14:05:23.813260-07:00)
+2026-05-30 14:05:23,827 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:06:23 PDT)" executed successfully
+2026-05-30 14:05:24,037 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bull_macro_sentiment_t3 timed out after 90s for Macro_Sentiment/HIMS
+2026-05-30 14:05:24,037 [app.services.vllm_client] INFO [PRISM] Agent call for bear_macro_sentiment_t4_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:05:24,043 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:05:24,859 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:05:24,862 [app.tools.prism_agent_harness] INFO [PrismHarness] Tool selection: 8 tools selected for bull_technical_t3_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:05:24,864 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_technical_t3_agent in Prism
+2026-05-30 14:05:24,910 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:05:24,913 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_TECHNICAL_T3_AGENT (db_id: 6a15075bf623804f353dde19)
+2026-05-30 14:05:25,038 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15075bf623804f353dde19 "HTTP/1.1 200 OK"
+2026-05-30 14:05:25,058 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_technical_t3_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=8, ticker=LTM)
+2026-05-30 14:05:26,756 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/13 tools for 'bear_macro_sentiment_t4_agent_selector' (HIMS) — 1073 selector tokens used. Tools: ['get_finnhub_news', 'search_web', 'search_internal_database']
+2026-05-30 14:05:26,757 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bear_macro_sentiment_t4_agent → ['get_finnhub_news', 'search_web', 'search_internal_database']
+2026-05-30 14:05:26,757 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_macro_sentiment_t4_agent agentic loop to Prism /agent
+2026-05-30 14:05:26,758 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_macro_sentiment_t4_agent in Prism
+2026-05-30 14:05:26,766 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:05:26,769 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_MACRO_SENTIMENT_T4_AGENT (db_id: 6a1511a8f623804f353de298)
+2026-05-30 14:05:26,824 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1511a8f623804f353de298 "HTTP/1.1 200 OK"
+2026-05-30 14:05:26,852 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_macro_sentiment_t4_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=3, ticker=HIMS)
+2026-05-30 14:05:29,069 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bull_technical_t3 timed out after 90s for Technical/HIMS
+2026-05-30 14:05:29,070 [app.services.vllm_client] INFO [PRISM] Agent call for bear_technical_t4_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:05:29,100 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:05:29,688 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1348s (running)
+2026-05-30 14:05:30,893 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:05:30,895 [app.tools.prism_agent_harness] INFO [PrismHarness] bear_macro_sentiment_t4_agent completed via Prism in 31640ms (0 tokens)
+2026-05-30 14:05:31,010 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bear_macro_sentiment_t4_agent
+2026-05-30 14:05:36,160 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:05:36,162 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:05:44,323 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:05:44,324 [app.tools.prism_agent_harness] INFO [PrismHarness] bear_macro_sentiment_t4_agent completed via Prism in 17566ms (0 tokens)
+2026-05-30 14:05:44,366 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 3 tools as active for Prism-routed agent bear_macro_sentiment_t4_agent
+2026-05-30 14:05:44,713 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:05:44,714 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1364s (running)
+2026-05-30 14:05:45,140 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:05:45,550 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:05:48,983 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:05:48,986 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bear_technical_t4_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:05:48,991 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:05:48,991 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_technical_t4_agent agentic loop to Prism /agent
+2026-05-30 14:05:48,992 [app.services.vllm_client] INFO [PRISM] Agent call for bear_technical_t4_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:05:48,996 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:05:57,556 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bull_fundamental_t3 timed out after 90s for Fundamental/LTM
+2026-05-30 14:05:57,557 [app.services.vllm_client] INFO [PRISM] Agent call for bear_fundamental_t4_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:05:57,567 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:05:59,048 [app.services.vllm_client] WARNING [VLLM] 🛑 Task cancelled while waiting for future | agent=bear_technical_t4_agent_selector ticker=HIMS endpoint=dgx_spark (chat_with_tools)
+2026-05-30 14:05:59,050 [app.cognition.orchestration.runner] WARNING [V2] Adversarial debate failed for HIMS (non-fatal): 
+2026-05-30 14:05:59,050 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_debate_fail_HIMS: HIMS: Debate failed —  (warning)
+2026-05-30 14:05:59,052 [app.services.embedding_service] INFO Attempting fallback to Prism embedding gateway...
+2026-05-30 14:05:59,093 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/embed "HTTP/1.1 200 OK"
+2026-05-30 14:05:59,094 [app.services.embedding_service] INFO Successfully retrieved fallback embeddings from Prism for batch of size 1.
+2026-05-30 14:05:59,100 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/autoresearch_HIMS: HIMS: Injected 2 Autoresearch lessons (ok)
+2026-05-30 14:05:59,100 [app.cognition.orchestration.runner] INFO [V2] [MEMORY] Injected 2 Autoresearch lessons for HIMS
+2026-05-30 14:05:59,100 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_thesis_HIMS: HIMS: Generating thesis via LLM... (running)
+2026-05-30 14:05:59,103 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing thesis_agent → Prism /agent (agent=CUSTOM_BULLISH_DEBATER, ticker=HIMS, tools=0)
+2026-05-30 14:05:59,715 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1379s (running)
+2026-05-30 14:05:59,924 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/10 tools for 'bear_fundamental_t4_agent_selector' (LTM) — 1001 selector tokens used. Tools: ['get_market_data', 'get_sec_filings', 'query_financial_metrics']
+2026-05-30 14:05:59,925 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bear_fundamental_t4_agent → ['get_market_data', 'get_sec_filings', 'query_financial_metrics']
+2026-05-30 14:05:59,928 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_fundamental_t4_agent agentic loop to Prism /agent
+2026-05-30 14:05:59,929 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_fundamental_t4_agent in Prism
+2026-05-30 14:06:00,016 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:06:00,018 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_FUNDAMENTAL_T4_AGENT (db_id: 6a1511a8f623804f353de295)
+2026-05-30 14:06:00,093 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1511a8f623804f353de295 "HTTP/1.1 200 OK"
+2026-05-30 14:06:00,127 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_fundamental_t4_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=3, ticker=LTM)
+2026-05-30 14:06:09,952 [app.services.vllm_client] WARNING [VLLM] 🛑 Active request cancelled for agent=bear_technical_t4_agent_selector ticker=HIMS
+2026-05-30 14:06:14,731 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:06:14,731 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1394s (running)
+2026-05-30 14:06:15,166 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:06:15,589 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:06:19,197 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bull_technical_t3 timed out after 90s for Technical/LTM
+2026-05-30 14:06:19,204 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:06:19,204 [app.services.vllm_client] INFO [PRISM] Agent call for bear_technical_t4_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:06:19,209 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:06:23,820 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:07:23 PDT)" (scheduled at 2026-05-30 14:06:23.813260-07:00)
+2026-05-30 14:06:23,841 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:07:23 PDT)" executed successfully
+2026-05-30 14:06:29,732 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1409s (running)
+2026-05-30 14:06:44,750 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:06:44,750 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1424s (running)
+2026-05-30 14:06:45,189 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:06:45,632 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:06:48,251 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:06:48,251 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bear_technical_t4_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:06:48,251 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_technical_t4_agent agentic loop to Prism /agent
+2026-05-30 14:06:48,253 [app.services.vllm_client] INFO [PRISM] Agent call for bear_technical_t4_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:06:48,258 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:06:49,180 [app.services.vllm_client] WARNING [VLLM] 🛑 Task cancelled while waiting for future | agent=bear_technical_t4_agent_selector ticker=LTM endpoint=dgx_spark (chat_with_tools)
+2026-05-30 14:06:49,181 [app.cognition.orchestration.runner] WARNING [V2] Adversarial debate failed for LTM (non-fatal): 
+2026-05-30 14:06:49,181 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_debate_fail_LTM: LTM: Debate failed —  (warning)
+2026-05-30 14:06:49,185 [app.services.embedding_service] INFO Attempting fallback to Prism embedding gateway...
+2026-05-30 14:06:49,222 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/embed "HTTP/1.1 200 OK"
+2026-05-30 14:06:49,223 [app.services.embedding_service] INFO Successfully retrieved fallback embeddings from Prism for batch of size 1.
+2026-05-30 14:06:49,228 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/autoresearch_LTM: LTM: Injected 2 Autoresearch lessons (ok)
+2026-05-30 14:06:49,229 [app.cognition.orchestration.runner] INFO [V2] [MEMORY] Injected 2 Autoresearch lessons for LTM
+2026-05-30 14:06:49,229 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_thesis_LTM: LTM: Generating thesis via LLM... (running)
+2026-05-30 14:06:49,235 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:06:49,236 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing thesis_agent → Prism /agent (agent=CUSTOM_BULLISH_DEBATER, ticker=LTM, tools=0)
+2026-05-30 14:06:59,752 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1439s (running)
+2026-05-30 14:07:14,770 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:07:14,771 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1454s (running)
+2026-05-30 14:07:15,217 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:07:15,674 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:07:19,247 [app.services.vllm_client] WARNING [VLLM] 🛑 Active request cancelled for agent=bear_technical_t4_agent_selector ticker=LTM
+2026-05-30 14:07:23,814 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:08:23 PDT)" (scheduled at 2026-05-30 14:07:23.813260-07:00)
+2026-05-30 14:07:23,827 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:08:23 PDT)" executed successfully
+2026-05-30 14:07:29,771 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1469s (running)
+2026-05-30 14:07:36,244 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:07:36,256 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:07:44,789 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:07:44,790 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1484s (running)
+2026-05-30 14:07:45,240 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:07:45,709 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:07:59,114 [app.services.prism_client] WARNING [PRISM] API call to http://10.0.0.16:7777/chat?stream=false timed out. Raising immediately to trigger fast fallback.
+2026-05-30 14:07:59,114 [app.services.prism_agent_caller] WARNING [PrismAgentCaller] Prism routing failed for thesis_agent (CUSTOM_BULLISH_DEBATER), falling back to local: 
+2026-05-30 14:07:59,125 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:07:59,127 [app.services.vllm_client] INFO [PRISM] Agent call for thesis_agent (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:07:59,143 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:07:59,791 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1499s (running)
+2026-05-30 14:08:14,817 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 1})
+2026-05-30 14:08:14,818 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1514s (running)
+2026-05-30 14:08:15,263 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:08:15,755 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:08:20,989 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_thesis_done_HIMS: HIMS: Thesis → HOLD @ 65% (claims: 3, weaknesses: 4) (ok)
+2026-05-30 14:08:21,048 [app.cognition.memory.writer] INFO [COGNITION] Wrote episodic memory 16aef161 for HIMS
+2026-05-30 14:08:21,048 [app.cognition.orchestration.runner] INFO [V2] Wrote episode 16aef161 for HIMS
+2026-05-30 14:08:21,049 [app.cognition.orchestration.runner] INFO [V2] PIPELINE_COMPLETE ticker=HIMS elapsed=523708ms tokens=15751 action=HOLD confidence=65 stages=[data_completeness:10001ms, ontology:646ms, evidence_build:60070ms, thesis_generation:141888ms]
+2026-05-30 14:08:21,049 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_decision_HIMS: 🟡 HIMS: HOLD @ 65% | V2 cognition | 523.7s | 15,751 tokens (ok)
+2026-05-30 14:08:21,088 [app.pipeline.snapshot_writer] INFO Saved snapshot for HIMS to cycle-1780173780_HIMS_20260530_210821.json
+2026-05-30 14:08:21,090 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing post_cycle_learner → Prism /agent (agent=CUSTOM_SYSTEM_JANITOR_AGENT, ticker=HIMS, tools=0)
+2026-05-30 14:08:23,814 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:09:23 PDT)" (scheduled at 2026-05-30 14:08:23.813260-07:00)
+2026-05-30 14:08:23,824 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:09:23 PDT)" executed successfully
+2026-05-30 14:08:29,819 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1529s (running)
+2026-05-30 14:08:44,835 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 2})
+2026-05-30 14:08:44,836 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 1 done, 1 errors, queue=20, workers=2/2, elapsed=1544s (running)
+2026-05-30 14:08:45,291 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:08:45,795 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:08:49,241 [app.services.prism_client] WARNING [PRISM] API call to http://10.0.0.16:7777/chat?stream=false timed out. Raising immediately to trigger fast fallback.
+2026-05-30 14:08:49,241 [app.services.prism_agent_caller] WARNING [PrismAgentCaller] Prism routing failed for thesis_agent (CUSTOM_BULLISH_DEBATER), falling back to local: 
+2026-05-30 14:08:49,244 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:08:49,244 [app.services.vllm_client] INFO [PRISM] Agent call for thesis_agent (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:08:49,250 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:08:59,224 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:08:59,225 [app.services.prism_agent_caller] INFO [PrismAgentCaller] post_cycle_learner completed via Prism (agent=CUSTOM_SYSTEM_JANITOR_AGENT, tokens=666, 38135ms)
+2026-05-30 14:08:59,226 [app.cognition.trading_memory] INFO [MEMORY] Added to market (11.0% full): [HIMS] [MEDIUM] D/E 253.73 + negative margin (-0.56%) + yields 4.45% = avoid ent
+2026-05-30 14:08:59,226 [app.cycle.orchestration.post_cycle_learn] INFO [LEARN] HIMS: Stored lesson (666 tokens): [HIMS] [MEDIUM] D/E 253.73 + negative margin (-0.56%) + yields 4.45% = avoid ent
+2026-05-30 14:08:59,227 [app.services.embedding_service] INFO Attempting fallback to Prism embedding gateway...
+2026-05-30 14:08:59,274 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/embed "HTTP/1.1 200 OK"
+2026-05-30 14:08:59,275 [app.services.embedding_service] INFO Successfully retrieved fallback embeddings from Prism for batch of size 1.
+2026-05-30 14:08:59,324 [app.cognition.lesson_store] INFO [cognition] Stored evolution lesson evo_023627ef14e1 (session=live_may30 round=0)
+2026-05-30 14:08:59,356 [app.cognition.ontology.graph_mutations] INFO [GRAPH] Created Claim claim_a7 for HIMS: [HIMS] [MEDIUM] D/E 253.73 + negative margin (-0.56%) + yiel
+2026-05-30 14:08:59,401 [app.cognition.ontology.graph_mutations] INFO [GRAPH] Created TradeDecision decision_cyc: HOLD HIMS @65%
+2026-05-30 14:08:59,403 [app.services.logging.autoresearch] INFO [EvalWorker] Starting evaluation sweep...
+2026-05-30 14:08:59,406 [app.services.logging.autoresearch] INFO [EvalWorker] Evaluation sweep complete.
+2026-05-30 14:08:59,427 [app.cycle.phases.phase4_analysis] INFO [CYCLE] [Worker 1] Completed HIMS → HOLD@65% in 562087ms (2/30 done)
+2026-05-30 14:08:59,440 [app.cycle.phases.phase4_analysis] INFO [CYCLE] [Worker 1] Got CBOE (waited 0ms, 19 remaining in queue)
+2026-05-30 14:08:59,440 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/worker_got_CBOE: Worker 1 → CBOE (queue: 19 remaining, waited 0ms) (running)
+2026-05-30 14:08:59,442 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_start_CBOE: CBOE: V2 cognition pipeline starting (running)
+2026-05-30 14:08:59,489 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_CBOE: 📋 CBOE: Checking data completeness... (running)
+2026-05-30 14:08:59,489 [app.pipeline.data.data_completeness] INFO [PIPELINE]   📋 CBOE: Checking data completeness...
+2026-05-30 14:08:59,502 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_CBOE: 📰 CBOE: News recently collected, skipping JIT fetch. (info)
+2026-05-30 14:08:59,502 [app.pipeline.data.data_completeness] INFO [PIPELINE]   📰 CBOE: News recently collected, skipping JIT fetch.
+2026-05-30 14:08:59,503 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_CBOE: 🟠 CBOE: Reddit recently collected, skipping JIT fetch. (info)
+2026-05-30 14:08:59,504 [app.pipeline.data.data_completeness] INFO [PIPELINE]   🟠 CBOE: Reddit recently collected, skipping JIT fetch.
+2026-05-30 14:08:59,505 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_CBOE: 🔴 CBOE: YouTube recently collected, skipping JIT fetch. (info)
+2026-05-30 14:08:59,505 [app.pipeline.data.data_completeness] INFO [PIPELINE]   🔴 CBOE: YouTube recently collected, skipping JIT fetch.
+2026-05-30 14:08:59,508 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_CBOE: ✅ CBOE: 599 data points across 7 categories (all up to date) (info)
+2026-05-30 14:08:59,509 [app.pipeline.data.data_completeness] INFO [PIPELINE]   ✅ CBOE: 599 data points across 7 categories (all up to date)
+2026-05-30 14:08:59,513 [app.pipeline.data.data_completeness] INFO [DATA CHECK] CBOE JIT required: unsummarized news=30, yt=0, reddit=0
+2026-05-30 14:08:59,701 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/summarize: All scraped data already has summaries for ticker CBOE (ok)
+2026-05-30 14:08:59,701 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] consensus/started: Starting news consensus and outlier detection for ticker CBOE (running)
+2026-05-30 14:08:59,702 [app.processors.consensus_engine] INFO [CONSENSUS] Starting News Consensus Engine... for ticker CBOE
+2026-05-30 14:08:59,705 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing consensus_engine → Prism /agent (agent=CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT, ticker=N/A, tools=0)
+2026-05-30 14:08:59,837 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 2 done, 1 errors, queue=19, workers=2/2, elapsed=1559s (running)
+2026-05-30 14:09:09,491 [app.cognition.orchestration.runner] WARNING [V2] Data completeness TIMEOUT for CBOE (10s) — this check consistently times out. Proceeding without gap fill; evidence packet builder will handle data quality.
+2026-05-30 14:09:09,491 [cognition.OntologyBuilder] INFO [OntologyBuilder] Executing logic...
+2026-05-30 14:09:09,891 [app.cognition.ontology.ontology_builder] INFO [BrainGraph] Seeded 25 nodes+edges for CBOE
+2026-05-30 14:09:09,936 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_ontology_CBOE: CBOE: Ontology built (42 nodes) (ok)
+2026-05-30 14:09:09,989 [app.services.adaptive_concurrency] INFO [CONCURRENCY] packet_builder: dispatching 71 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:09:10,002 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing pillar_adjuster → Prism /agent (agent=CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT, ticker=CBOE, tools=0)
+2026-05-30 14:09:14,855 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 2})
+2026-05-30 14:09:14,855 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 2 done, 1 errors, queue=19, workers=2/2, elapsed=1574s (running)
+2026-05-30 14:09:15,314 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:09:15,832 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:09:19,874 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_thesis_done_LTM: LTM: Thesis → HOLD @ 65% (claims: 3, weaknesses: 4) (ok)
+2026-05-30 14:09:19,970 [app.cognition.memory.writer] INFO [COGNITION] Wrote episodic memory 7cf3190d for LTM
+2026-05-30 14:09:19,971 [app.cognition.orchestration.runner] INFO [V2] Wrote episode 7cf3190d for LTM
+2026-05-30 14:09:19,971 [app.cognition.orchestration.runner] INFO [V2] PIPELINE_COMPLETE ticker=LTM elapsed=534371ms tokens=15758 action=HOLD confidence=65 stages=[data_completeness:10001ms, ontology:458ms, evidence_build:60063ms, thesis_generation:150643ms]
+2026-05-30 14:09:19,971 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_decision_LTM: 🟡 LTM: HOLD @ 65% | V2 cognition | 534.4s | 15,758 tokens (ok)
+2026-05-30 14:09:20,047 [app.pipeline.snapshot_writer] INFO Saved snapshot for LTM to cycle-1780173780_LTM_20260530_210920.json
+2026-05-30 14:09:20,118 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:09:20,119 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing post_cycle_learner → Prism /agent (agent=CUSTOM_SYSTEM_JANITOR_AGENT, ticker=LTM, tools=0)
+2026-05-30 14:09:23,815 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:10:23 PDT)" (scheduled at 2026-05-30 14:09:23.813260-07:00)
+2026-05-30 14:09:23,824 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:10:23 PDT)" executed successfully
+2026-05-30 14:09:29,856 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 2 done, 1 errors, queue=19, workers=2/2, elapsed=1589s (running)
+2026-05-30 14:09:36,267 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:09:36,269 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:09:44,338 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:09:44,338 [app.services.prism_agent_caller] INFO [PrismAgentCaller] post_cycle_learner completed via Prism (agent=CUSTOM_SYSTEM_JANITOR_AGENT, tokens=695, 24219ms)
+2026-05-30 14:09:44,339 [app.cognition.trading_memory] INFO [MEMORY] Added to market (15.9% full): [LTM] [MEDIUM] Stochastic K > 95 near resistance at $54 despite P/E 9.3 = wait f
+2026-05-30 14:09:44,339 [app.cycle.orchestration.post_cycle_learn] INFO [LEARN] LTM: Stored lesson (695 tokens): [LTM] [MEDIUM] Stochastic K > 95 near resistance at $54 despite P/E 9.3 = wait f
+2026-05-30 14:09:44,340 [app.services.embedding_service] INFO Attempting fallback to Prism embedding gateway...
+2026-05-30 14:09:44,471 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/embed "HTTP/1.1 200 OK"
+2026-05-30 14:09:44,473 [app.services.embedding_service] INFO Successfully retrieved fallback embeddings from Prism for batch of size 1.
+2026-05-30 14:09:44,525 [app.cognition.lesson_store] INFO [cognition] Stored evolution lesson evo_264ef37c20f1 (session=live_may30 round=0)
+2026-05-30 14:09:44,569 [app.cognition.ontology.graph_mutations] INFO [GRAPH] Created Claim claim_e7 for LTM: [LTM] [MEDIUM] Stochastic K > 95 near resistance at $54 desp
+2026-05-30 14:09:44,621 [app.cognition.ontology.graph_mutations] INFO [GRAPH] Created TradeDecision decision_cyc: HOLD LTM @65%
+2026-05-30 14:09:44,623 [app.services.logging.autoresearch] INFO [EvalWorker] Starting evaluation sweep...
+2026-05-30 14:09:44,626 [app.services.logging.autoresearch] INFO [EvalWorker] Evaluation sweep complete.
+2026-05-30 14:09:44,641 [app.cycle.phases.phase4_analysis] INFO [CYCLE] [Worker 0] Completed LTM → HOLD@65% in 559040ms (3/30 done)
+2026-05-30 14:09:44,660 [app.cycle.phases.phase4_analysis] INFO [CYCLE] [Worker 0] Got OC (waited 0ms, 18 remaining in queue)
+2026-05-30 14:09:44,660 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/worker_got_OC: Worker 0 → OC (queue: 18 remaining, waited 0ms) (running)
+2026-05-30 14:09:44,662 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_start_OC: OC: V2 cognition pipeline starting (running)
+2026-05-30 14:09:44,713 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_OC: 📋 OC: Checking data completeness... (running)
+2026-05-30 14:09:44,713 [app.pipeline.data.data_completeness] INFO [PIPELINE]   📋 OC: Checking data completeness...
+2026-05-30 14:09:44,722 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_OC: 📰 OC: News recently collected, skipping JIT fetch. (info)
+2026-05-30 14:09:44,722 [app.pipeline.data.data_completeness] INFO [PIPELINE]   📰 OC: News recently collected, skipping JIT fetch.
+2026-05-30 14:09:44,723 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_OC: 🟠 OC: Reddit recently collected, skipping JIT fetch. (info)
+2026-05-30 14:09:44,723 [app.pipeline.data.data_completeness] INFO [PIPELINE]   🟠 OC: Reddit recently collected, skipping JIT fetch.
+2026-05-30 14:09:44,724 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_OC: 🔴 OC: YouTube recently collected, skipping JIT fetch. (info)
+2026-05-30 14:09:44,724 [app.pipeline.data.data_completeness] INFO [PIPELINE]   🔴 OC: YouTube recently collected, skipping JIT fetch.
+2026-05-30 14:09:44,724 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/data_OC: ✅ OC: 515 data points across 7 categories (all up to date) (info)
+2026-05-30 14:09:44,724 [app.pipeline.data.data_completeness] INFO [PIPELINE]   ✅ OC: 515 data points across 7 categories (all up to date)
+2026-05-30 14:09:44,727 [app.pipeline.data.data_completeness] INFO [DATA CHECK] OC JIT required: unsummarized news=2, yt=0, reddit=0
+2026-05-30 14:09:44,833 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] collecting/summarize: All scraped data already has summaries for ticker OC (ok)
+2026-05-30 14:09:44,834 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] consensus/started: Starting news consensus and outlier detection for ticker OC (running)
+2026-05-30 14:09:44,834 [app.processors.consensus_engine] INFO [CONSENSUS] Starting News Consensus Engine... for ticker OC
+2026-05-30 14:09:44,836 [app.processors.consensus_engine] INFO [CONSENSUS] Complete. No tickers had enough articles.
+2026-05-30 14:09:44,836 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] consensus/finished: Consensus finished: 0 processed. (ok)
+2026-05-30 14:09:44,841 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing narrative_curator → Prism /agent (agent=CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT, ticker=OC, tools=0)
+2026-05-30 14:09:44,882 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: [], tickers: {'analyzing': 3})
+2026-05-30 14:09:44,882 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1604s (running)
+2026-05-30 14:09:45,338 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:09:45,893 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:09:54,714 [app.cognition.orchestration.runner] WARNING [V2] Data completeness TIMEOUT for OC (10s) — this check consistently times out. Proceeding without gap fill; evidence packet builder will handle data quality.
+2026-05-30 14:09:54,715 [cognition.OntologyBuilder] INFO [OntologyBuilder] Executing logic...
+2026-05-30 14:09:55,157 [app.cognition.ontology.ontology_builder] INFO [BrainGraph] Seeded 25 nodes+edges for OC
+2026-05-30 14:09:55,201 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_ontology_OC: OC: Ontology built (20 nodes) (ok)
+2026-05-30 14:09:55,268 [app.services.adaptive_concurrency] INFO [CONCURRENCY] packet_builder: dispatching 70 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:09:55,286 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:09:55,286 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing pillar_adjuster → Prism /agent (agent=CUSTOM_TRADING_CYCLE_ANALYSIS_AGENT, ticker=OC, tools=0)
+2026-05-30 14:09:59,883 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1619s (running)
+2026-05-30 14:10:10,002 [app.cognition.evidence.packet_builder] WARNING [PACKET] Qualitative pillar adjustment failed for CBOE: 
+2026-05-30 14:10:10,003 [app.cognition.orchestration.runner] INFO [V2] [EVIDENCE] CBOE: 63 claims, 60 structured facts, 11 sources, missing=none, teaser_risk=0.00, diversity=4
+2026-05-30 14:10:10,003 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_evidence_CBOE: CBOE: Evidence packet — 63 claims, 60 facts, 0 missing, teaser_risk=0%, diversity=4 (ok)
+2026-05-30 14:10:10,003 [app.cognition.verification.sufficiency_gate] INFO [SUFFICIENCY] CBOE → sufficient | claims=63, facts=60, missing=none, blockers=none, warnings=0
+2026-05-30 14:10:10,024 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_orchestrator_CBOE: CBOE: MetaOrchestrator determining sub-agent routing... (running)
+2026-05-30 14:10:10,024 [app.cognition.orchestration.meta_orchestrator] INFO [CBOE] MetaOrchestrator: Dispatching ['macro_risk', 'sentiment', 'fundamentals'] (timeout=600.0s each)
+2026-05-30 14:10:10,024 [app.services.adaptive_concurrency] INFO [CONCURRENCY] meta_orchestrator: dispatching 3 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:10:10,025 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing macro_risk_agent → Prism /agent (agent=CUSTOM_MACRO_RISK_AGENT, ticker=CBOE, tools=0)
+2026-05-30 14:10:10,027 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing sentiment_agent → Prism /agent (agent=CUSTOM_SENTIMENT_AGENT, ticker=CBOE, tools=0)
+2026-05-30 14:10:10,028 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing fundamental_agent → Prism /agent (agent=CUSTOM_FUNDAMENTAL_AGENT, ticker=CBOE, tools=0)
+2026-05-30 14:10:14,902 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 3})
+2026-05-30 14:10:14,903 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1634s (running)
+2026-05-30 14:10:15,376 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:10:15,930 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:10:17,944 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:10:17,945 [app.services.prism_agent_caller] INFO [PrismAgentCaller] sentiment_agent completed via Prism (agent=CUSTOM_SENTIMENT_AGENT, tokens=3086, 7918ms)
+2026-05-30 14:10:20,053 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:10:20,054 [app.services.prism_agent_caller] INFO [PrismAgentCaller] macro_risk_agent completed via Prism (agent=CUSTOM_MACRO_RISK_AGENT, tokens=3057, 10028ms)
+2026-05-30 14:10:20,685 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:10:20,686 [app.services.prism_agent_caller] INFO [PrismAgentCaller] fundamental_agent completed via Prism (agent=CUSTOM_FUNDAMENTAL_AGENT, tokens=3081, 10657ms)
+2026-05-30 14:10:20,689 [app.agents.task_board] INFO [TaskBoard] macro_risk_agent posted finding f-0013 (fact): CBOE exhibits strong profitability with a 25.8% margin and high ROE, yet trades 
+2026-05-30 14:10:20,690 [app.agents.task_board] INFO [TaskBoard] sentiment_agent posted finding f-0014 (fact): Classification: Mildly Bearish
+Score: -0.5
+Color: HSL(30, 100%, 40%)
+Rationale: 
+2026-05-30 14:10:20,690 [app.agents.task_board] INFO [TaskBoard] fundamentals_agent posted finding f-0015 (fact): CBOE trades at a premium valuation with a P/E of 28.5 and P/B of 6.5, justified 
+2026-05-30 14:10:20,690 [app.cognition.orchestration.meta_orchestrator] INFO [CBOE] MetaOrchestrator: Posted 3 specialist findings to TaskBoard
+2026-05-30 14:10:20,690 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_orchestrator_done_CBOE: CBOE: MetaOrchestrator completed 3 specialist agents (ok)
+2026-05-30 14:10:20,691 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_position_CBOE: CBOE: Bot HOLDS position — entry=$347.69, P&L=-1.7%, held 2d. Debate will include sell-thesis framing. (ok)
+2026-05-30 14:10:20,691 [app.cognition.orchestration.runner] INFO [V2] [COLLAB] Injected 3 team findings for CBOE into debate context
+2026-05-30 14:10:20,691 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_team_findings_CBOE: CBOE: 3 team findings injected into debate context (ok)
+2026-05-30 14:10:20,692 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_debate_CBOE: CBOE: Starting adversarial debate (HOLD-vs-SELL)... (running)
+2026-05-30 14:10:20,692 [app.cognition.debate.debate_coordinator] INFO [DEBATE] ══════════════════════════════════════════════════
+2026-05-30 14:10:20,692 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Starting HOLD-vs-SELL debate for CBOE
+2026-05-30 14:10:20,692 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Swarm load-balancing mode active for all personas.
+2026-05-30 14:10:20,694 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Attempt 1 / 3
+2026-05-30 14:10:20,695 [app.services.adaptive_concurrency] INFO [CONCURRENCY] debate_personas: dispatching 3 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:10:20,696 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Fundamental gets 25/60 facts (filtered)
+2026-05-30 14:10:20,696 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Technical gets 18/60 facts (filtered)
+2026-05-30 14:10:20,697 [app.cognition.debate.debate_coordinator] WARNING [DEBATE] Evidence filter for Macro_Sentiment matched 0/60 facts — using full packet
+2026-05-30 14:10:20,697 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Macro_Sentiment gets 60/60 facts (filtered)
+2026-05-30 14:10:20,700 [app.services.vllm_client] INFO [PRISM] Agent call for bull_fundamental_t1_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:10:20,703 [app.services.vllm_client] INFO [PRISM] Agent call for bull_macro_sentiment_t1_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:10:20,705 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t1_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:10:20,713 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:10:20,734 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:10:20,737 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:10:23,813 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:11:23 PDT)" (scheduled at 2026-05-30 14:10:23.813260-07:00)
+2026-05-30 14:10:23,823 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:11:23 PDT)" executed successfully
+2026-05-30 14:10:24,386 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bull_macro_sentiment_t1_agent_selector' (CBOE) — 1129 selector tokens used. Tools: ['get_finnhub_news', 'search_web', 'query_hermes', 'read_team_findings', 'search_database_facts']
+2026-05-30 14:10:24,387 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_macro_sentiment_t1_agent → ['get_finnhub_news', 'search_web', 'query_hermes', 'read_team_findings', 'search_database_facts']
+2026-05-30 14:10:24,387 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_macro_sentiment_t1_agent agentic loop to Prism /agent
+2026-05-30 14:10:24,389 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_macro_sentiment_t1_agent in Prism
+2026-05-30 14:10:24,464 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:10:24,467 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_MACRO_SENTIMENT_T1_AGENT (db_id: 6a15063ef623804f353ddd90)
+2026-05-30 14:10:24,560 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/10 tools for 'bull_fundamental_t1_agent_selector' (CBOE) — 1058 selector tokens used. Tools: ['search_trading_skills', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:10:24,560 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_fundamental_t1_agent → ['search_trading_skills', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:10:24,561 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ef623804f353ddd90 "HTTP/1.1 200 OK"
+2026-05-30 14:10:24,645 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_macro_sentiment_t1_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=CBOE)
+2026-05-30 14:10:24,645 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_fundamental_t1_agent agentic loop to Prism /agent
+2026-05-30 14:10:24,648 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_fundamental_t1_agent in Prism
+2026-05-30 14:10:24,703 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:10:24,705 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_FUNDAMENTAL_T1_AGENT (db_id: 6a15063ff623804f353ddd94)
+2026-05-30 14:10:24,749 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ff623804f353ddd94 "HTTP/1.1 200 OK"
+2026-05-30 14:10:24,844 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_fundamental_t1_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=CBOE)
+2026-05-30 14:10:30,058 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1649s (running)
+2026-05-30 14:10:37,319 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:10:37,319 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bull_technical_t1_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:10:37,324 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:10:37,325 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_technical_t1_agent agentic loop to Prism /agent
+2026-05-30 14:10:37,325 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t1_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:10:37,330 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:10:44,921 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 3})
+2026-05-30 14:10:45,060 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1664s (running)
+2026-05-30 14:10:45,425 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:10:45,977 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:10:53,807 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:10:53,807 [app.tools.prism_agent_harness] INFO [PrismHarness] Tool selection: 8 tools selected for bull_technical_t1_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:10:53,809 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_technical_t1_agent in Prism
+2026-05-30 14:10:53,819 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:10:53,821 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_TECHNICAL_T1_AGENT (db_id: 6a15063ef623804f353ddd8b)
+2026-05-30 14:10:53,854 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ef623804f353ddd8b "HTTP/1.1 200 OK"
+2026-05-30 14:10:53,930 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_technical_t1_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=8, ticker=CBOE)
+2026-05-30 14:10:55,285 [app.cognition.evidence.packet_builder] WARNING [PACKET] Qualitative pillar adjustment failed for OC: 
+2026-05-30 14:10:55,285 [app.cognition.orchestration.runner] INFO [V2] [EVIDENCE] OC: 59 claims, 59 structured facts, 11 sources, missing=none, teaser_risk=0.09, diversity=4
+2026-05-30 14:10:55,285 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_evidence_OC: OC: Evidence packet — 59 claims, 59 facts, 0 missing, teaser_risk=9%, diversity=4 (ok)
+2026-05-30 14:10:55,286 [app.cognition.verification.sufficiency_gate] INFO [SUFFICIENCY] OC → sufficient | claims=59, facts=59, missing=none, blockers=none, warnings=0
+2026-05-30 14:10:55,306 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_orchestrator_OC: OC: MetaOrchestrator determining sub-agent routing... (running)
+2026-05-30 14:10:55,306 [app.cognition.orchestration.meta_orchestrator] INFO [OC] MetaOrchestrator: Dispatching ['macro_risk', 'sentiment', 'fundamentals'] (timeout=600.0s each)
+2026-05-30 14:10:55,306 [app.services.adaptive_concurrency] INFO [CONCURRENCY] meta_orchestrator: dispatching 3 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:10:55,307 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing macro_risk_agent → Prism /agent (agent=CUSTOM_MACRO_RISK_AGENT, ticker=OC, tools=0)
+2026-05-30 14:10:55,309 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing sentiment_agent → Prism /agent (agent=CUSTOM_SENTIMENT_AGENT, ticker=OC, tools=0)
+2026-05-30 14:10:55,311 [app.services.prism_agent_caller] INFO [PrismAgentCaller] Routing fundamental_agent → Prism /agent (agent=CUSTOM_FUNDAMENTAL_AGENT, ticker=OC, tools=0)
+2026-05-30 14:11:00,061 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1679s (running)
+2026-05-30 14:11:05,109 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:11:05,110 [app.services.prism_agent_caller] INFO [PrismAgentCaller] sentiment_agent completed via Prism (agent=CUSTOM_SENTIMENT_AGENT, tokens=3043, 9801ms)
+2026-05-30 14:11:07,168 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:11:07,169 [app.services.prism_agent_caller] INFO [PrismAgentCaller] macro_risk_agent completed via Prism (agent=CUSTOM_MACRO_RISK_AGENT, tokens=3001, 11862ms)
+2026-05-30 14:11:08,067 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:11:08,068 [app.services.prism_agent_caller] INFO [PrismAgentCaller] fundamental_agent completed via Prism (agent=CUSTOM_FUNDAMENTAL_AGENT, tokens=3019, 12756ms)
+2026-05-30 14:11:08,068 [app.agents.task_board] INFO [TaskBoard] macro_risk_agent posted finding f-0016 (fact): The entity exhibits severe fundamental distress with a 10.5% revenue contraction
+2026-05-30 14:11:08,068 [app.agents.task_board] INFO [TaskBoard] sentiment_agent posted finding f-0017 (fact): Classification: Mildly Bearish
+Score: -0.5
+Color: HSL(30, 100%, 40%)
+Rationale: 
+2026-05-30 14:11:08,068 [app.agents.task_board] INFO [TaskBoard] fundamentals_agent posted finding f-0018 (fact): Despite attractive valuation multiples like a forward P/E of 10.5 and EV/EBITDA 
+2026-05-30 14:11:08,068 [app.cognition.orchestration.meta_orchestrator] INFO [OC] MetaOrchestrator: Posted 3 specialist findings to TaskBoard
+2026-05-30 14:11:08,069 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_orchestrator_done_OC: OC: MetaOrchestrator completed 3 specialist agents (ok)
+2026-05-30 14:11:08,069 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_position_OC: OC: Bot HOLDS position — entry=$126.66, P&L=+0.0%, held 1d. Debate will include sell-thesis framing. (ok)
+2026-05-30 14:11:08,074 [app.cognition.orchestration.runner] INFO [V2] [COLLAB] Injected 3 team findings for OC into debate context
+2026-05-30 14:11:08,074 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_team_findings_OC: OC: 3 team findings injected into debate context (ok)
+2026-05-30 14:11:08,074 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/v2_debate_OC: OC: Starting adversarial debate (HOLD-vs-SELL)... (running)
+2026-05-30 14:11:08,075 [app.cognition.debate.debate_coordinator] INFO [DEBATE] ══════════════════════════════════════════════════
+2026-05-30 14:11:08,075 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Starting HOLD-vs-SELL debate for OC
+2026-05-30 14:11:08,075 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Swarm load-balancing mode active for all personas.
+2026-05-30 14:11:08,077 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Attempt 1 / 3
+2026-05-30 14:11:08,077 [app.services.adaptive_concurrency] INFO [CONCURRENCY] debate_personas: dispatching 3 tasks (limit=8 | vLLM: cache=0%, running=0, waiting=0)
+2026-05-30 14:11:08,078 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Fundamental gets 24/59 facts (filtered)
+2026-05-30 14:11:08,079 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Technical gets 18/59 facts (filtered)
+2026-05-30 14:11:08,079 [app.cognition.debate.debate_coordinator] WARNING [DEBATE] Evidence filter for Macro_Sentiment matched 0/59 facts — using full packet
+2026-05-30 14:11:08,080 [app.cognition.debate.debate_coordinator] INFO [DEBATE] Macro_Sentiment gets 59/59 facts (filtered)
+2026-05-30 14:11:08,090 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:11:08,094 [app.services.vllm_client] INFO [PRISM] Agent call for bull_fundamental_t1_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:11:08,097 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:11:08,101 [app.services.vllm_client] INFO [PRISM] Agent call for bull_macro_sentiment_t1_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:11:08,104 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:11:08,108 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t1_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:11:08,119 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:11:08,121 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:11:08,122 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:11:10,569 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:11:10,571 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_macro_sentiment_t1_agent completed via Prism in 46182ms (0 tokens)
+2026-05-30 14:11:10,651 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_macro_sentiment_t1_agent
+2026-05-30 14:11:10,652 [app.services.vllm_client] INFO [PRISM] Agent call for bear_macro_sentiment_t2_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:11:10,662 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:11:13,084 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bull_macro_sentiment_t1_agent_selector' (OC) — 1120 selector tokens used. Tools: ['get_finnhub_news', 'search_web', 'query_hermes', 'read_team_findings', 'search_database_facts']
+2026-05-30 14:11:13,089 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_macro_sentiment_t1_agent → ['get_finnhub_news', 'search_web', 'query_hermes', 'read_team_findings', 'search_database_facts']
+2026-05-30 14:11:13,111 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_macro_sentiment_t1_agent agentic loop to Prism /agent
+2026-05-30 14:11:13,143 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_macro_sentiment_t1_agent in Prism
+2026-05-30 14:11:13,145 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/10 tools for 'bull_fundamental_t1_agent_selector' (OC) — 1049 selector tokens used. Tools: ['read_team_findings', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:11:13,145 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bull_fundamental_t1_agent → ['read_team_findings', 'get_sec_filings', 'get_earnings_data', 'query_financial_metrics', 'search_database_facts']
+2026-05-30 14:11:13,206 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_fundamental_t1_agent agentic loop to Prism /agent
+2026-05-30 14:11:13,212 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_fundamental_t1_agent in Prism
+2026-05-30 14:11:13,318 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:11:13,322 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_MACRO_SENTIMENT_T1_AGENT (db_id: 6a15063ef623804f353ddd90)
+2026-05-30 14:11:13,324 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:11:13,327 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_FUNDAMENTAL_T1_AGENT (db_id: 6a15063ff623804f353ddd94)
+2026-05-30 14:11:13,370 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ef623804f353ddd90 "HTTP/1.1 200 OK"
+2026-05-30 14:11:13,477 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_macro_sentiment_t1_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=OC)
+2026-05-30 14:11:13,480 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ff623804f353ddd94 "HTTP/1.1 200 OK"
+2026-05-30 14:11:13,545 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_fundamental_t1_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=OC)
+2026-05-30 14:11:14,220 [app.agents.tool_selector] INFO [ToolSelector] Selected 5/13 tools for 'bear_macro_sentiment_t2_agent_selector' (CBOE) — 1108 selector tokens used. Tools: ['get_market_data', 'get_finnhub_news', 'search_internal_database', 'search_trading_skills', 'read_team_findings']
+2026-05-30 14:11:14,220 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 5 tools selected for bear_macro_sentiment_t2_agent → ['get_market_data', 'get_finnhub_news', 'search_internal_database', 'search_trading_skills', 'read_team_findings']
+2026-05-30 14:11:14,221 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_macro_sentiment_t2_agent agentic loop to Prism /agent
+2026-05-30 14:11:14,223 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_macro_sentiment_t2_agent in Prism
+2026-05-30 14:11:14,298 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:11:14,302 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_MACRO_SENTIMENT_T2_AGENT (db_id: 6a1506cff623804f353dddfa)
+2026-05-30 14:11:14,340 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506cff623804f353dddfa "HTTP/1.1 200 OK"
+2026-05-30 14:11:14,378 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_macro_sentiment_t2_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=5, ticker=CBOE)
+2026-05-30 14:11:14,392 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:11:14,394 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_fundamental_t1_agent completed via Prism in 49746ms (0 tokens)
+2026-05-30 14:11:14,500 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_fundamental_t1_agent
+2026-05-30 14:11:14,538 [app.services.vllm_client] INFO [PRISM] Agent call for bear_fundamental_t2_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:11:14,583 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:11:14,938 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 3})
+2026-05-30 14:11:15,069 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1694s (running)
+2026-05-30 14:11:15,447 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:11:16,021 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:11:23,813 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:12:23 PDT)" (scheduled at 2026-05-30 14:11:23.813260-07:00)
+2026-05-30 14:11:23,824 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:12:23 PDT)" executed successfully
+2026-05-30 14:11:24,970 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:11:24,970 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 8 tools selected for bull_technical_t1_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:11:24,970 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bull_technical_t1_agent agentic loop to Prism /agent
+2026-05-30 14:11:24,974 [app.services.vllm_client] INFO [PRISM] Agent call for bull_technical_t1_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:11:24,980 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:11:30,076 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1709s (running)
+2026-05-30 14:11:36,099 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/10 tools for 'bear_fundamental_t2_agent_selector' (CBOE) — 1020 selector tokens used. Tools: ['get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:11:36,103 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bear_fundamental_t2_agent → ['get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:11:36,104 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_fundamental_t2_agent agentic loop to Prism /agent
+2026-05-30 14:11:36,106 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_fundamental_t2_agent in Prism
+2026-05-30 14:11:36,193 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:11:36,196 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_FUNDAMENTAL_T2_AGENT (db_id: 6a1506c9f623804f353dddf6)
+2026-05-30 14:11:36,282 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:11:36,284 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/v1/models "HTTP/1.1 200 OK"
+2026-05-30 14:11:36,335 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506c9f623804f353dddf6 "HTTP/1.1 200 OK"
+2026-05-30 14:11:36,370 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_fundamental_t2_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=3, ticker=CBOE)
+2026-05-30 14:11:44,958 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 3})
+2026-05-30 14:11:45,100 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1724s (running)
+2026-05-30 14:11:45,474 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:11:45,989 [app.agents.tool_selector] WARNING [ToolSelector] No JSON found in selector output, falling back to full pool. Raw: 
+2026-05-30 14:11:45,990 [app.tools.prism_agent_harness] INFO [PrismHarness] Tool selection: 8 tools selected for bull_technical_t1_agent → ['get_market_data', 'get_technical_indicators', 'search_trading_skills', 'post_finding', 'read_team_findings', 'get_options_flow', 'get_polygon_price_history', 'query_technical_indicator']
+2026-05-30 14:11:45,991 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bull_technical_t1_agent in Prism
+2026-05-30 14:11:46,003 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:11:46,007 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BULL_TECHNICAL_T1_AGENT (db_id: 6a15063ef623804f353ddd8b)
+2026-05-30 14:11:46,075 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:11:46,120 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a15063ef623804f353ddd8b "HTTP/1.1 200 OK"
+2026-05-30 14:11:46,201 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bull_technical_t1_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=8, ticker=OC)
+2026-05-30 14:11:50,698 [app.cognition.debate.debate_coordinator] ERROR [DEBATE] TURN TIMEOUT: bull_technical_t1 timed out after 90s for Technical/CBOE
+2026-05-30 14:11:50,701 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:11:50,701 [app.services.vllm_client] INFO [PRISM] Agent call for bear_technical_t2_agent_selector (via dgx_spark) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:11:50,705 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:12:00,102 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1739s (running)
+2026-05-30 14:12:02,315 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/8 tools for 'bear_technical_t2_agent_selector' (CBOE) — 995 selector tokens used. Tools: ['get_market_data', 'get_technical_indicators', 'read_team_findings']
+2026-05-30 14:12:02,316 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bear_technical_t2_agent → ['get_market_data', 'get_technical_indicators', 'read_team_findings']
+2026-05-30 14:12:02,316 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_technical_t2_agent agentic loop to Prism /agent
+2026-05-30 14:12:02,318 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_technical_t2_agent in Prism
+2026-05-30 14:12:02,418 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:12:02,420 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_TECHNICAL_T2_AGENT (db_id: 6a1506c2f623804f353dddf1)
+2026-05-30 14:12:02,443 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506c2f623804f353dddf1 "HTTP/1.1 200 OK"
+2026-05-30 14:12:02,469 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_technical_t2_agent to Prism /agent (model=cyankiwi/MiniMax-M2.7-AWQ-4bit, tools=3, ticker=CBOE)
+2026-05-30 14:12:09,461 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:12:09,462 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_fundamental_t1_agent completed via Prism in 56251ms (0 tokens)
+2026-05-30 14:12:09,572 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_fundamental_t1_agent
+2026-05-30 14:12:09,575 [app.services.vllm_client] INFO [PRISM] Agent call for bear_fundamental_t2_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:12:09,580 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"
+2026-05-30 14:12:12,435 [app.agents.tool_selector] INFO [ToolSelector] Selected 3/10 tools for 'bear_fundamental_t2_agent_selector' (OC) — 1018 selector tokens used. Tools: ['get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:12:12,438 [app.cognition.debate.debate_coordinator] INFO [Debate] Tool selection: 3 tools selected for bear_fundamental_t2_agent → ['get_sec_filings', 'get_earnings_data', 'query_financial_metrics']
+2026-05-30 14:12:12,439 [app.cognition.debate.debate_coordinator] INFO [Debate] Routing bear_fundamental_t2_agent agentic loop to Prism /agent
+2026-05-30 14:12:12,441 [app.tools.prism_agent_harness] INFO [PrismHarness] Registering/updating custom agent bear_fundamental_t2_agent in Prism
+2026-05-30 14:12:12,451 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/custom-agents "HTTP/1.1 200 OK"
+2026-05-30 14:12:12,453 [app.services.prism_client] INFO [PRISM] Updating existing custom agent CUSTOM_BEAR_FUNDAMENTAL_T2_AGENT (db_id: 6a1506c9f623804f353dddf6)
+2026-05-30 14:12:12,599 [httpx] INFO HTTP Request: PUT http://10.0.0.16:7777/custom-agents/6a1506c9f623804f353dddf6 "HTTP/1.1 200 OK"
+2026-05-30 14:12:12,629 [app.tools.prism_agent_harness] INFO [PrismHarness] Delegating bear_fundamental_t2_agent to Prism /agent (model=Kbenkhaled/Qwen3.5-35B-A3B-quantized.w4a16, tools=3, ticker=OC)
+2026-05-30 14:12:14,972 [app.cycle.orchestration.state_manager] INFO [CHECKPOINT] Saved checkpoint for cycle-1780173780 (phases: ['collecting'], tickers: {'analyzing': 3})
+2026-05-30 14:12:15,103 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1754s (running)
+2026-05-30 14:12:15,502 [httpx] INFO HTTP Request: GET http://10.0.0.141:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:12:16,108 [httpx] INFO HTTP Request: GET http://10.0.0.30:8000/metrics "HTTP/1.1 200 OK"
+2026-05-30 14:12:23,815 [apscheduler.executors.default] INFO Running job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:13:23 PDT)" (scheduled at 2026-05-30 14:12:23.813260-07:00)
+2026-05-30 14:12:23,825 [apscheduler.executors.default] INFO Job "SchedulerService._run_background_stop_loss (trigger: interval[0:01:00], next run at: 2026-05-30 14:13:23 PDT)" executed successfully
+2026-05-30 14:12:30,104 [app.cycle.orchestration.state_manager] INFO [CYCLE cycle-1780173780] analyzing/heartbeat: Analysis: 3 done, 1 errors, queue=18, workers=2/2, elapsed=1769s (running)
+2026-05-30 14:12:30,449 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/agent?stream=false "HTTP/1.1 200 OK"
+2026-05-30 14:12:30,451 [app.tools.prism_agent_harness] INFO [PrismHarness] bull_macro_sentiment_t1_agent completed via Prism in 77311ms (0 tokens)
+2026-05-30 14:12:30,623 [app.services.tool_optimizer] INFO [ToolOptimizer] Marked 5 tools as active for Prism-routed agent bull_macro_sentiment_t1_agent
+2026-05-30 14:12:30,677 [httpx] INFO HTTP Request: GET http://10.0.0.16:7777/health "HTTP/1.1 200 OK"
+2026-05-30 14:12:30,680 [app.services.vllm_client] INFO [PRISM] Agent call for bear_macro_sentiment_t2_agent_selector (via jetson) | agent=CUSTOM_MARKET_ALPHA
+2026-05-30 14:12:30,710 [httpx] INFO HTTP Request: POST http://10.0.0.16:7777/chat "HTTP/1.1 200 OK"

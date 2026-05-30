@@ -131,6 +131,13 @@ class LogManager:
             "payload": payload,
         }
         self._write_jsonl(self._cycle_path(cycle_id), log_entry)
+        
+        # --- WEBHOOK ALERT ---
+        try:
+            from app.services.logging.webhook_alerter import trigger_alert
+            trigger_alert(f"Cycle Error: {error_type}", log_entry)
+        except Exception:
+            pass
 
     # ── Cycle Summary (NEW) ──────────────────────────────────────────────
 
@@ -265,6 +272,13 @@ class LogManager:
                 }
                 self._write_jsonl(path, recovery_entry)
                 crashed.append(crash_info)
+
+                # --- WEBHOOK ALERT ---
+                try:
+                    from app.services.logging.webhook_alerter import trigger_alert
+                    trigger_alert(f"Crash Recovery: Cycle {cycle_id} interrupted", recovery_entry)
+                except Exception:
+                    pass
 
                 logger.warning(
                     "[LogManager] CRASH RECOVERY: %s — last step '%s' for %s, "

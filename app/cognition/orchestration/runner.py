@@ -30,6 +30,9 @@ from app.log_manager import log_manager
 logger = logging.getLogger(__name__)
 
 
+from app.services.logging.tracer import trace_span
+
+@trace_span("orchestration.execute_v2_pipeline")
 async def execute_v2_pipeline(
     ticker: str,
     *,
@@ -914,6 +917,21 @@ async def execute_v2_pipeline(
         "weaknesses_count": len(thesis.weaknesses),
         "tokens": thesis_tokens, "elapsed_ms": ms6,
     })
+
+    # --- META-AUDITOR ---
+    from app.services.logging.meta_auditor import audit_thesis_quality
+    # Run the audit non-blockingly so it doesn't slow down the main pipeline heavily
+    try:
+        audit_task = asyncio.create_task(
+            audit_thesis_quality(ticker, str(packet.structured_facts), thesis.rationale, cycle_id, bot_id)
+        )
+        # We await it with a short timeout so we don't hold up the pipeline
+        audit_result = await asyncio.wait_for(audit_task, timeout=15.0)
+        log_manager.log_v2_cycle(cycle_id, "meta_audit", {"ticker": ticker, "audit": audit_result})
+    except asyncio.TimeoutError:
+        logger.warning("[V2] Meta-auditor timed out for %s, proceeding without it", ticker)
+    except Exception as e:
+        logger.warning("[V2] Meta-auditor failed for %s: %s", ticker, e)
 
     emit(
         "analyzing",
