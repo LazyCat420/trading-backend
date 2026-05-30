@@ -2250,3 +2250,130 @@ class TestLargeDatasetHistory:
 
         assert count == 10, f"Should purge 10 resolved requests, got {count}"
         logger.info("PASS: purge_resolved cleaned up 10 old requests")
+
+
+# ────────────────────────────────────────────────────────────────────────
+# 15. Memory Soak Test
+#     Verify no memory leaks under repeated operations:
+#     a) _truncate_context repeated calls don't accumulate memory
+#     b) Rate limiter repeated acquire/release doesn't leak semaphores
+#     c) _parse_timestamp repeated calls are memory-stable
+#     d) Collector status dict stays fixed-size after updates
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestMemorySoak:
+    """Verify no memory leaks under repeated operations."""
+
+    def test_truncate_context_no_accumulation(self):
+        """Repeated _truncate_context calls should not accumulate memory."""
+        import gc
+        import sys
+
+        from app.pipeline.analysis.debate_engine import _truncate_context
+
+        large_ctx = "X" * 50000
+
+        # Warm up
+        _truncate_context(large_ctx, max_chars=2000)
+        gc.collect()
+        baseline_objects = len(gc.get_objects())
+
+        # Run 100 iterations
+        for _ in range(100):
+            result = _truncate_context(large_ctx, max_chars=2000)
+            assert "[truncated]" in result
+
+        gc.collect()
+        final_objects = len(gc.get_objects())
+
+        # Allow for some variance (gc overhead) but not linear growth
+        growth = final_objects - baseline_objects
+        assert growth < 500, (
+            f"Object count grew by {growth} after 100 iterations — possible leak"
+        )
+        logger.info(
+            "PASS: _truncate_context 100 iterations — object growth: %d (acceptable)",
+            growth,
+        )
+
+    @pytest.mark.asyncio
+    async def test_rate_limiter_no_semaphore_leak(self):
+        """Repeated acquire/release should not create new semaphore objects."""
+        from app.services.api_rate_limiter import APIRateLimiter
+
+        limiter = APIRateLimiter()
+
+        # First acquire creates the semaphore
+        async with limiter.acquire("test_soak"):
+            pass
+
+        initial_count = len(limiter._semaphores)
+
+        # 100 more acquires should reuse the same semaphore
+        for _ in range(100):
+            async with limiter.acquire("test_soak"):
+                pass
+
+        final_count = len(limiter._semaphores)
+        assert final_count == initial_count, (
+            f"Semaphore count grew from {initial_count} to {final_count}"
+        )
+        logger.info(
+            "PASS: 100 rate limiter acquires — semaphore count stable: %d",
+            final_count,
+        )
+
+    def test_parse_timestamp_repeated_no_leak(self):
+        """Repeated _parse_timestamp calls should be memory-stable."""
+        import gc
+        import datetime as dt
+
+        from app.pipeline.data.collection_scheduler import _parse_timestamp
+
+        # Warm up
+        _parse_timestamp("2026-06-01 12:00:00")
+        gc.collect()
+        baseline = len(gc.get_objects())
+
+        # Run 200 iterations with various inputs
+        for i in range(200):
+            _parse_timestamp(f"2026-06-01 12:{i % 60:02d}:00")
+            _parse_timestamp(dt.date(2026, 6, 1))
+            _parse_timestamp(dt.datetime(2026, 6, 1, i % 24, 0, 0, tzinfo=dt.UTC))
+
+        gc.collect()
+        growth = len(gc.get_objects()) - baseline
+        assert growth < 1000, (
+            f"Object count grew by {growth} after 600 parse calls — possible leak"
+        )
+        logger.info(
+            "PASS: _parse_timestamp 600 calls — object growth: %d (acceptable)",
+            growth,
+        )
+
+    def test_collector_status_dict_fixed_size(self):
+        """_collector_status dict should stay fixed-size after repeated updates."""
+        from app.services.passive_collector import (
+            _collector_status,
+            _set_state,
+        )
+
+        initial_keys = set(_collector_status.keys())
+
+        # Simulate many state transitions
+        for _ in range(50):
+            _set_state("collecting")
+            _set_state("sleeping")
+            _set_state("idle")
+
+        final_keys = set(_collector_status.keys())
+
+        # Same keys, no new keys added
+        assert final_keys == initial_keys, (
+            f"New keys appeared: {final_keys - initial_keys}"
+        )
+        logger.info(
+            "PASS: Collector status dict stable — %d keys after 150 transitions",
+            len(final_keys),
+        )
