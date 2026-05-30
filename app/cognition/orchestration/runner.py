@@ -171,16 +171,16 @@ async def execute_v2_pipeline(
     await cycle_control.wait_if_paused()
     t2 = time.monotonic()
     try:
-        packet = await asyncio.wait_for(build_evidence_packet(ticker), timeout=120.0)
+        packet = await asyncio.wait_for(build_evidence_packet(ticker), timeout=600.0)
     except asyncio.TimeoutError as te:
-        logger.error("[V2] Evidence packet build TIMEOUT for %s (30s)", ticker)
+        logger.error("[V2] Evidence packet build TIMEOUT for %s (600s)", ticker)
         emit("analyzing", f"v2_evidence_timeout_{ticker}", f"{ticker}: Evidence build TIMEOUT", status="error")
         log_manager.log_v2_cycle(cycle_id, "v2_error", {
-            "ticker": ticker, "error": "Evidence packet build timed out after 30s",
+            "ticker": ticker, "error": "Evidence packet build timed out after 600s",
             "error_type": "TimeoutError", "stages_completed": stages,
             "elapsed_ms": elapsed_ms(t2),
         })
-        raise RuntimeError("Evidence packet build timed out after 30s") from te
+        raise RuntimeError("Evidence packet build timed out after 600s") from te
     ms2 = elapsed_ms(t2)
     stages.append("evidence_build")
     stage_timings["evidence_build"] = ms2
@@ -432,10 +432,10 @@ async def execute_v2_pipeline(
             MetaOrchestrator.orchestrate(
                 ticker, packet, sufficiency, cycle_id, bot_id, is_highly_redundant
             ),
-            timeout=300.0,
+            timeout=900.0,
         )
     except asyncio.TimeoutError:
-        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (300s) — injecting fallback context", ticker)
+        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (900s) — injecting fallback context", ticker)
         # Instead of proceeding with zero context, inject a synthetic fallback
         # that tells the thesis agent to rely on evidence packet data only.
         # This prevents EMPTY_SIGNAL (confidence=0, claims=0) from flowing downstream.
@@ -603,7 +603,7 @@ async def execute_v2_pipeline(
                 position_context=position_context,
                 portfolio_dashboard=portfolio_dashboard,
             ),
-            timeout=360.0,
+            timeout=900.0,
         )
         ms_debate = elapsed_ms(t_debate)
 
