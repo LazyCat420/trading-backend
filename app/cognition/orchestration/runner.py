@@ -171,7 +171,7 @@ async def execute_v2_pipeline(
     await cycle_control.wait_if_paused()
     t2 = time.monotonic()
     try:
-        packet = await asyncio.wait_for(build_evidence_packet(ticker), timeout=30.0)
+        packet = await asyncio.wait_for(build_evidence_packet(ticker), timeout=120.0)
     except asyncio.TimeoutError as te:
         logger.error("[V2] Evidence packet build TIMEOUT for %s (30s)", ticker)
         emit("analyzing", f"v2_evidence_timeout_{ticker}", f"{ticker}: Evidence build TIMEOUT", status="error")
@@ -432,10 +432,10 @@ async def execute_v2_pipeline(
             MetaOrchestrator.orchestrate(
                 ticker, packet, sufficiency, cycle_id, bot_id, is_highly_redundant
             ),
-            timeout=90.0,
+            timeout=300.0,
         )
     except asyncio.TimeoutError:
-        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (90s) — injecting fallback context", ticker)
+        logger.warning("[V2] MetaOrchestrator TIMEOUT for %s (300s) — injecting fallback context", ticker)
         # Instead of proceeding with zero context, inject a synthetic fallback
         # that tells the thesis agent to rely on evidence packet data only.
         # This prevents EMPTY_SIGNAL (confidence=0, claims=0) from flowing downstream.
@@ -603,7 +603,7 @@ async def execute_v2_pipeline(
                 position_context=position_context,
                 portfolio_dashboard=portfolio_dashboard,
             ),
-            timeout=120.0,
+            timeout=360.0,
         )
         ms_debate = elapsed_ms(t_debate)
 
@@ -831,7 +831,7 @@ async def execute_v2_pipeline(
     # Fix 1: Retry thesis once on timeout — GPU may drain between attempts.
     # First attempt gets 180s, then 30s cooldown, then 120s retry.
     # This would have saved ~12 tickers in the cycle-1780038350 crash cascade.
-    _thesis_timeouts = [180.0, 120.0]
+    _thesis_timeouts = [360.0, 240.0]
     _thesis_max_attempts = len(_thesis_timeouts)
     thesis = None
     thesis_tokens = 0

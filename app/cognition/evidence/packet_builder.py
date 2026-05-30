@@ -459,11 +459,11 @@ Active Narrative Themes:
                     fallback_system_prompt=PILLAR_ADJUSTER_SYSTEM_PROMPT,
                     fallback_agent_name="pillar_adjuster",
                     temperature=0.2,
-                    max_tokens=1024,
+                    max_tokens=2048,
                     priority=Priority.NORMAL,
                     ticker=ticker,
                 ),
-                timeout=15.0,
+                timeout=60.0,
             )
             cleaned = response.strip()
             if cleaned.startswith("```"):

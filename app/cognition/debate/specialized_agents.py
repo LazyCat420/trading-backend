@@ -26,7 +26,7 @@ async def _run_specialized_agent(
             fallback_system_prompt=system_prompt,
             fallback_agent_name=agent_name,
             temperature=LLM_TEMPERATURES.get(agent_name, 0.3),
-            max_tokens=256,
+            max_tokens=2048,
             priority=Priority.NORMAL,
             ticker=entity_id,
             cycle_id=cycle_id,

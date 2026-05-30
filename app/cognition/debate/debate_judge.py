@@ -228,7 +228,7 @@ async def judge_debate(
             fallback_system_prompt=system_prompt,
             fallback_agent_name="debate_judge",
             temperature=LLM_TEMPERATURES.get("debate_judge", 0.2),
-            max_tokens=512,
+            max_tokens=4096,
             priority=Priority.NORMAL,
             ticker=ticker,
             cycle_id=cycle_id,

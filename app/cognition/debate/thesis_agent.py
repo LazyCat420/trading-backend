@@ -179,7 +179,7 @@ async def generate_thesis(
             fallback_system_prompt=active_prompt,
             fallback_agent_name="thesis_agent",
             temperature=LLM_TEMPERATURES.get(active_temp_key, 0.5),
-            max_tokens=768,
+            max_tokens=4096,
             priority=Priority.NORMAL,
             ticker=entity_id,
             cycle_id=cycle_id,

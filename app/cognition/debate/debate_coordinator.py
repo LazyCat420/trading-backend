@@ -495,7 +495,7 @@ async def _run_biased_agent(
                         temperature=LLM_TEMPERATURES.get(agent_name, 0.4),
                         max_tokens=4096,
                     ),
-                    timeout=30.0,  # Hard cap: don't let Prism consume debate budget
+                    timeout=120.0,  # Hard cap: allow time for CoT reasoning
                 )
                 return (
                     result.get("final_text", "").strip(),
@@ -1530,8 +1530,8 @@ async def run_adversarial_debate(
                 user_message=critic_user,
                 fallback_system_prompt=critic_sys,
                 fallback_agent_name="debate_critic",
-                temperature=0.2,
-                max_tokens=256,
+                temperature=0.1,
+                max_tokens=2048,
                 priority=Priority.NORMAL,
                 ticker=ticker,
                 cycle_id=cycle_id,
