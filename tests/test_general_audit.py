@@ -767,3 +767,335 @@ class TestConnectionPoolExhaustion:
 
 
 
+# ────────────────────────────────────────────────────────────────────────
+# 6. Network Partition Test
+#    Simulate upstream connectivity loss (ConnectionError, TimeoutError)
+#    mid-collection.  Verify:
+#    a) Single-source failure is isolated — other sources + ticker succeed.
+#    b) Full-ticker failure is isolated — other tickers proceed.
+#    c) Timeout-based disconnection rejects the ticker cleanly.
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestNetworkPartition:
+    """Verify per-ticker collection isolates upstream network failures."""
+
+    @staticmethod
+    def _make_emit_recorder():
+        """Return (emit_fn, events_list) where events_list collects all emitted events."""
+        events = []
+
+        def _emit(phase, key, msg, *, status=None, data=None, elapsed_ms=None):
+            events.append({"phase": phase, "key": key, "msg": msg, "status": status})
+
+        return _emit, events
+
+    @staticmethod
+    def _build_common_patches(stack, **overrides):
+        """Enter all common patches via ExitStack and return handles dict.
+
+        ``overrides`` lets callers swap specific mocks (e.g. side_effect
+        on fetch_price_history).
+        """
+        from contextlib import ExitStack
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = overrides.get("price_count", (500,))
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        # --- Core pipeline machinery (no-ops / defaults) ---
+        mock_cc = stack.enter_context(
+            patch("app.pipeline.data.data_perticker_collection.cycle_control")
+        )
+        mock_cc.wait_if_paused = AsyncMock()
+
+        mock_settings = stack.enter_context(
+            patch("app.pipeline.data.data_perticker_collection.settings")
+        )
+        mock_settings.COLLECTION_MAX_CONCURRENT = 5
+        mock_settings.USE_TOOL_CALLING = False
+
+        if "source_timeout" in overrides:
+            stack.enter_context(
+                patch(
+                    "app.pipeline.data.data_perticker_collection.SOURCE_TIMEOUT",
+                    overrides["source_timeout"],
+                )
+            )
+
+        stack.enter_context(
+            patch("app.pipeline.data.collection_scheduler.should_collect", return_value=True)
+        )
+        stack.enter_context(
+            patch("app.pipeline.data.data_perticker_collection.record_collection")
+        )
+        stack.enter_context(
+            patch("app.pipeline.data.data_perticker_collection.elapsed_ms", return_value=10.0)
+        )
+        stack.enter_context(
+            patch("app.pipeline.data.data_perticker_collection.pipeline_profiler")
+        )
+
+        # --- Collectors (overrideable) ---
+        stack.enter_context(
+            patch(
+                "app.collectors.data_rotator.fetch_price_history",
+                **(overrides.get("yf_price", {"new_callable": AsyncMock, "return_value": 300})),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.collectors.data_rotator.fetch_fundamentals",
+                **(overrides.get("yf_fund", {"new_callable": AsyncMock, "return_value": 5})),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.collectors.data_rotator.fetch_financials",
+                **(overrides.get("yf_fin", {"new_callable": AsyncMock, "return_value": 3})),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.collectors.data_rotator.fetch_balance_sheet",
+                **(overrides.get("yf_bs", {"new_callable": AsyncMock, "return_value": 2})),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.collectors.finnhub_collector.collect_news",
+                **(overrides.get("finnhub", {"new_callable": AsyncMock, "return_value": 5})),
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.collectors.reddit_collector.collect_for_ticker",
+                new_callable=AsyncMock, return_value=10,
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.collectors.youtube_collector.collect_for_ticker",
+                new_callable=AsyncMock, return_value={"stored": 3},
+            )
+        )
+        stack.enter_context(
+            patch(
+                "app.collectors.yfinance_collector.collect_news",
+                new_callable=AsyncMock, return_value=8,
+            )
+        )
+
+        # --- DB + infra ---
+        stack.enter_context(patch("app.db.connection.get_db", side_effect=fake_get_db))
+
+        mock_rl = stack.enter_context(
+            patch("app.services.api_rate_limiter.rate_limiter")
+        )
+        mock_rl.acquire.return_value.__aenter__ = AsyncMock()
+        mock_rl.acquire.return_value.__aexit__ = AsyncMock()
+
+        stack.enter_context(
+            patch("app.processors.technical_processor.compute_technicals", return_value=50)
+        )
+        stack.enter_context(
+            patch("app.pipeline.watchlist_health.update_signals_from_collection")
+        )
+        stack.enter_context(
+            patch(
+                "app.pipeline.data.data_perticker_collection.run_ticker_processors",
+                new_callable=AsyncMock,
+            )
+        )
+        stack.enter_context(
+            patch("app.pipeline.data.data_sufficiency.check_data_sufficiency", return_value=False)
+        )
+        stack.enter_context(
+            patch("app.pipeline.data.fallback_collector.detect_data_gaps", return_value=[])
+        )
+        stack.enter_context(
+            patch("app.pipeline.alpha_decay_purge.run_alpha_decay_purge", return_value=[])
+        )
+
+        # --- Ticker extractor safety gate ---
+        mock_reg = MagicMock()
+        mock_reg.is_rejected.return_value = False
+        stack.enter_context(
+            patch("app.processors.ticker_extractor.get_registry", return_value=mock_reg)
+        )
+        stack.enter_context(
+            patch("app.processors.ticker_extractor._is_hard_blocked", return_value=False)
+        )
+
+        return {"mock_cc": mock_cc, "mock_settings": mock_settings}
+
+    @pytest.mark.asyncio
+    async def test_single_source_failure_isolated(self):
+        """If Finnhub raises ConnectionError, other sources still succeed and
+        the ticker is NOT rejected (yfinance is the gate-keeper)."""
+        from contextlib import ExitStack
+
+        emit, events = self._make_emit_recorder()
+
+        async def finnhub_explode(ticker):
+            raise ConnectionError("Simulated network partition: DNS unreachable")
+
+        with ExitStack() as stack:
+            self._build_common_patches(
+                stack,
+                finnhub={"side_effect": finnhub_explode},
+            )
+
+            from app.pipeline.data.data_perticker_collection import run_perticker_collection
+
+            results = {"collectors": {}}
+            summary = {"cycle_id": "test-net-partition"}
+
+            await run_perticker_collection(
+                tickers=["AAPL"],
+                _glance_set=set(),
+                _deep_set={"AAPL"},
+                emit=emit,
+                results=results,
+                _summary=summary,
+            )
+
+        # AAPL should still be in the results (not rejected)
+        assert "AAPL" in results["tickers"], (
+            "AAPL should survive a single-source (Finnhub) network failure"
+        )
+
+        # Verify Finnhub emitted a skip/error status
+        finnhub_events = [e for e in events if "finnhub" in e["key"].lower()]
+        assert any(e["status"] in ("skipped", "error") for e in finnhub_events), (
+            "Finnhub should emit skipped/error status on ConnectionError"
+        )
+        logger.info("PASS: Single-source network failure isolated — ticker survived")
+
+    @pytest.mark.asyncio
+    async def test_yfinance_network_failure_rejects_ticker_not_others(self):
+        """If yfinance raises ConnectionError for ticker A, ticker A is rejected
+        but ticker B completes successfully.
+
+        This tests the critical `return_exceptions=True` in asyncio.gather
+        at the outer (all-tickers) level.
+        """
+        from contextlib import ExitStack
+
+        emit, events = self._make_emit_recorder()
+
+        async def yf_price_history(ticker):
+            if ticker == "BADTK":
+                raise ConnectionError("Network unreachable for BADTK")
+            return 300
+
+        async def yf_fundamentals(ticker):
+            if ticker == "BADTK":
+                raise ConnectionError("Network unreachable for BADTK")
+            return 5
+
+        async def yf_financials(ticker):
+            if ticker == "BADTK":
+                raise ConnectionError("Network unreachable for BADTK")
+            return 3
+
+        async def yf_balance_sheet(ticker):
+            if ticker == "BADTK":
+                raise ConnectionError("Network unreachable for BADTK")
+            return 2
+
+        with ExitStack() as stack:
+            self._build_common_patches(
+                stack,
+                yf_price={"side_effect": yf_price_history},
+                yf_fund={"side_effect": yf_fundamentals},
+                yf_fin={"side_effect": yf_financials},
+                yf_bs={"side_effect": yf_balance_sheet},
+            )
+            # Extra patch for PipelineStateDB error logging
+            stack.enter_context(
+                patch("app.pipeline.orchestration.state_manager.PipelineStateDB")
+            )
+
+            from app.pipeline.data.data_perticker_collection import run_perticker_collection
+
+            results = {"collectors": {}}
+            summary = {"cycle_id": "test-net-partition-multi"}
+
+            await run_perticker_collection(
+                tickers=["GOODTK", "BADTK"],
+                _glance_set=set(),
+                _deep_set={"GOODTK", "BADTK"},
+                emit=emit,
+                results=results,
+                _summary=summary,
+            )
+
+        # GOODTK must survive
+        assert "GOODTK" in results["tickers"], (
+            "GOODTK should survive when BADTK has network failure"
+        )
+        # BADTK should be rejected (yfinance failure → _ticker_rejected.set())
+        assert "BADTK" not in results["tickers"], (
+            "BADTK should be rejected after yfinance network failure"
+        )
+        logger.info("PASS: Ticker-level network partition isolated — healthy ticker survived")
+
+    @pytest.mark.asyncio
+    async def test_timeout_disconnection_rejects_ticker(self):
+        """Simulate a network hang (timeout) on yfinance — the ticker should
+        be rejected via asyncio.wait_for timeout and _ticker_rejected.set()."""
+        from contextlib import ExitStack
+
+        emit, events = self._make_emit_recorder()
+
+        async def yf_hang(ticker):
+            await asyncio.sleep(9999)
+
+        with ExitStack() as stack:
+            self._build_common_patches(
+                stack,
+                price_count=(0,),
+                source_timeout=0.5,
+                yf_price={"side_effect": yf_hang},
+            )
+
+            from app.pipeline.data.data_perticker_collection import run_perticker_collection
+
+            results = {"collectors": {}}
+            summary = {"cycle_id": "test-timeout-partition"}
+
+            await run_perticker_collection(
+                tickers=["HANGTK"],
+                _glance_set=set(),
+                _deep_set={"HANGTK"},
+                emit=emit,
+                results=results,
+                _summary=summary,
+            )
+
+        # HANGTK should be rejected (timeout → _ticker_rejected.set())
+        assert "HANGTK" not in results["tickers"], (
+            "HANGTK should be rejected after yfinance timeout (network hang)"
+        )
+
+        # Verify yfinance emitted a timeout or error status for HANGTK
+        # (The retry decorator may reclassify the exception, so we accept both)
+        yf_events = [
+            e for e in events
+            if e["key"] == "yfinance_HANGTK" and e["status"] in ("timeout", "error")
+        ]
+        assert len(yf_events) >= 1, (
+            f"Should emit timeout/error status for yfinance when network hangs. "
+            f"Got events: {[e for e in events if 'yfinance' in str(e.get('key', ''))]}"
+        )
+        logger.info(
+            "PASS: Timeout disconnection correctly rejects ticker (status=%s)",
+            yf_events[0]["status"],
+        )
