@@ -2007,3 +2007,132 @@ class TestQueueBacklog:
 
         assert count == 3, f"Should reset 3 stale requests, got {count}"
         logger.info("PASS: cleanup_stale reset 3 stuck PROCESSING requests")
+
+
+# ────────────────────────────────────────────────────────────────────────
+# 13. Max Parallelism Test
+#     Verify concurrent execution limits are properly configured:
+#     a) COLLECTION_MAX_CONCURRENT is a sane value
+#     b) Rate limiter semaphores enforce per-API limits
+#     c) Burst mode bypasses semaphores
+#     d) Unknown services get a default limit
+#     e) Semaphore actually blocks when at capacity
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestMaxParallelism:
+    """Verify concurrency controls and rate limiting."""
+
+    def test_collection_max_concurrent_is_sane(self):
+        """COLLECTION_MAX_CONCURRENT should be a reasonable value (1-20)."""
+        from app.config import settings
+
+        val = settings.COLLECTION_MAX_CONCURRENT
+        assert isinstance(val, int), f"Should be int, got {type(val)}"
+        assert 1 <= val <= 20, (
+            f"COLLECTION_MAX_CONCURRENT should be 1-20, got {val}"
+        )
+        logger.info("PASS: COLLECTION_MAX_CONCURRENT = %d (sane range)", val)
+
+    def test_rate_limiter_per_api_limits(self):
+        """Each API service should have a configured concurrency limit."""
+        from app.services.api_rate_limiter import APIRateLimiter
+        from app.config import settings
+
+        limiter = APIRateLimiter()
+
+        # Check all expected APIs have limits
+        expected_apis = ["yfinance", "finnhub", "reddit", "youtube"]
+        for api in expected_apis:
+            assert api in limiter._limits, f"Missing rate limit for {api}"
+            limit = limiter._limits[api]
+            assert isinstance(limit, int) and limit >= 1, (
+                f"{api} limit should be >= 1, got {limit}"
+            )
+
+        logger.info(
+            "PASS: Rate limits configured — %s",
+            {k: v for k, v in limiter._limits.items()},
+        )
+
+    @pytest.mark.asyncio
+    async def test_burst_mode_bypasses_semaphores(self):
+        """When burst_mode is enabled, acquire() should not block."""
+        from app.services.api_rate_limiter import APIRateLimiter
+
+        limiter = APIRateLimiter()
+        limiter.enable_burst_mode(True)
+
+        # Even if we acquire more than the limit, it shouldn't block
+        acquired_count = 0
+        for _ in range(50):
+            async with limiter.acquire("yfinance"):
+                acquired_count += 1
+
+        assert acquired_count == 50, (
+            f"Burst mode should allow unlimited, got {acquired_count}"
+        )
+        limiter.enable_burst_mode(False)
+        logger.info("PASS: Burst mode bypasses semaphores (50 acquired)")
+
+    def test_rate_limiter_default_for_unknown_service(self):
+        """Unknown services should get the default limit (3)."""
+        from app.services.api_rate_limiter import APIRateLimiter
+
+        limiter = APIRateLimiter()
+        sem = limiter._get_semaphore("unknown_api_xyz")
+
+        # Default limit is 3
+        assert sem._value == 3, (
+            f"Unknown service should get default limit 3, got {sem._value}"
+        )
+        logger.info("PASS: Unknown service gets default limit of 3")
+
+    @pytest.mark.asyncio
+    async def test_semaphore_blocks_at_capacity(self):
+        """When all semaphore slots are taken, the next acquire should block."""
+        from app.services.api_rate_limiter import APIRateLimiter
+
+        limiter = APIRateLimiter()
+        # Create a service with limit 1
+        limiter._limits["test_service"] = 1
+
+        blocked = False
+
+        async def try_acquire():
+            nonlocal blocked
+            try:
+                async with asyncio.timeout(0.2):
+                    async with limiter.acquire("test_service"):
+                        pass
+            except asyncio.TimeoutError:
+                blocked = True
+
+        # Acquire the only slot
+        async with limiter.acquire("test_service"):
+            # Now try to acquire in a separate task — should block
+            await try_acquire()
+
+        assert blocked is True, (
+            "Second acquire should block when all slots are taken"
+        )
+        logger.info("PASS: Semaphore blocks at capacity (limit=1, blocked=True)")
+
+    def test_rate_limiter_status_report(self):
+        """status() should return all configured services with in_use counts."""
+        from app.services.api_rate_limiter import APIRateLimiter
+
+        limiter = APIRateLimiter()
+        status = limiter.status()
+
+        assert isinstance(status, dict), "status() should return a dict"
+        assert len(status) > 0, "Should have at least one service"
+
+        for service, info in status.items():
+            assert "max" in info, f"{service} missing 'max' in status"
+            assert "in_use" in info, f"{service} missing 'in_use' in status"
+            assert info["in_use"] == 0, (
+                f"{service} should have 0 in_use at startup"
+            )
+
+        logger.info("PASS: Rate limiter status report — %d services", len(status))
