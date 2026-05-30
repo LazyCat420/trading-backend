@@ -950,8 +950,8 @@ async def run_adversarial_debate(
             br_tok = 0
 
             # Per-turn timeout (seconds) — prevents one hung agent from blocking
-            # the entire debate phase. Each agent turn gets 90s max.
-            TURN_TIMEOUT = 90.0
+            # the entire debate phase. Each agent turn gets 150s max.
+            TURN_TIMEOUT = 150.0
 
             async def _timed_agent_call(agent_bias, *args, **kwargs):
                 """Wrap _run_biased_agent with a per-turn timeout."""
