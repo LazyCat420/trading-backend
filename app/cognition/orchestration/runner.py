@@ -842,31 +842,37 @@ async def execute_v2_pipeline(
                 _guarded_thesis(),
                 timeout=_attempt_timeout,
             )
+            # Check if thesis_agent failed to parse JSON and returned the fallback empty signal
+            if thesis.confidence == 0 and not thesis.core_claims:
+                raise ValueError(f"LLM returned malformed JSON or EMPTY_SIGNAL: {thesis.rationale}")
+                
             if _thesis_attempt > 0:
                 logger.info(
                     "[V2] Thesis generation SUCCEEDED for %s on retry attempt %d/%d",
                     ticker, _thesis_attempt + 1, _thesis_max_attempts,
                 )
             break  # success
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, ValueError) as err:
+            is_timeout = isinstance(err, asyncio.TimeoutError)
+            err_msg = "TIMEOUT" if is_timeout else "PARSE_ERROR"
             if _thesis_attempt < _thesis_max_attempts - 1:
                 logger.warning(
-                    "[V2] Thesis TIMEOUT for %s (attempt %d/%d, %.0fs) — waiting 30s for GPU queue drain before retry",
-                    ticker, _thesis_attempt + 1, _thesis_max_attempts, _attempt_timeout,
+                    "[V2] Thesis %s for %s (attempt %d/%d, %.0fs) — waiting 30s before retry. Err: %s",
+                    err_msg, ticker, _thesis_attempt + 1, _thesis_max_attempts, _attempt_timeout, err
                 )
                 emit(
                     "analyzing",
                     f"v2_thesis_retry_{ticker}",
-                    f"{ticker}: Thesis TIMEOUT (attempt {_thesis_attempt + 1}/{_thesis_max_attempts}) — retrying after 30s cooldown",
+                    f"{ticker}: Thesis {err_msg} (attempt {_thesis_attempt + 1}/{_thesis_max_attempts}) — retrying after 30s cooldown",
                     status="warning",
                 )
                 await asyncio.sleep(30)  # Let GPU queue drain
             else:
                 logger.error(
-                    "[V2] Thesis generation TIMEOUT for %s after %d attempts",
-                    ticker, _thesis_max_attempts,
+                    "[V2] Thesis generation %s for %s after %d attempts. Err: %s",
+                    err_msg, ticker, _thesis_max_attempts, err
                 )
-                emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM TIMEOUT (all {_thesis_max_attempts} attempts exhausted)", status="error")
+                emit("analyzing", f"v2_thesis_timeout_{ticker}", f"{ticker}: Thesis LLM {err_msg} (all {_thesis_max_attempts} attempts exhausted)", status="error")
                 log_manager.log_v2_cycle(cycle_id, "v2_error", {
                     "ticker": ticker,
                     "error": f"Thesis generation timed out after {_thesis_max_attempts} attempts",
