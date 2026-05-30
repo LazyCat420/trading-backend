@@ -545,11 +545,11 @@ async def execute_v2_pipeline(
 
     # Fix 5: Budget-aware debate skip — if the pipeline has already consumed
     # most of the worker timeout, skip debate to preserve time for thesis.
-    # Thesis retry loop worst-case: 360s + 30s cooldown + 240s = 630s.
+    # Thesis retry loop worst-case: 600s + 30s cooldown + 300s = 930s.
     # Hallucination check + memory write + DB log ≈ 30s.
     # Debate itself can take up to 300s.
-    # So we need: debate(300) + thesis(630) + overhead(30) = 960s minimum remaining.
-    _THESIS_BUDGET_SECONDS = 660  # thesis retries + overhead (non-negotiable)
+    # So we need: debate(300) + thesis(960) + overhead(30) = 1290s minimum remaining.
+    _THESIS_BUDGET_SECONDS = 960  # thesis retries + overhead (non-negotiable)
     if not _skip_debate:
         from app.config import settings as _settings
         _elapsed_so_far = time.monotonic() - start
@@ -837,9 +837,9 @@ async def execute_v2_pipeline(
             )
 
     # Fix 1: Retry thesis once on timeout — GPU may drain between attempts.
-    # First attempt gets 180s, then 30s cooldown, then 120s retry.
+    # First attempt gets 600s, then 30s cooldown, then 300s retry.
     # This would have saved ~12 tickers in the cycle-1780038350 crash cascade.
-    _thesis_timeouts = [360.0, 240.0]
+    _thesis_timeouts = [600.0, 300.0]
     _thesis_max_attempts = len(_thesis_timeouts)
     thesis = None
     thesis_tokens = 0
