@@ -495,7 +495,7 @@ class ToolRegistry:
                 url = f"{base_url}/execute/{func_name}"
                 logger.info("[ToolRegistry] Forwarding execution of '%s' to lazy-tool-service: %s", func_name, url)
                 service_source = "lazy-tool-service"
-                async with httpx.AsyncClient(timeout=120.0) as client:
+                async with httpx.AsyncClient(timeout=300.0) as client:
                     resp = await client.post(url, json=kwargs)
                     if resp.status_code != 200:
                         raise RuntimeError(f"lazy-tool-service returned status code {resp.status_code}: {resp.text}")
