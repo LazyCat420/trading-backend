@@ -1473,3 +1473,150 @@ class TestOffHoursBlackoutWindow:
                 "Sunday noon should be off-peak"
             )
         logger.info("PASS: Sunday noon → off-peak = True")
+
+
+# ────────────────────────────────────────────────────────────────────────
+# 9. Clock Drift Test
+#    Verify the collection scheduler handles clock skew between:
+#    - local container clock (datetime.now)
+#    - DB timestamps (last_success / last_failure)
+#    - External source timestamps (published_at, etc.)
+#    Key functions tested: should_collect, hours_since_last, _parse_timestamp
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestClockDrift:
+    """Verify collection scheduler handles clock skew safely."""
+
+    def test_future_timestamp_makes_data_appear_fresh(self):
+        """If the DB has a future timestamp (clock skewed source),
+        hours_since_last returns a negative value. should_collect
+        should still handle this correctly (treat as fresh → skip)."""
+        import datetime as dt
+
+        # Simulate: DB says last_success = 2 hours in the future
+        # DB cursor returns datetime objects directly (not strings)
+        future_ts = dt.datetime.now(dt.UTC) + dt.timedelta(hours=2)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (future_ts,)
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.collection_scheduler.get_db", side_effect=fake_get_db):
+            from app.pipeline.data.collection_scheduler import hours_since_last, should_collect
+
+            hours = hours_since_last("news_finnhub")
+
+        # hours_since_last should return a negative number (future timestamp)
+        assert hours is not None, "Should return a value, not None"
+        assert hours < 0, f"Future timestamp should produce negative hours, got {hours}"
+
+        # should_collect should say False (negative hours < 6h interval = fresh)
+        with patch("app.pipeline.data.collection_scheduler.get_db", side_effect=fake_get_db):
+            result = should_collect("news_finnhub")
+        assert result is False, (
+            "Future timestamp (clock drift) should make data appear fresh → skip"
+        )
+        logger.info("PASS: Future timestamp → negative hours → treated as fresh (skip)")
+
+    def test_should_collect_unknown_source_always_true(self):
+        """Unknown source keys should always return True (safe default)."""
+        from app.pipeline.data.collection_scheduler import should_collect
+
+        # No DB call needed — unknown source short-circuits
+        result = should_collect("nonexistent_source_xyz")
+        assert result is True, (
+            "Unknown source should always return True (collect)"
+        )
+        logger.info("PASS: Unknown source → should_collect = True (safe default)")
+
+    def test_parse_timestamp_naive_string(self):
+        """_parse_timestamp should handle timezone-naive strings by assuming UTC."""
+        from app.pipeline.data.collection_scheduler import _parse_timestamp
+        import datetime as dt
+
+        result = _parse_timestamp("2026-06-01 12:00:00")
+        assert result is not None, "Should parse '2026-06-01 12:00:00'"
+        assert result.tzinfo is not None, (
+            "Timezone-naive string should be upgraded to UTC"
+        )
+        assert result.tzinfo == dt.UTC, (
+            f"Should be UTC, got {result.tzinfo}"
+        )
+        logger.info("PASS: Naive timestamp string → parsed with UTC tzinfo")
+
+    def test_parse_timestamp_date_object(self):
+        """_parse_timestamp should handle date objects (no time component)."""
+        import datetime as dt
+        from app.pipeline.data.collection_scheduler import _parse_timestamp
+
+        d = dt.date(2026, 6, 1)
+        result = _parse_timestamp(d)
+        assert result is not None, "Should parse a date object"
+        assert isinstance(result, dt.datetime), "Should return a datetime"
+        assert result.hour == 0 and result.minute == 0, (
+            "Date should be converted to midnight datetime"
+        )
+        assert result.tzinfo is not None, "Should have UTC timezone"
+        logger.info("PASS: date object → midnight UTC datetime")
+
+    def test_hours_since_last_returns_none_when_no_data(self):
+        """When no data exists for a source, hours_since_last returns None.
+        This is the safe default that triggers collection."""
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (None,)
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.collection_scheduler.get_db", side_effect=fake_get_db):
+            from app.pipeline.data.collection_scheduler import hours_since_last, should_collect
+
+            hours = hours_since_last("news_finnhub")
+
+        assert hours is None, "No data should return None"
+
+        # should_collect should return True when hours is None
+        with patch("app.pipeline.data.collection_scheduler.get_db", side_effect=fake_get_db):
+            result = should_collect("news_finnhub")
+        assert result is True, (
+            "No data (hours=None) should trigger collection"
+        )
+        logger.info("PASS: No data → hours_since_last=None → should_collect=True")
+
+    def test_stale_data_triggers_collection(self):
+        """Data that is older than the refresh interval should trigger collection."""
+        import datetime as dt
+
+        # Simulate: last collected 12 hours ago (news_finnhub interval = 6h)
+        old_ts = dt.datetime.now(dt.UTC) - dt.timedelta(hours=12)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (old_ts.isoformat(),)
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.collection_scheduler.get_db", side_effect=fake_get_db):
+            from app.pipeline.data.collection_scheduler import should_collect
+
+            result = should_collect("news_finnhub")
+
+        assert result is True, (
+            "Data 12h old with 6h interval should trigger collection"
+        )
+        logger.info("PASS: 12h old data with 6h interval → should_collect=True")
