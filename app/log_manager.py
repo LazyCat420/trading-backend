@@ -293,6 +293,28 @@ class LogManager:
 
     # ── Read-back (NEW) ──────────────────────────────────────────────────
 
+    def list_all_cycles(self) -> list[dict]:
+        """List all available cycles based on JSONL files in the cycles directory."""
+        cycles = []
+        try:
+            if not self.cycles_dir.exists():
+                return cycles
+            
+            for path in self.cycles_dir.glob("*.jsonl"):
+                cycle_id = path.stem
+                stat = path.stat()
+                cycles.append({
+                    "cycle_id": cycle_id,
+                    "last_modified": stat.st_mtime,
+                    "size_bytes": stat.st_size
+                })
+            # Sort newest first
+            cycles.sort(key=lambda x: x["last_modified"], reverse=True)
+        except Exception as e:
+            logger.error("[LogManager] Failed to list cycles: %s", e)
+            
+        return cycles
+
     def get_cycle_log(self, cycle_id: str) -> list[dict]:
         """Read all entries from a cycle's JSONL file.
 
