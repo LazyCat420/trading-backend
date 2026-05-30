@@ -29,6 +29,7 @@ from app.cognition.reflection_utils import generate_critique_prompt
 
 from app.cognition.debate.debate_judge import judge_debate
 from app.cognition.contracts.retrieval import SourceDocRef
+from app.services.adaptive_concurrency import concurrency_controller
 
 logger = logging.getLogger(__name__)
 
@@ -1168,7 +1169,7 @@ async def run_adversarial_debate(
 
         num_personas = len(PERSONAS)
         tasks = [run_persona_debate(name, instr) for name, instr in PERSONAS.items()]
-        persona_results = await asyncio.gather(*tasks, return_exceptions=True)
+        persona_results = await concurrency_controller.gather(tasks, label="debate_personas", return_exceptions=True)
 
         bull_claims = []
         bear_claims = []
@@ -1395,7 +1396,7 @@ async def run_adversarial_debate(
                 )
                 cross_persona_names.append(p_name)
 
-        cross_results = await asyncio.gather(*cross_tasks, return_exceptions=True)
+        cross_results = await concurrency_controller.gather(cross_tasks, label="debate_cross_exam", return_exceptions=True)
 
         # Merge per-persona cross-exam results
         merged_cross_parsed: dict = {

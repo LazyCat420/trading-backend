@@ -34,6 +34,7 @@ from app.db.connection import get_db
 from app.trading.scoring_engine import build_hierarchical_pillar_profiles
 from app.services.prism_agent_caller import call_prism_agent
 from app.services.vllm_client import Priority
+from app.services.adaptive_concurrency import concurrency_controller
 
 logger = logging.getLogger(__name__)
 
@@ -325,9 +326,12 @@ async def build_evidence_packet(
         enrichment_tasks = [
             enrich_claims_with_llm(doc, ticker, claims) for doc in documents
         ]
-        enrichment_results = await asyncio.gather(*enrichment_tasks)
+        enrichment_results = await concurrency_controller.gather(enrichment_tasks, label="packet_builder", return_exceptions=True)
         for res in enrichment_results:
-            claims.extend(res)
+            if not isinstance(res, Exception) and res:
+                claims.extend(res)
+            elif isinstance(res, Exception):
+                logger.error(f"[packet_builder] Enrichment task failed: {res}")
 
     # 3. Cluster Claims
     clusters = cluster_claims(claims)

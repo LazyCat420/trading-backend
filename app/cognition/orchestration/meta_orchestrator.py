@@ -14,6 +14,8 @@ from app.cognition.debate.specialized_agents import (
 logger = logging.getLogger(__name__)
 
 
+from app.services.adaptive_concurrency import concurrency_controller
+
 class MetaOrchestrator:
     """
     Deterministically routes to specialized agents depending on the EvidencePacket
@@ -81,7 +83,7 @@ class MetaOrchestrator:
                 asyncio.wait_for(task, timeout=PER_AGENT_TIMEOUT)
                 for task in tasks
             ]
-            outputs = await asyncio.gather(*wrapped_tasks, return_exceptions=True)
+            outputs = await concurrency_controller.gather(wrapped_tasks, label="meta_orchestrator", return_exceptions=True)
             for label, out in zip(labels, outputs):
                 if isinstance(out, asyncio.TimeoutError):
                     logger.warning(
