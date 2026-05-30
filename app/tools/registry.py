@@ -366,22 +366,30 @@ class ToolRegistry:
                 }
 
         # ── Tool existence check ──
+        import os
+        use_lazy_tool = os.environ.get("USE_LAZY_TOOL_SERVICE", "false").lower() == "true"
+        is_remote_tool = False
+
         if func_name not in self.tools:
-            self._log_usage(
-                func_name or "unknown",
-                agent_name,
-                ticker,
-                cycle_id,
-                False,
-                0,
-                f"Tool '{func_name}' not found",
-            )
-            return {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "name": func_name,
-                "content": json.dumps({"error": f"Tool '{func_name}' not found."}),
-            }
+            if use_lazy_tool:
+                logger.info("[ToolRegistry] Tool '%s' not found locally, treating as remote tool.", func_name)
+                is_remote_tool = True
+            else:
+                self._log_usage(
+                    func_name or "unknown",
+                    agent_name,
+                    ticker,
+                    cycle_id,
+                    False,
+                    0,
+                    f"Tool '{func_name}' not found",
+                )
+                return {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "name": func_name,
+                    "content": json.dumps({"error": f"Tool '{func_name}' not found."}),
+                }
 
         # ── Cache interception check ──
         if tool_cache:
@@ -411,13 +419,42 @@ class ToolRegistry:
                     "content": cached_content,
                 }
 
-        # ── Permission check ──
-        if not skip_permission_check:
-            allowed, reason = self.check_permission(func_name)
-            if not allowed:
-                logger.warning(
-                    "[ToolRegistry] PERMISSION DENIED: %s — %s", func_name, reason
-                )
+        if not is_remote_tool:
+            # ── Permission check ──
+            if not skip_permission_check:
+                allowed, reason = self.check_permission(func_name)
+                if not allowed:
+                    logger.warning(
+                        "[ToolRegistry] PERMISSION DENIED: %s — %s", func_name, reason
+                    )
+                    self._log_usage(
+                        func_name,
+                        agent_name,
+                        ticker,
+                        cycle_id,
+                        False,
+                        0,
+                        f"Permission denied: {reason}",
+                    )
+                    return {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": func_name,
+                        "content": json.dumps(
+                            {
+                                "error": reason,
+                                "requires_approval": True,
+                                "pending_command": arguments_json,
+                                "action_required": "This tool requires human approval. The request has been logged for review.",
+                            }
+                        ),
+                    }
+
+            # ── Input validation (Pydantic) ──
+            try:
+                kwargs = self._validate_input(func_name, kwargs)
+            except ValidationError as e:
+                error_details = e.errors()
                 self._log_usage(
                     func_name,
                     agent_name,
@@ -425,7 +462,7 @@ class ToolRegistry:
                     cycle_id,
                     False,
                     0,
-                    f"Permission denied: {reason}",
+                    f"Validation failed: {len(error_details)} errors",
                 )
                 return {
                     "role": "tool",
@@ -433,43 +470,15 @@ class ToolRegistry:
                     "name": func_name,
                     "content": json.dumps(
                         {
-                            "error": reason,
-                            "requires_approval": True,
-                            "pending_command": arguments_json,
-                            "action_required": "This tool requires human approval. The request has been logged for review.",
+                            "error": f"Input validation failed: {len(error_details)} error(s)",
+                            "details": [
+                                {"field": err.get("loc", []), "message": err.get("msg", "")}
+                                for err in error_details[:5]
+                            ],
+                            "hint": "Fix the arguments and try again.",
                         }
                     ),
                 }
-
-        # ── Input validation (Pydantic) ──
-        try:
-            kwargs = self._validate_input(func_name, kwargs)
-        except ValidationError as e:
-            error_details = e.errors()
-            self._log_usage(
-                func_name,
-                agent_name,
-                ticker,
-                cycle_id,
-                False,
-                0,
-                f"Validation failed: {len(error_details)} errors",
-            )
-            return {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "name": func_name,
-                "content": json.dumps(
-                    {
-                        "error": f"Input validation failed: {len(error_details)} error(s)",
-                        "details": [
-                            {"field": err.get("loc", []), "message": err.get("msg", "")}
-                            for err in error_details[:5]
-                        ],
-                        "hint": "Fix the arguments and try again.",
-                    }
-                ),
-            }
 
         logger.info(
             "[ToolRegistry] Executing tool: %s with args: %s", func_name, kwargs
@@ -480,10 +489,10 @@ class ToolRegistry:
         try:
             import os
             service_source = "trading-service"
-            if os.environ.get("USE_LAZY_TOOL_SERVICE", "false").lower() == "true":
+            if use_lazy_tool and is_remote_tool:
                 import httpx
-                port = os.environ.get("LAZY_TOOL_SERVICE_PORT", "5591")
-                url = f"http://localhost:{port}/execute/{func_name}"
+                base_url = os.environ.get("LAZY_TOOL_SERVICE_URL", "http://10.0.0.16:5591")
+                url = f"{base_url}/execute/{func_name}"
                 logger.info("[ToolRegistry] Forwarding execution of '%s' to lazy-tool-service: %s", func_name, url)
                 service_source = "lazy-tool-service"
                 async with httpx.AsyncClient(timeout=120.0) as client:

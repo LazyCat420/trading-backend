@@ -12,6 +12,8 @@ services:
       - DATABASE_URL=postgresql://trader:trading_bot_pass@10.0.0.16:5433/trading_bot
       - API_SERVER_KEY=sun-trading-secure-api-key-2026
       - SCRAPER_SERVICE_URL=http://10.0.0.16:8001
+      - USE_LAZY_TOOL_SERVICE=true
+      - LAZY_TOOL_SERVICE_URL=http://10.0.0.16:5591
     volumes:
       - /usr/share/zoneinfo/America/Los_Angeles:/etc/localtime:ro
       - ./logs:/app/logs
