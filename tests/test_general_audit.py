@@ -1756,3 +1756,104 @@ class TestMidnightUTCRollover:
         )
         logger.info("PASS: date and '00:00:00' string → identical midnight timestamp")
 
+
+# ────────────────────────────────────────────────────────────────────────
+# 11. Frozen Time Regression Test
+#     Verify behavior when the system clock freezes or returns the same
+#     value repeatedly (VM snapshot, container pause, etc.).
+#     Key areas:
+#     a) elapsed_ms() returns 0 when monotonic clock is frozen
+#     b) run_with_timeout() still fires timeout (uses event loop clock)
+#     c) hours_since_last() returns 0 when now == last_collected
+#     d) Deterministic market hours check with frozen clock
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestFrozenTimeRegression:
+    """Verify system handles frozen/static clock gracefully."""
+
+    def test_elapsed_ms_frozen_monotonic(self):
+        """If time.monotonic() returns the same value, elapsed_ms should return 0."""
+        frozen_time = 12345.678
+
+        with patch("app.utils.pipeline_utils.time") as mock_time:
+            mock_time.monotonic.return_value = frozen_time
+
+            from app.utils.pipeline_utils import elapsed_ms
+
+            result = elapsed_ms(frozen_time)
+
+        assert result == 0, f"Frozen monotonic should give 0ms, got {result}"
+        logger.info("PASS: Frozen monotonic → elapsed_ms = 0")
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_fires_even_with_frozen_wallclock(self):
+        """asyncio.wait_for uses the event loop clock (not wall clock),
+        so timeouts should still fire correctly."""
+        from app.utils.async_utils import run_with_timeout
+
+        async def hang_forever():
+            await asyncio.sleep(9999)
+
+        result = await run_with_timeout(
+            hang_forever(),
+            timeout=0.1,
+            label="frozen-time-test",
+            fallback="TIMED_OUT",
+        )
+
+        assert result == "TIMED_OUT", (
+            f"Should return fallback on timeout, got {result}"
+        )
+        logger.info("PASS: run_with_timeout fires correctly (event loop clock)")
+
+    def test_hours_since_last_zero_when_now_equals_collected(self):
+        """If last_collected timestamp is essentially 'now',
+        hours_since_last should return ~0."""
+        import datetime as dt
+
+        # Simulate: data collected 1 second ago (essentially frozen time scenario)
+        almost_now = dt.datetime.now(dt.UTC) - dt.timedelta(seconds=1)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (almost_now,)
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.collection_scheduler.get_db", side_effect=fake_get_db):
+            from app.pipeline.data.collection_scheduler import hours_since_last
+
+            hours = hours_since_last("news_finnhub")
+
+        assert hours is not None, "Should return a value"
+        assert abs(hours) < 0.01, (
+            f"Near-frozen clock should give ~0 hours, got {hours}"
+        )
+        logger.info("PASS: Near-frozen clock → hours = %.6f ≈ 0", hours)
+
+    def test_market_hours_deterministic_with_frozen_clock(self):
+        """Calling _is_market_hours() twice with the same frozen clock
+        should return the same result (no randomness)."""
+        import pytz
+
+        et = pytz.timezone("US/Eastern")
+        # Freeze at 12:00 PM ET Wednesday
+        frozen = et.localize(datetime(2026, 6, 3, 12, 0, 0))
+
+        with patch("app.services.cycle_scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = frozen
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.services.cycle_scheduler import SchedulerService
+
+            result1 = SchedulerService._is_market_hours()
+            result2 = SchedulerService._is_market_hours()
+
+        assert result1 == result2, "Frozen clock should produce deterministic results"
+        assert result1 is True, "12:00 PM ET Wednesday should be market hours"
+        logger.info("PASS: Frozen clock → deterministic market hours (True, True)")
