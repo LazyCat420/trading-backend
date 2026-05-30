@@ -1620,3 +1620,139 @@ class TestClockDrift:
             "Data 12h old with 6h interval should trigger collection"
         )
         logger.info("PASS: 12h old data with 6h interval → should_collect=True")
+
+
+# ────────────────────────────────────────────────────────────────────────
+# 10. Midnight UTC Rollover Test
+#     Verify behavior at the UTC date boundary (23:59 → 00:00).
+#     Key areas:
+#     a) get_sec_13f_quarter() returns correct quarter at month boundaries
+#     b) should_collect() daily interval at 11:59 PM vs 12:01 AM
+#     c) _parse_timestamp date objects produce midnight UTC
+#     d) is_off_peak at midnight ET
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestMidnightUTCRollover:
+    """Verify system behavior at the UTC date boundary."""
+
+    def test_sec_13f_quarter_january_boundary(self):
+        """In January, Q3 filings should still be the latest available
+        (Q4 isn't due until Feb 14)."""
+        import datetime as dt
+        from app.pipeline.data.collection_scheduler import get_sec_13f_quarter
+
+        # Jan 10 2026 — Q4 not yet available
+        with patch("app.pipeline.data.collection_scheduler.datetime") as mock_dt:
+            mock_dt.datetime.now.return_value = dt.datetime(2026, 1, 10)
+            mock_dt.datetime.side_effect = lambda *a, **kw: dt.datetime(*a, **kw)
+
+            result = get_sec_13f_quarter()
+
+        assert result == "2025Q3", (
+            f"January should show previous year Q3, got {result}"
+        )
+        logger.info("PASS: January → Q3 of previous year (Q4 not yet filed)")
+
+    def test_sec_13f_quarter_may_boundary(self):
+        """In May, Q1 filings should be available."""
+        import datetime as dt
+        from app.pipeline.data.collection_scheduler import get_sec_13f_quarter
+
+        with patch("app.pipeline.data.collection_scheduler.datetime") as mock_dt:
+            mock_dt.datetime.now.return_value = dt.datetime(2026, 5, 15)
+            mock_dt.datetime.side_effect = lambda *a, **kw: dt.datetime(*a, **kw)
+
+            result = get_sec_13f_quarter()
+
+        assert result == "2026Q1", (
+            f"May should show Q1, got {result}"
+        )
+        logger.info("PASS: May → Q1 filings available")
+
+    def test_should_collect_daily_source_just_before_midnight(self):
+        """A daily source collected at 11:59 PM should NOT be collected again
+        at 11:59:30 PM (still within the 24h window)."""
+        import datetime as dt
+
+        # Last collected 30 seconds ago
+        recent_ts = dt.datetime.now(dt.UTC) - dt.timedelta(seconds=30)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (recent_ts,)
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.collection_scheduler.get_db", side_effect=fake_get_db):
+            from app.pipeline.data.collection_scheduler import should_collect
+
+            result = should_collect("price_history")  # 24h interval
+
+        assert result is False, (
+            "Data collected 30 seconds ago should NOT trigger re-collection"
+        )
+        logger.info("PASS: Recent collection (30s ago) → skip (within 24h window)")
+
+    def test_should_collect_daily_source_after_24h(self):
+        """A daily source collected 25 hours ago should trigger re-collection."""
+        import datetime as dt
+
+        old_ts = dt.datetime.now(dt.UTC) - dt.timedelta(hours=25)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (old_ts,)
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.collection_scheduler.get_db", side_effect=fake_get_db):
+            from app.pipeline.data.collection_scheduler import should_collect
+
+            result = should_collect("price_history")
+
+        assert result is True, (
+            "Data 25h old with 24h interval should trigger collection"
+        )
+        logger.info("PASS: 25h old data with 24h interval → should_collect=True")
+
+    def test_is_off_peak_at_midnight_et(self):
+        """Midnight ET (12:00 AM) should be off-peak."""
+        fake_now = datetime(2026, 6, 2, 0, 0, 0)  # Tuesday midnight
+
+        with patch("app.pipeline.data.data_lifecycle.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.pipeline.data.data_lifecycle import is_off_peak
+
+            assert is_off_peak() is True, (
+                "Midnight ET should be off-peak"
+            )
+        logger.info("PASS: Midnight ET → off-peak = True")
+
+    def test_parse_timestamp_midnight_consistency(self):
+        """A date '2026-06-01' and datetime '2026-06-01 00:00:00' should
+        parse to the same midnight timestamp."""
+        import datetime as dt
+        from app.pipeline.data.collection_scheduler import _parse_timestamp
+
+        from_date = _parse_timestamp(dt.date(2026, 6, 1))
+        from_string = _parse_timestamp("2026-06-01 00:00:00")
+
+        assert from_date is not None
+        assert from_string is not None
+        assert from_date == from_string, (
+            f"date and string should produce same midnight timestamp: "
+            f"{from_date} != {from_string}"
+        )
+        logger.info("PASS: date and '00:00:00' string → identical midnight timestamp")
+
