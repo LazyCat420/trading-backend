@@ -7,6 +7,7 @@ under adverse infrastructure conditions.
 
 import asyncio
 import time
+from datetime import datetime
 import logging
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch, AsyncMock
@@ -1099,3 +1100,232 @@ class TestNetworkPartition:
             "PASS: Timeout disconnection correctly rejects ticker (status=%s)",
             yf_events[0]["status"],
         )
+
+
+# ────────────────────────────────────────────────────────────────────────
+# 7. Processing Window Boundary Test
+#    Verify market-hours boundary logic at exact open/close times.
+#    Three functions are tested:
+#    a) SchedulerService._is_market_hours() — ET 9:30–16:00 weekdays
+#    b) passive_collector._is_market_hours() — PT 6:00–17:00 weekdays
+#    c) data_lifecycle.is_off_peak() — ET 9:30–16:00 weekdays
+#    d) Scheduler skips market_hours_only schedules when outside hours
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestProcessingWindowBoundary:
+    """Verify market hours functions return correct values at exact boundaries."""
+
+    # ── A: SchedulerService._is_market_hours() ──
+
+    def test_scheduler_market_open_boundary_930am_et(self):
+        """At exactly 9:30 AM ET on a Wednesday, _is_market_hours() → True."""
+        import pytz
+
+        et = pytz.timezone("US/Eastern")
+        # Wednesday 9:30:00 AM ET
+        fake_now = et.localize(datetime(2026, 6, 3, 9, 30, 0))
+
+        with patch("app.services.cycle_scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.services.cycle_scheduler import SchedulerService
+
+            assert SchedulerService._is_market_hours() is True, (
+                "9:30 AM ET on Wednesday should be market hours"
+            )
+        logger.info("PASS: 9:30 AM ET → market hours = True")
+
+    def test_scheduler_market_close_boundary_400pm_et(self):
+        """At exactly 4:00 PM ET on a Wednesday, _is_market_hours() → True (inclusive)."""
+        import pytz
+
+        et = pytz.timezone("US/Eastern")
+        fake_now = et.localize(datetime(2026, 6, 3, 16, 0, 0))
+
+        with patch("app.services.cycle_scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.services.cycle_scheduler import SchedulerService
+
+            assert SchedulerService._is_market_hours() is True, (
+                "4:00 PM ET on Wednesday should still be market hours (boundary inclusive)"
+            )
+        logger.info("PASS: 4:00 PM ET → market hours = True (boundary)")
+
+    def test_scheduler_one_minute_after_close(self):
+        """At 4:01 PM ET on a Wednesday, _is_market_hours() → False."""
+        import pytz
+
+        et = pytz.timezone("US/Eastern")
+        fake_now = et.localize(datetime(2026, 6, 3, 16, 1, 0))
+
+        with patch("app.services.cycle_scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.services.cycle_scheduler import SchedulerService
+
+            assert SchedulerService._is_market_hours() is False, (
+                "4:01 PM ET on Wednesday should NOT be market hours"
+            )
+        logger.info("PASS: 4:01 PM ET → market hours = False")
+
+    def test_scheduler_weekend_saturday(self):
+        """Saturday should NOT be market hours regardless of time."""
+        import pytz
+
+        et = pytz.timezone("US/Eastern")
+        # Saturday 12:00 PM ET (June 6, 2026 is Saturday)
+        fake_now = et.localize(datetime(2026, 6, 6, 12, 0, 0))
+
+        with patch("app.services.cycle_scheduler.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.services.cycle_scheduler import SchedulerService
+
+            assert SchedulerService._is_market_hours() is False, (
+                "Saturday 12:00 PM should NOT be market hours"
+            )
+        logger.info("PASS: Saturday → market hours = False")
+
+    # ── B: passive_collector._is_market_hours() (PT-based) ──
+
+    def test_passive_collector_extended_hours_open(self):
+        """At 6:00 AM PT on a Monday, passive collector → market hours."""
+        import pytz
+
+        pt = pytz.timezone("America/Los_Angeles")
+        fake_now = pt.localize(datetime(2026, 6, 1, 6, 0, 0))  # Monday
+
+        with patch("app.services.passive_collector.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.services.passive_collector import _is_market_hours
+
+            assert _is_market_hours() is True, (
+                "6:00 AM PT on Monday should be extended market hours"
+            )
+        logger.info("PASS: 6:00 AM PT → passive collector market hours = True")
+
+    def test_passive_collector_after_extended_close(self):
+        """At 5:00 PM PT on a Monday, passive collector → NOT market hours."""
+        import pytz
+
+        pt = pytz.timezone("America/Los_Angeles")
+        fake_now = pt.localize(datetime(2026, 6, 1, 17, 0, 0))  # Monday
+
+        with patch("app.services.passive_collector.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.services.passive_collector import _is_market_hours
+
+            assert _is_market_hours() is False, (
+                "5:00 PM PT on Monday should NOT be extended market hours"
+            )
+        logger.info("PASS: 5:00 PM PT → passive collector market hours = False")
+
+    # ── C: data_lifecycle.is_off_peak() ──
+
+    def test_off_peak_during_market_hours(self):
+        """During active market hours (12:00 PM ET Mon), is_off_peak() → False."""
+        fake_now = datetime(2026, 6, 1, 12, 0, 0)  # Monday noon
+
+        with patch("app.pipeline.data.data_lifecycle.datetime") as mock_dt:
+            # Patch both ZoneInfo and direct datetime calls
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.pipeline.data.data_lifecycle import is_off_peak
+
+            assert is_off_peak() is False, (
+                "12:00 PM ET on Monday should NOT be off-peak"
+            )
+        logger.info("PASS: 12:00 PM ET Monday → off-peak = False")
+
+    def test_off_peak_after_market_close(self):
+        """After market close (6:00 PM ET Mon), is_off_peak() → True."""
+        fake_now = datetime(2026, 6, 1, 18, 0, 0)  # Monday 6 PM
+
+        with patch("app.pipeline.data.data_lifecycle.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+
+            from app.pipeline.data.data_lifecycle import is_off_peak
+
+            assert is_off_peak() is True, (
+                "6:00 PM ET on Monday should be off-peak"
+            )
+        logger.info("PASS: 6:00 PM ET Monday → off-peak = True")
+
+    # ── D: Scheduler skips market_hours_only schedules ──
+
+    @pytest.mark.asyncio
+    async def test_scheduler_skips_market_hours_only_schedule_outside_hours(self):
+        """When market_hours_only=True and it's 8 PM ET, the schedule should
+        be skipped (not execute a cycle)."""
+        import pytz
+
+        et = pytz.timezone("US/Eastern")
+        fake_now = et.localize(datetime(2026, 6, 3, 20, 0, 0))  # Wed 8 PM ET
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        # Return a schedule row with market_hours_only = True
+        mock_cursor.fetchone.return_value = (
+            "sched-001",       # id
+            "Test Schedule",   # name
+            "interval",        # schedule_type
+            None,              # cron_expression
+            2.0,               # interval_hours
+            True,              # collect
+            True,              # analyze
+            True,              # trade
+            "[]",              # tickers
+            10,                # max_tickers
+            True,              # discovered_tickers
+            True,              # market_hours_only ← True
+            True,              # is_active
+            None,              # last_run_at
+            None,              # next_run_at
+            0,                 # run_count
+            None,              # last_status
+            None,              # last_error
+            "2026-01-01T00:00:00Z",  # created_at
+            "2026-01-01T00:00:00Z",  # updated_at
+        )
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.services.cycle_scheduler.datetime") as mock_dt, \
+             patch("app.services.cycle_scheduler.get_db", side_effect=fake_get_db), \
+             patch("app.services.cycle_scheduler.cycle_control") as mock_cc:
+            mock_dt.now.return_value = fake_now
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+            mock_cc.is_paused = False
+
+            from app.services.cycle_scheduler import SchedulerService
+
+            # Mock _sync_next_run_to_db to avoid scheduler access
+            with patch.object(SchedulerService, "_sync_next_run_to_db"):
+                await SchedulerService.execute_schedule("sched-001")
+
+            # The cycle should NOT have been dispatched — check that
+            # no system_commands INSERT was executed
+            insert_calls = [
+                call for call in mock_cursor.execute.call_args_list
+                if "system_commands" in str(call).lower()
+            ]
+            assert len(insert_calls) == 0, (
+                "Should NOT dispatch a cycle when market_hours_only=True and outside hours"
+            )
+        logger.info("PASS: Scheduler skips market_hours_only schedule outside hours")
