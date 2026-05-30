@@ -682,4 +682,88 @@ class TestInferenceOverload:
         assert "Strong momentum" in result.summary
 
 
+# ────────────────────────────────────────────────────────────────────────
+# 5. Connection Pool Exhaustion Test
+#    Verify that when the connection pool is saturated, the get_db()
+#    concurrency manager handles the failure gracefully by reclaiming
+#    connections via garbage collection, and raises errors properly without
+#    crashing the backend process.
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestConnectionPoolExhaustion:
+    """Verify system resilience under DB connection pool exhaustion."""
+
+    @pytest.fixture(autouse=True)
+    def patch_get_db(self):
+        """Override the global autouse fixture from conftest.py to test the real get_db."""
+        return None
+
+    @pytest.mark.asyncio
+    async def test_get_db_recovers_on_gc_collect(self):
+        """Verify that get_db() calls gc.collect() and retries when pool is exhausted,
+        succeeding if a connection becomes available."""
+        mock_pool = MagicMock()
+        mock_conn = MagicMock()
+
+        # First call raises timeout, second call succeeds
+        mock_pool.getconn.side_effect = [
+            Exception("Pool timeout: no connections available"),
+            mock_conn,
+        ]
+
+        with patch("app.db.connection._ensure_pool", return_value=mock_pool), \
+             patch("gc.collect") as mock_gc:
+
+            from app.db.connection import get_db
+
+            with get_db() as db:
+                assert db._conn == mock_conn
+
+            # Verify gc.collect() was triggered
+            mock_gc.assert_called_once()
+            # Verify getconn was called twice (first fail, then retry)
+            assert mock_pool.getconn.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_db_raises_after_failed_retry(self):
+        """Verify that get_db() raises if the retry attempt also fails."""
+        mock_pool = MagicMock()
+
+        # Both calls raise timeout
+        mock_pool.getconn.side_effect = [
+            Exception("Pool timeout error"),
+            Exception("Pool timeout error"),
+        ]
+
+        with patch("app.db.connection._ensure_pool", return_value=mock_pool), \
+             patch("gc.collect"):
+
+            from app.db.connection import get_db
+
+            with pytest.raises(Exception, match="Pool timeout error"):
+                with get_db():
+                    pass
+
+    @pytest.mark.asyncio
+    async def test_pipeline_state_db_survives_pool_exhaustion(self):
+        """Verify that PipelineStateDB doesn't crash when get_db() raises timeout."""
+        mock_pool = MagicMock()
+        mock_pool.getconn.side_effect = Exception("Pool timeout error")
+
+        with patch("app.db.connection._ensure_pool", return_value=mock_pool), \
+             patch("gc.collect"):
+
+            from app.cycle.orchestration.state_manager import PipelineStateDB
+
+            # Reading state should fall back to default_state instead of raising
+            state = PipelineStateDB.get_state()
+            assert state["status"] == "idle"
+            assert state["cycle_id"] is None
+
+            # Saving state should swallow the error and log it (should not raise)
+            PipelineStateDB.save_state({"status": "running"})
+
+
+
 
