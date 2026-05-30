@@ -574,3 +574,112 @@ class TestContainerRestart:
             assert run_cycle_called_with.macro_memo == "macro memo test"
 
 
+# ────────────────────────────────────────────────────────────────────────
+# 4. Inference / AI Service Overload Test
+#    Verify that when the LLM service returns truncated, partial, or malformed
+#    JSON responses (due to context overflow, timeouts, or model overload),
+#    the agents recover gracefully using robust fallbacks.
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestInferenceOverload:
+    """Verify agent resilience under partial/truncated LLM JSON responses."""
+
+    @pytest.mark.asyncio
+    async def test_pre_trade_agent_truncated_response(self):
+        """Verify pre_trade_agent handles truncated JSON response without crashing."""
+        from app.agents.pre_trade_agent import run_pre_trade
+
+        # Simulate a JSON response that was cut off mid-sentence
+        truncated_response = '{"decision": "VETO", "rationale": "High volatility and'
+
+        with patch("app.agents.pre_trade_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": truncated_response, "tokens_used": 10}
+            result = await run_pre_trade("AAPL", 90, "cycle_1", "bot_1")
+
+            # Should fallback to APPROVE with Kelly sizing
+            assert result["decision"] == "APPROVE"
+            assert "Kelly fallback" in result["rationale"]
+
+    @pytest.mark.asyncio
+    async def test_trade_execution_agent_truncated_response(self):
+        """Verify trade_execution_agent handles truncated JSON response without crashing."""
+        from app.agents.trade_execution_agent import run_trade_execution
+
+        truncated_response = '{"decision": "VETO", "rationale": "Insufficient liquidity due to'
+
+        with patch("app.agents.trade_execution_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": truncated_response, "tokens_used": 10}
+
+            # Action: BUY -> fallback is APPROVE / Kelly
+            result = await run_trade_execution("AAPL", "BUY", 90, "cycle_1", "bot_1")
+            assert result["decision"] == "APPROVE"
+            assert "Kelly fallback" in result["rationale"]
+
+            # Action: SELL -> fallback is APPROVE / 100% trim
+            result_sell = await run_trade_execution("AAPL", "SELL", 90, "cycle_1", "bot_1")
+            assert result_sell["decision"] == "APPROVE"
+            assert result_sell["sell_pct"] == 100  # 100% trim fallback
+
+
+    @pytest.mark.asyncio
+    async def test_portfolio_allocator_agent_truncated_response(self):
+        """Verify portfolio_allocator_agent handles truncated JSON response without crashing."""
+        from app.agents.portfolio_allocator_agent import run_portfolio_allocator
+
+        truncated_response = '{"allocations": [{"ticker": "AAPL", "weight": 0.5}, {"ticker": "MSFT'
+
+        with patch("app.agents.portfolio_allocator_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": truncated_response, "tokens_used": 15}
+
+            result = await run_portfolio_allocator(
+                [{"ticker": "AAPL", "action": "BUY", "confidence": 90}], "cycle_1", "bot_1"
+            )
+            # Should degrade to empty allocations dict
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_post_mortem_auditor_agent_truncated_response(self):
+        """Verify post_mortem_auditor_agent handles truncated JSON response without crashing."""
+        from app.agents.post_mortem_auditor_agent import run_post_mortem
+
+        truncated_response = '{"audit_findings": {"ticker": "AAPL", "performance":'
+
+        with patch("app.agents.post_mortem_auditor_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": truncated_response, "tokens_used": 12}
+
+            result = await run_post_mortem("AAPL", 100.0, 110.0, 10.0, "cycle_1", "bot_1")
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_meta_agent_truncated_response(self):
+        """Verify meta_agent handles truncated JSON response without crashing."""
+        from app.agents.meta_agent import generate_prompt
+
+        truncated_response = '{"improved_prompt": "You are a trading bot assistant'
+
+        with patch("app.agents.meta_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": truncated_response, "tokens_used": 20}
+
+            result = await generate_prompt("wins", "losses", "insights", "existing", "cycle_1", "bot_1")
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_context_compressor_truncated_response(self):
+        """Verify context_compressor generate_capsule degrades gracefully with truncated JSON."""
+        from app.agents.context_compressor import generate_capsule
+
+        # A truncated JSON which contains some plain text patterns that the regex fallback can extract
+        truncated_response = '{"signal": "BUY", "confidence": 85, "summary": "Strong momentum'
+
+        # When json parsing fails, it falls back to regex heuristic.
+        # Let's ensure it extracts "BUY" and confidence 0.85
+        result = await generate_capsule(
+            {"response": truncated_response, "tokens_used": 10}, "test_agent", "cycle_1", "AAPL"
+        )
+        assert result.signal == "BUY"
+        assert result.confidence == 0.85
+        assert "Strong momentum" in result.summary
+
+
+

@@ -183,7 +183,8 @@ _SIGNAL_PATTERNS = {
     "HOLD": re.compile(r"\b(HOLD|NEUTRAL|WAIT|NO\s*ACTION)\b", re.IGNORECASE),
 }
 
-_CONFIDENCE_PATTERN = re.compile(r"(?:confidence|conf)[:\s]*(\d{1,3})(?:\s*%)?", re.IGNORECASE)
+_CONFIDENCE_PATTERN = re.compile(r"[\"\']?(?:confidence|conf)[\"\']?[:\s]*(\d{1,3})(?:\s*%)?", re.IGNORECASE)
+
 
 
 def _extract_from_json(parsed: dict) -> tuple[str, str, float, list[str]]:
