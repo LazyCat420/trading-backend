@@ -100,13 +100,12 @@ async def execute_v2_pipeline(
 
     try:
         from app.pipeline.data.data_completeness import check_and_fill
-        # Reduced from 30s to 10s — check_and_fill was consistently timing out
-        # at exactly 30s, adding dead time to every ticker. The evidence packet
-        # builder (Step 2) independently checks data quality and fills gaps.
-        data_report = await asyncio.wait_for(check_and_fill(ticker, emit=emit), timeout=10.0)
+        # Increased from 10s to 30s to allow more time for gap filling.
+        # The evidence packet builder (Step 2) independently checks data quality and fills gaps.
+        data_report = await asyncio.wait_for(check_and_fill(ticker, emit=emit), timeout=30.0)
     except asyncio.TimeoutError:
         logger.warning(
-            "[V2] Data completeness TIMEOUT for %s (10s) — this check consistently times out. "
+            "[V2] Data completeness TIMEOUT for %s (30s) — this check consistently times out. "
             "Proceeding without gap fill; evidence packet builder will handle data quality.",
             ticker,
         )
