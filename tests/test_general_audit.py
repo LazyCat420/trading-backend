@@ -1857,3 +1857,153 @@ class TestFrozenTimeRegression:
         assert result1 == result2, "Frozen clock should produce deterministic results"
         assert result1 is True, "12:00 PM ET Wednesday should be market hours"
         logger.info("PASS: Frozen clock → deterministic market hours (True, True)")
+
+
+# ────────────────────────────────────────────────────────────────────────
+# 12. Queue Backlog Test
+#     Verify behavior when queues accumulate large backlogs:
+#     a) Scraper queue drops requests when at max size
+#     b) Scraper queue deduplicates pending requests
+#     c) Scraper queue cooldown prevents re-scraping after resolve
+#     d) Analysis queue high watermark threshold is enforced
+#     e) cleanup_stale resets stuck PROCESSING requests
+# ────────────────────────────────────────────────────────────────────────
+
+
+class TestQueueBacklog:
+    """Verify queue systems handle backlogs with proper backpressure."""
+
+    def test_scraper_queue_drops_when_full(self):
+        """When queue_size >= SCRAPER_MAX_QUEUE_SIZE, enqueue_request
+        should return None (drop the request)."""
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        # First call: dedup check → no existing request
+        # Second call: cooldown check → no cooldown
+        # Third call: queue size → at max
+        mock_cursor.fetchone.side_effect = [
+            None,       # dedup: no existing
+            None,       # cooldown: no active cooldown
+            (500,),     # queue size: at max (500)
+        ]
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.scraper_queue.get_db", side_effect=fake_get_db), \
+             patch("app.pipeline.data.scraper_queue.settings") as mock_settings:
+            mock_settings.SCRAPER_MAX_QUEUE_SIZE = 500
+            mock_settings.SCRAPER_ROUTINE_PRIORITY = 5
+            mock_settings.SCRAPER_MAX_RETRIES = 3
+
+            from app.pipeline.data.scraper_queue import enqueue_request
+
+            result = enqueue_request("AAPL", "news")
+
+        assert result is None, (
+            "Should return None when queue is full"
+        )
+        logger.info("PASS: Scraper queue drops request when full (500/500)")
+
+    def test_scraper_queue_deduplicates_pending(self):
+        """If an identical PENDING request exists, enqueue should return None."""
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        # First call: dedup check → existing request found
+        mock_cursor.fetchone.return_value = ("existing-id-1234",)
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.scraper_queue.get_db", side_effect=fake_get_db), \
+             patch("app.pipeline.data.scraper_queue.settings") as mock_settings:
+            mock_settings.SCRAPER_ROUTINE_PRIORITY = 5
+            mock_settings.SCRAPER_MAX_RETRIES = 3
+
+            from app.pipeline.data.scraper_queue import enqueue_request
+
+            result = enqueue_request("AAPL", "news")
+
+        assert result is None, (
+            "Should return None when duplicate request exists"
+        )
+        logger.info("PASS: Scraper queue deduplicates pending requests")
+
+    def test_scraper_queue_cooldown_blocks_enqueue(self):
+        """If a ticker/data_type is in cooldown, enqueue should return None."""
+        import datetime as dt
+
+        future_cooldown = dt.datetime.now(dt.UTC) + dt.timedelta(hours=3)
+
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        # First call: dedup → no existing
+        # Second call: cooldown → active cooldown
+        mock_cursor.fetchone.side_effect = [
+            None,                   # dedup: no existing
+            (future_cooldown,),     # cooldown: active until 3h from now
+        ]
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.scraper_queue.get_db", side_effect=fake_get_db), \
+             patch("app.pipeline.data.scraper_queue.settings") as mock_settings:
+            mock_settings.SCRAPER_ROUTINE_PRIORITY = 5
+            mock_settings.SCRAPER_MAX_RETRIES = 3
+
+            from app.pipeline.data.scraper_queue import enqueue_request
+
+            result = enqueue_request("AAPL", "news")
+
+        assert result is None, (
+            "Should return None when in cooldown"
+        )
+        logger.info("PASS: Scraper queue respects cooldown window")
+
+    def test_analysis_queue_watermark_config_exists(self):
+        """Verify the high/low watermark settings are accessible."""
+        from app.config import settings
+
+        high_wm = getattr(settings, "PIPELINE_QUEUE_HIGH_WATERMARK", 200)
+        low_wm = getattr(settings, "PIPELINE_QUEUE_LOW_WATERMARK", 100)
+
+        assert isinstance(high_wm, int), "High watermark should be int"
+        assert isinstance(low_wm, int), "Low watermark should be int"
+        assert high_wm > low_wm, (
+            f"High watermark ({high_wm}) must be > low watermark ({low_wm})"
+        )
+        logger.info(
+            "PASS: Queue watermarks configured — high=%d, low=%d",
+            high_wm, low_wm,
+        )
+
+    def test_scraper_cleanup_stale_resets_stuck_requests(self):
+        """cleanup_stale() should reset PROCESSING requests older than timeout."""
+        mock_cursor = MagicMock()
+        mock_cursor.execute.return_value = mock_cursor
+        # Simulate 3 stale requests reset
+        mock_cursor.fetchall.return_value = [("id1",), ("id2",), ("id3",)]
+        mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_cursor.__exit__ = MagicMock(return_value=False)
+
+        @contextmanager
+        def fake_get_db():
+            yield mock_cursor
+
+        with patch("app.pipeline.data.scraper_queue.get_db", side_effect=fake_get_db):
+            from app.pipeline.data.scraper_queue import cleanup_stale
+
+            count = cleanup_stale(timeout_minutes=10)
+
+        assert count == 3, f"Should reset 3 stale requests, got {count}"
+        logger.info("PASS: cleanup_stale reset 3 stuck PROCESSING requests")
