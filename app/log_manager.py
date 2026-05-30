@@ -429,5 +429,62 @@ class LogManager:
 
         return abandoned
 
+    # ── Log Rotation / Cleanup (NEW) ─────────────────────────────────────
+
+    def cleanup_old_logs(self, max_age_days: int = 14) -> dict:
+        """Delete old cycle JSONL files and debate audit files.
+
+        Keeps logs from the last `max_age_days` days.
+        Returns a summary of what was cleaned up.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+        removed = {"cycle_logs": 0, "audit_logs": 0, "bytes_freed": 0}
+
+        # 1. Clean old cycle JSONL files
+        for path in sorted(self.CYCLE_DIR.glob("cycle-*.jsonl")):
+            try:
+                # Read first line to get cycle start timestamp
+                with open(path, "r", encoding="utf-8") as f:
+                    first_line = f.readline().strip()
+                if not first_line:
+                    continue
+                entry = json.loads(first_line)
+                ts_str = entry.get("timestamp", "")
+                cycle_start = datetime.fromisoformat(ts_str)
+                if cycle_start < cutoff:
+                    size = path.stat().st_size
+                    path.unlink()
+                    removed["cycle_logs"] += 1
+                    removed["bytes_freed"] += size
+            except Exception:
+                continue
+
+        # 2. Clean old debate audit files
+        audit_dir = self.BASE_DIR / "audit"
+        if audit_dir.exists():
+            for path in sorted(audit_dir.glob("debate_audit_*.jsonl")):
+                try:
+                    mtime = datetime.fromtimestamp(
+                        path.stat().st_mtime, tz=timezone.utc
+                    )
+                    if mtime < cutoff:
+                        size = path.stat().st_size
+                        path.unlink()
+                        removed["audit_logs"] += 1
+                        removed["bytes_freed"] += size
+                except Exception:
+                    continue
+
+        if removed["cycle_logs"] or removed["audit_logs"]:
+            logger.info(
+                "[LogManager] Cleanup: removed %d cycle logs + %d audit logs "
+                "(freed %.1f KB)",
+                removed["cycle_logs"],
+                removed["audit_logs"],
+                removed["bytes_freed"] / 1024,
+            )
+
+        return removed
+
 
 log_manager = LogManager()

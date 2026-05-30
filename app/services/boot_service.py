@@ -155,6 +155,17 @@ class BootService:
         else:
             logger.info("[Boot] No crashed cycles detected from previous runs.")
 
+        # Clean up old log files (>14 days) to prevent unbounded disk growth
+        from app.config import settings
+        max_days = getattr(settings, "AUDIT_LOG_TTL_DAYS", 14)
+        cleanup = log_manager.cleanup_old_logs(max_age_days=max_days)
+        if cleanup["cycle_logs"] or cleanup["audit_logs"]:
+            logger.info(
+                "[Boot] Log cleanup: removed %d cycle + %d audit files (%.1f KB freed)",
+                cleanup["cycle_logs"], cleanup["audit_logs"],
+                cleanup["bytes_freed"] / 1024,
+            )
+
     @classmethod
     def _start_scheduler(cls):
         from app.services.cycle_scheduler import SchedulerService

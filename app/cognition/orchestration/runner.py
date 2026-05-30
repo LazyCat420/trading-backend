@@ -545,20 +545,28 @@ async def execute_v2_pipeline(
 
     # Fix 5: Budget-aware debate skip — if the pipeline has already consumed
     # most of the worker timeout, skip debate to preserve time for thesis.
+    # Thesis retry loop worst-case: 360s + 30s cooldown + 240s = 630s.
+    # Hallucination check + memory write + DB log ≈ 30s.
+    # Debate itself can take up to 300s.
+    # So we need: debate(300) + thesis(630) + overhead(30) = 960s minimum remaining.
+    _THESIS_BUDGET_SECONDS = 660  # thesis retries + overhead (non-negotiable)
     if not _skip_debate:
         from app.config import settings as _settings
         _elapsed_so_far = time.monotonic() - start
         _remaining_budget = float(_settings.ANALYSIS_WORKER_TIMEOUT_SECONDS) - _elapsed_so_far
-        if _remaining_budget < 200:
+        if _remaining_budget < (_THESIS_BUDGET_SECONDS + 300):
             _skip_debate = True
             logger.warning(
-                "[V2] Skipping debate for %s — only %.0fs remaining in worker budget (need 200s minimum)",
+                "[V2] Skipping debate for %s — only %.0fs remaining in worker budget "
+                "(need %ds for thesis + %ds for debate = %ds)",
                 ticker, _remaining_budget,
+                _THESIS_BUDGET_SECONDS, 300, _THESIS_BUDGET_SECONDS + 300,
             )
             emit(
                 "analyzing",
                 f"v2_debate_budget_skip_{ticker}",
-                f"{ticker}: Debate SKIPPED — only {_remaining_budget:.0f}s left in worker budget",
+                f"{ticker}: Debate SKIPPED — only {_remaining_budget:.0f}s left "
+                f"(need {_THESIS_BUDGET_SECONDS + 300}s)",
                 status="warning",
             )
 
