@@ -78,7 +78,8 @@ def _run_alpha_decay_purge_inner(
             from app.services.bot_manager import get_active_bot_id
 
             bid = get_active_bot_id()
-        except Exception:
+        except Exception as e:
+            logger.warning("[alpha_decay] Failed to get active bot ID: %s", e)
             from app.config import settings as _cfg
 
             bid = _cfg.BOT_ID
@@ -88,7 +89,8 @@ def _run_alpha_decay_purge_inner(
                 [bid],
             ).fetchall()
             positions = {r[0] for r in pos_rows}
-        except Exception:
+        except Exception as e:
+            logger.warning("[alpha_decay] Failed to fetch active position tickers: %s", e)
             positions = set()
 
         banned_tickers = []

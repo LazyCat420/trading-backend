@@ -94,7 +94,7 @@ def mock_db():
     return cursor
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def patch_get_db(mock_db):
     """Patch get_db() globally so no real DB connections are created."""
     with patch("app.db.connection.get_db", return_value=mock_db), \
@@ -110,6 +110,7 @@ def mock_llm():
     """Provide a mock VLLMClient with a pre-configured chat() response."""
     client = MagicMock()
     client.chat = AsyncMock(return_value=("mock response", 100, 500))
+    client.chat_with_tools = AsyncMock(return_value={"text": "mock response", "total_tokens": 100, "elapsed_ms": 500})
     client.model = "test-model"
     client.discover_roles = MagicMock(return_value={})
     client.get_least_busy_model = MagicMock(return_value="test-model")
@@ -121,9 +122,23 @@ def mock_llm():
     return client
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def patch_llm(mock_llm):
-    """Patch the global llm singleton so no real vLLM calls are made."""
-    with patch("app.services.vllm_client.llm", mock_llm):
+    """Patch the global llm singleton in-place so all modules share the mock."""
+    from app.services.vllm_client import llm
+    with patch.object(llm, "chat", mock_llm.chat), \
+         patch.object(llm, "chat_with_tools", mock_llm.chat_with_tools), \
+         patch.object(llm, "discover_roles", mock_llm.discover_roles), \
+         patch.object(llm, "get_least_busy_model", mock_llm.get_least_busy_model), \
+         patch.object(llm, "get_trader_model", mock_llm.get_trader_model), \
+         patch.object(llm, "queue_status", mock_llm.queue_status):
         yield mock_llm
+
+
+def pytest_unconfigure(config):
+    """Force exit to prevent hanging on background threads or connections."""
+    import os
+    exitstatus = getattr(config, "exitstatus", 0)
+    os._exit(exitstatus)
+
 

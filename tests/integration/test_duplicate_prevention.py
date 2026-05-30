@@ -34,7 +34,7 @@ class TestPipelineStateLock:
             (  # schedule config
                 "sched-dup", "Test", "interval", None, 2.0,
                 True, True, True, "[]", None, False,
-                True, None, None, 0, "ok", None,
+                True, True, None, None, 0, "ok", None,
                 "2025-01-01", "2025-01-01",
             ),
             ("running",),  # pipeline_state.status = running
@@ -62,6 +62,7 @@ class TestPipelineStateLock:
         )
 
         # last_status should be "skipped"
+        print("MOCK_DB EXECUTE CALLS:", mock_db.execute.call_args_list)
         update_calls = [
             c for c in mock_db.execute.call_args_list
             if "UPDATE cycle_schedules" in str(c) and "last_status" in str(c)
@@ -145,7 +146,7 @@ class TestScheduler409:
                 return (
                     "sched-409", "Test", "interval", None, 2.0,
                     True, True, True, "[]", None, False,
-                    True, None, None, 0, "ok", None,
+                    True, True, None, None, 0, "ok", None,
                     "2025-01-01", "2025-01-01",
                 )
             elif call_count[0] == 2:

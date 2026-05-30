@@ -124,7 +124,14 @@ async def generate_prompt(
 
     from app.utils.text_utils import parse_json_response
 
-    parsed = parse_json_response(result.get("response", ""))
+    try:
+        parsed = parse_json_response(result.get("response", ""))
+    except Exception as parse_err:
+        logger.warning(
+            "[META_AGENT] parse_json_response failed: %s — returning empty",
+            parse_err,
+        )
+        parsed = {}
 
     if not parsed.get("system_prompt"):
         logger.warning("[META_AGENT] Generated prompt was empty or unparseable")

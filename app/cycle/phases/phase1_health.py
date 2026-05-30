@@ -178,8 +178,8 @@ async def run_phase1_health(
                         "SELECT ticker FROM watchlist WHERE status = 'active' AND source = 'user'"
                     ).fetchall()
                 _user_added = {r[0] for r in _user_rows}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("Failed to load user-added tickers from watchlist: %s", e)
 
             positions_list = state.get("position_tickers", [])
             triage_result = classify_tickers(

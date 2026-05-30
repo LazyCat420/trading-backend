@@ -143,8 +143,9 @@ def _parse_purge_response(content: str, valid_tickers: list[str]) -> list[str]:
 
     # Log reasoning
     reasoning = data.get("reasoning", {})
-    for ticker, reason in reasoning.items():
-        logger.info("[PIPELINE] purge_pass: %s -- %s", ticker, reason)
+    if isinstance(reasoning, dict):
+        for ticker, reason in reasoning.items():
+            logger.info("[PIPELINE] purge_pass: %s -- %s", ticker, reason)
 
     return validated
 

@@ -130,7 +130,15 @@ async def run_pre_trade(
 
     # Parse the agent's JSON output
     response_text = result.get("response", "")
-    parsed_json = parse_json_response(response_text)
+    try:
+        parsed_json = parse_json_response(response_text)
+    except Exception as parse_err:
+        logger.warning(
+            "[PRE_TRADE] parse_json_response failed for %s: %s — using Kelly fallback",
+            ticker,
+            parse_err,
+        )
+        parsed_json = {}
 
     if not parsed_json:
         logger.warning(

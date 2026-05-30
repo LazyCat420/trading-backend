@@ -391,7 +391,8 @@ def get_purge_candidates(
             from app.services.bot_manager import get_active_bot_id
 
             bid = get_active_bot_id()
-        except Exception:
+        except Exception as e:
+            logger.warning("[watchlist_health] Failed to get active bot ID: %s", e)
             from app.config import settings as _cfg
 
             bid = _cfg.BOT_ID
@@ -401,7 +402,8 @@ def get_purge_candidates(
                 (bid,),
             ).fetchall()
             positions = {r[0] for r in pos_rows}
-        except Exception:
+        except Exception as e:
+            logger.warning("[watchlist_health] Failed to fetch active position tickers: %s", e)
             positions = set()
 
     all_scores = score_all_active()

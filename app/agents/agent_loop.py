@@ -271,7 +271,8 @@ async def run_agent_loop(
             )
         except Exception as e:
             logger.error(f"[AgentLoop] chat_with_tools failed: {e}")
-            final_content = f"Error during agent execution: {str(e)}"
+            err_msg = str(e) or type(e).__name__
+            final_content = f"Error during agent execution: {err_msg}"
             stop_reason = "blocked"
             break
 
@@ -346,7 +347,14 @@ async def run_agent_loop(
             if require_json_schema and content:
                 from app.utils.text_utils import parse_json_response
 
-                parsed = parse_json_response(content)
+                try:
+                    parsed = parse_json_response(content)
+                except Exception as parse_err:
+                    logger.warning(
+                        f"[AgentLoop] Agent '{agent_name}' JSON parsing failed: {parse_err}. "
+                        "Treating as empty to trigger recovery/repair."
+                    )
+                    parsed = {}
                 if not parsed or (isinstance(parsed, dict) and not parsed):
                     # Attempt self-healing REPAIR
                     fail_event = FailureEvent(

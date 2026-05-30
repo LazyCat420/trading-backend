@@ -168,7 +168,14 @@ async def run_portfolio_allocator(
     )
 
     response_text = result.get("response", "")
-    parsed_json = parse_json_response(response_text)
+    try:
+        parsed_json = parse_json_response(response_text)
+    except Exception as parse_err:
+        logger.warning(
+            "[PORTFOLIO_ALLOCATOR] parse_json_response failed: %s — returning empty allocations",
+            parse_err,
+        )
+        parsed_json = {}
 
     if not parsed_json or "allocations" not in parsed_json:
         logger.warning(

@@ -202,19 +202,18 @@ async def test_b07_data_context_truncation(mock_run_agent_loop, mock_db_empty):
         assert len(user_prompt_passed) <= len("This is a ") + len("\n\nuser")
 
 @pytest.mark.asyncio
-async def test_b05_timeout_returns_dict_shape(mock_db_empty):
+async def test_b05_timeout_returns_dict_shape(mock_db_empty, mock_llm):
     """
     B-05: 90s timeout returns error dict, not raise
     """
     import asyncio
-    with patch("asyncio.wait_for") as mock_wait:
-        mock_wait.side_effect = asyncio.TimeoutError()
-        result = await run_agent(
-            agent_name="test_agent", ticker="AAPL", cycle_id="1", bot_id="1",
-            system_prompt="sys", user_prompt="user"
-        )
-        assert isinstance(result, dict)
-        assert "timeout" in result.get("response", "").lower()
+    mock_llm.chat_with_tools.side_effect = asyncio.TimeoutError
+    result = await run_agent(
+        agent_name="test_agent", ticker="AAPL", cycle_id="1", bot_id="1",
+        system_prompt="sys", user_prompt="user"
+    )
+    assert isinstance(result, dict)
+    assert "timeout" in result.get("response", "").lower()
 
 @pytest.mark.asyncio
 async def test_b10_playbook_appended_not_overwritten(mock_run_agent_loop):

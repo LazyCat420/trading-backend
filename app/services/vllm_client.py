@@ -751,15 +751,37 @@ class VLLMClient:
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
+                # Track the loop on the VLLMClient instance to correctly detect loop changes
+                loop_changed = getattr(self, "_dispatcher_loop", None) is not loop
+                if loop_changed:
+                    logger.warning("[VLLM] Event loop changed from %s to %s — re-initializing global slots and dispatcher tasks", getattr(self, "_dispatcher_loop", None), loop)
+                    self._dispatcher_loop = loop
+                    self._global_slots = asyncio.Semaphore(self._global_slots_total)
+
                 for ep in self._endpoints.values():
                     if not ep.enabled:
                         continue
-                    if ep.dispatcher_task is None or ep.dispatcher_task.done():
+
+                    # Re-initialize endpoint queues and semaphores if first run or loop changed
+                    if ep.queue is None or loop_changed:
+                        logger.warning("[VLLM] Initializing/Re-initializing %s queue and semaphores", ep.name)
+                        ep.queue = asyncio.PriorityQueue()
+                        ep.slots = asyncio.Semaphore(ep.max_concurrent)
+                        pipe_max = max(1, ep.max_concurrent - self.RESERVED_HIGH_SLOTS)
+                        ep.pipeline_slots = asyncio.Semaphore(pipe_max)
+
+                    if ep.dispatcher_task is None or ep.dispatcher_task.done() or loop_changed:
+                        if ep.dispatcher_task and not ep.dispatcher_task.done():
+                            ep.dispatcher_task.cancel()
                         ep.dispatcher_task = loop.create_task(self._dispatch_loop(ep))
-                    if ep.metrics_task is None or ep.metrics_task.done():
+                    if ep.metrics_task is None or ep.metrics_task.done() or loop_changed:
+                        if ep.metrics_task and not ep.metrics_task.done():
+                            ep.metrics_task.cancel()
                         ep.metrics_task = loop.create_task(self._poll_metrics_loop(ep))
                 # Start background rediscovery (re-probes offline endpoints every 60s)
-                if self._rediscovery_task is None or self._rediscovery_task.done():
+                if self._rediscovery_task is None or self._rediscovery_task.done() or loop_changed:
+                    if self._rediscovery_task and not self._rediscovery_task.done():
+                        self._rediscovery_task.cancel()
                     self._rediscovery_task = loop.create_task(self._rediscovery_loop())
         except RuntimeError:
             pass

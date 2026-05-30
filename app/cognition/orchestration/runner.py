@@ -603,7 +603,7 @@ async def execute_v2_pipeline(
                 position_context=position_context,
                 portfolio_dashboard=portfolio_dashboard,
             ),
-            timeout=900.0,
+            timeout=300.0,
         )
         ms_debate = elapsed_ms(t_debate)
 

@@ -332,7 +332,11 @@ async def generate_capsule(
     # Try JSON extraction first (preferred — agents output structured JSON)
     from app.utils.text_utils import parse_json_response
 
-    parsed = parse_json_response(response_text)
+    try:
+        parsed = parse_json_response(response_text)
+    except Exception as parse_err:
+        logger.warning("[Capsule] parse_json_response failed in generate_capsule: %s", parse_err)
+        parsed = {}
     if parsed and isinstance(parsed, dict) and len(parsed) > 0:
         signal, summary, confidence, flags = _extract_from_json(parsed)
     else:

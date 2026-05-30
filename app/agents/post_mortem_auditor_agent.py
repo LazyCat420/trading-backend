@@ -110,7 +110,15 @@ async def run_post_mortem(
     )
 
     response_text = result.get("response", "")
-    parsed_json = parse_json_response(response_text)
+    try:
+        parsed_json = parse_json_response(response_text)
+    except Exception as parse_err:
+        logger.warning(
+            "[POST_MORTEM] parse_json_response failed for %s: %s — returning empty",
+            ticker,
+            parse_err,
+        )
+        parsed_json = {}
 
     if not parsed_json:
         logger.warning("[POST_MORTEM] Failed to parse agent output for %s.", ticker)

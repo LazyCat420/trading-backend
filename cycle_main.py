@@ -272,11 +272,11 @@ async def poll_system_commands(shutdown: asyncio.Event):
                         result = {"status": "refresh_sectors_started"}
 
                     else:
-                        logger.warning(
+                        logger.error(
                             "[cycle_backend] Unknown command type '%s' (job %s) — no handler matched",
                             cmd_type, job_id,
                         )
-                        result = {"status": "error", "reason": f"Unknown command type: {cmd_type}"}
+                        raise ValueError(f"Unknown command type: {cmd_type}")
 
                     with get_db() as db:
                         db.execute(

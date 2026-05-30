@@ -303,8 +303,8 @@ async def buy(
                     "error": f"Price sanity failed: {ticker} at ${current_price:.4f} "
                     f"is {ratio:.1f}x the 30-day avg (${avg_30d:.4f})"
                 }
-    except Exception:
-        pass  # No historical data — skip general sanity check
+    except Exception as e:
+        logger.warning("[paper] Historical price sanity check skipped for %s: %s", ticker, e)
 
     # Calculate portfolio total value to enforce concentration cap
     with get_db() as db:
@@ -621,8 +621,8 @@ async def sell(
                                         tzinfo=datetime.UTC
                                     )
                                 holding_days = (now - lot_opened_dt).days
-                            except Exception:
-                                pass
+                            except Exception as parse_err:
+                                logger.warning("[paper] Failed to calculate holding_days for %s: %s", ticker, parse_err)
 
                         # Create closure record
                         closure_id = str(uuid.uuid4())
@@ -848,8 +848,8 @@ async def check_stop_losses(
                         ticker, current_price,
                         realized_pnl=result.get("realized_pnl"),
                     )
-                except Exception:
-                    pass
+                except Exception as outcome_err:
+                    logger.error("[stop-loss] Failed to resolve outcome for %s: %s", ticker, outcome_err)
                 
                 try:
                     record_fund_alert(
@@ -936,8 +936,8 @@ async def check_take_profits(
                         ticker, current_price,
                         realized_pnl=result.get("realized_pnl"),
                     )
-                except Exception:
-                    pass
+                except Exception as outcome_err:
+                    logger.error("[take-profit] Failed to resolve outcome for %s: %s", ticker, outcome_err)
 
     if triggered:
         logger.info(

@@ -933,16 +933,35 @@ async def run_perticker_collection(
     else:
         # Launch all tickers concurrently (semaphore enforces the cap)
         # NOTE: CancelledError propagates from gather() automatically — no post-gather check needed.
-        async with pipeline_profiler.phase("pass4_per_ticker_collection"):
             ticker_res = await asyncio.gather(
                 *[_collect_single_ticker(t) for t in tickers],
+                return_exceptions=True,
             )
 
-    # Filter out tickers that were rejected (None) or banned
-    valid_tickers = [t for t in ticker_res if t is not None]
+    # Filter out tickers that were rejected (None), failed (Exception), or banned
+    valid_tickers = []
+    for t, res in zip(tickers, ticker_res):
+        if isinstance(res, Exception):
+            logger.error("[PIPELINE] Critical collection failure for %s: %s", t, res, exc_info=res)
+            try:
+                import traceback
+                from app.pipeline.orchestration.state_manager import PipelineStateDB
+                PipelineStateDB.log_execution_error(
+                    results.get("cycle_id", _summary.get("cycle_id", "unknown")),
+                    "collection_perticker_collection",
+                    t,
+                    type(res).__name__,
+                    str(res),
+                    "".join(traceback.format_exception(type(res), res, res.__traceback__)),
+                )
+            except Exception:
+                pass
+        elif res is not None:
+            valid_tickers.append(res)
+
     if len(valid_tickers) < len(tickers):
         logger.info(
-            f"[PIPELINE]   [pass4] Dropped {len(tickers) - len(valid_tickers)} rejected/toxic tickers. Remaining: {len(valid_tickers)}"
+            f"[PIPELINE]   [pass4] Dropped {len(tickers) - len(valid_tickers)} rejected/failed/toxic tickers. Remaining: {len(valid_tickers)}"
         )
     tickers = valid_tickers
 

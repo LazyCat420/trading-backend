@@ -213,7 +213,8 @@ def is_banned(ticker: str) -> bool:
                 "SELECT ticker FROM ticker_bans WHERE ticker = %s", [ticker]
             ).fetchone()
             return row is not None
-    except Exception:
+    except Exception as e:
+        logger.error("watchlist: is_banned lookup failed for %s: %s", ticker, e)
         return False
 
 
@@ -226,7 +227,8 @@ def get_banned_list() -> list[dict]:
                 "market_cap, price_at_ban, volume_at_ban, banned_at "
                 "FROM ticker_bans ORDER BY banned_at DESC"
             ).fetchall()
-    except Exception:
+    except Exception as e:
+        logger.error("watchlist: get_banned_list query failed: %s", e)
         return []
     return [
         {
@@ -253,7 +255,8 @@ def check_ban_patterns(ticker: str) -> str | None:
             patterns = db.execute(
                 "SELECT pattern_name, conditions FROM ban_patterns WHERE auto_filter = TRUE"
             ).fetchall()
-    except Exception:
+    except Exception as e:
+        logger.error("watchlist: check_ban_patterns query failed: %s", e)
         return None
 
     if not patterns:
@@ -388,8 +391,8 @@ def _snapshot_market_data(ticker: str) -> tuple:
             ).fetchone()
             if fund_row:
                 market_cap = fund_row[0]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("watchlist: _snapshot_market_data fundamentals lookup failed for %s: %s", ticker, e)
 
         try:
             price_row = db.execute(
@@ -400,8 +403,8 @@ def _snapshot_market_data(ticker: str) -> tuple:
             if price_row:
                 price = price_row[0]
                 volume = price_row[1]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("watchlist: _snapshot_market_data price_history lookup failed for %s: %s", ticker, e)
 
     return market_cap, price, volume
 

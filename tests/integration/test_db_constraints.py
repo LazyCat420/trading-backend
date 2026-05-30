@@ -1,8 +1,13 @@
 import pytest
 from app.db.connection import get_db
 
+@pytest.fixture(autouse=True)
+def patch_get_db():
+    """Override global mock db fixture for database constraint testing."""
+    yield
+
 @pytest.mark.asyncio
-async def test_news_articles_no_unique_url_constraint():
+async def test_news_articles_no_unique_url_constraint(patch_real_get_db):
     """
     Test that we can insert two news articles with the exact same URL
     for two different tickers, and that no UniqueViolation error is raised.

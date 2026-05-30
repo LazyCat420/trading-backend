@@ -173,7 +173,7 @@ def _parse_curation_response(content: str, valid_tickers: list[str]) -> list[str
 
     # Log reasoning if available
     reasoning = data.get("reasoning", {})
-    if reasoning:
+    if isinstance(reasoning, dict):
         for ticker, reason in reasoning.items():
             logger.info("[PIPELINE] curation: %s — %s", ticker, reason)
 

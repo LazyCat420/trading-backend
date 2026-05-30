@@ -106,7 +106,7 @@ async def test_execute_decisions_blocked_by_gate(mock_portfolio, mock_gate, mock
     mock_buy.assert_not_called()
 
 @pytest.mark.asyncio
-async def test_execute_decisions_advisory_low_integrity(mock_portfolio, mock_get_db, mock_buy):
+async def test_execute_decisions_advisory_low_integrity(mock_portfolio, mock_gate, mock_get_db, mock_buy):
     """LOW_INTEGRITY is advisory: reduces confidence, does NOT force HOLD."""
     decisions = [{
         "ticker": "TSLA", 
@@ -119,7 +119,7 @@ async def test_execute_decisions_advisory_low_integrity(mock_portfolio, mock_get
     mock_buy.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_execute_decisions_low_integrity_reduces_confidence(mock_portfolio, mock_get_db):
+async def test_execute_decisions_low_integrity_reduces_confidence(mock_portfolio, mock_gate, mock_get_db):
     """LOW_INTEGRITY is advisory: confidence is reduced but action proceeds."""
     decisions = [
         {"ticker": "A", "action": "BUY", "confidence": 50, "v2_metadata": {"debate": {"integrity_status": "LOW_INTEGRITY"}}},

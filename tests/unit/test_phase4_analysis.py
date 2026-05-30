@@ -48,6 +48,26 @@ async def test_run_phase4_analysis_timeout_fallback(mock_execute, mock_ctx):
     state = {}
     emit = MagicMock()
     
+    # All-timeout should NOT abort the cycle — it should return fallback results
+    results = await run_phase4_analysis(mock_ctx, "bot1", "macro", emit, cycle_summary, state)
+    
+    assert len(results) == 3
+    for r in results:
+        assert r["is_timeout_fallback"] is True
+        assert r["action"] == "HOLD"
+
+@pytest.mark.asyncio
+@patch("app.cognition.orchestration.runner.execute_v2_pipeline")
+async def test_run_phase4_analysis_all_crashed_raises(mock_execute, mock_ctx):
+    mock_ctx.tickers = ["AAPL", "NVDA", "MSFT"]
+    
+    # Make execute function raise a real Exception
+    mock_execute.side_effect = Exception("Database connection lost")
+    
+    cycle_summary = {"buy_count": 0, "sell_count": 0, "hold_count": 0, "review_count": 0}
+    state = {}
+    emit = MagicMock()
+    
     with pytest.raises(RuntimeError, match="All 3 tickers crashed"):
         await run_phase4_analysis(mock_ctx, "bot1", "macro", emit, cycle_summary, state)
 

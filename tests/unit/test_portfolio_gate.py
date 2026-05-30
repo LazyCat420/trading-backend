@@ -8,7 +8,8 @@ def mock_dependencies():
          patch("app.cycle.portfolio_gate._get_ticker_sector") as mock_sector, \
          patch("app.cycle.portfolio_gate._load_thresholds") as mock_thresh, \
          patch("app.trading.paper_trader.get_portfolio") as mock_pf, \
-         patch("app.trading.paper_trader._get_current_price") as mock_price:
+         patch("app.trading.paper_trader._get_current_price") as mock_price, \
+         patch("app.cycle.portfolio_gate._get_correlation", return_value=None):
         
         mock_thresh.return_value = (30.0, 8, 0.70)  # sector_cap, pos_cap, corr_thresh
         mock_sector.return_value = "Technology"

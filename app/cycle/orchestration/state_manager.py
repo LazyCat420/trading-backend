@@ -576,7 +576,8 @@ class PipelineStateMixin:
                     }
                 else:
                     state["checkpoint"] = None
-            except Exception:
+            except Exception as e:
+                logger.warning("[PipelineStateDB] Failed to load checkpoint for interrupted state: %s", e)
                 state["checkpoint"] = None
 
         # Dynamically recalculate total_steps based on the actual number of tickers

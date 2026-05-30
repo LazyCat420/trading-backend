@@ -585,3 +585,69 @@ class TestRegressionExceptionHandling:
                 f"BaseException handler at offset {idx} must check for "
                 f"CancelledError and re-raise it. Block: {block[:200]}..."
             )
+
+
+# ============================================================================
+# CRITICAL PATH REVIEW: LLM Parser Robustness (try/except on parse_json_response)
+# ============================================================================
+
+class TestRegressionParserRobustness:
+    """Audit: ensure all agents catch ValueError from parse_json_response on empty output."""
+
+    @pytest.mark.asyncio
+    async def test_pre_trade_agent_empty_response(self):
+        """Verify pre_trade_agent handles empty LLM response without crashing."""
+        from app.agents.pre_trade_agent import run_pre_trade
+        with patch("app.agents.pre_trade_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": "", "tokens_used": 0}
+            result = await run_pre_trade("AAPL", 90, "cycle_1", "bot_1")
+            assert result["decision"] == "APPROVE"
+            assert "Kelly fallback" in result["rationale"]
+
+    @pytest.mark.asyncio
+    async def test_trade_execution_agent_empty_response(self):
+        """Verify trade_execution_agent handles empty LLM response without crashing."""
+        from app.agents.trade_execution_agent import run_trade_execution
+        with patch("app.agents.trade_execution_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": "", "tokens_used": 0}
+            result = await run_trade_execution("AAPL", "BUY", 90, "cycle_1", "bot_1")
+            assert result["decision"] == "APPROVE"
+            assert "Kelly fallback" in result["rationale"]
+
+    @pytest.mark.asyncio
+    async def test_portfolio_allocator_agent_empty_response(self):
+        """Verify portfolio_allocator_agent handles empty LLM response without crashing."""
+        from app.agents.portfolio_allocator_agent import run_portfolio_allocator
+        with patch("app.agents.portfolio_allocator_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": "", "tokens_used": 0}
+            result = await run_portfolio_allocator(
+                [{"ticker": "AAPL", "action": "BUY", "confidence": 90}], "cycle_1", "bot_1"
+            )
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_post_mortem_auditor_agent_empty_response(self):
+        """Verify post_mortem_auditor_agent handles empty LLM response without crashing."""
+        from app.agents.post_mortem_auditor_agent import run_post_mortem
+        with patch("app.agents.post_mortem_auditor_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": "", "tokens_used": 0}
+            result = await run_post_mortem("AAPL", 100.0, 110.0, 10.0, "cycle_1", "bot_1")
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_meta_agent_empty_response(self):
+        """Verify meta_agent handles empty LLM response without crashing."""
+        from app.agents.meta_agent import generate_prompt
+        with patch("app.agents.meta_agent.run_agent") as mock_agent:
+            mock_agent.return_value = {"response": "", "tokens_used": 0}
+            result = await generate_prompt("wins", "losses", "insights", "existing", "cycle_1", "bot_1")
+            assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_context_compressor_generate_capsule_empty_response(self):
+        """Verify context_compressor generate_capsule handles empty response without crashing."""
+        from app.agents.context_compressor import generate_capsule
+        result = await generate_capsule({"response": "", "tokens_used": 0}, "test_agent", "cycle_1", "AAPL")
+        assert result.signal == "UNKNOWN"
+        assert "empty_response" in result.flags
+

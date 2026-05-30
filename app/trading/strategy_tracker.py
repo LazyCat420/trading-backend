@@ -323,8 +323,8 @@ def get_confidence_bonus(prompt_hash: str) -> int:
                 )
                 return 5
 
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[STRATEGY] Failed to compute confidence bonus for prompt %s: %s", prompt_hash[:8], e)
 
         return 0
 

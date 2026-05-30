@@ -19,6 +19,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 
 # ============================================================================
+# FIXTURE: Override global autouse patch_get_db
+# ============================================================================
+
+@pytest.fixture(autouse=True)
+def patch_get_db():
+    """Override the global mock db fixture to test the real connection manager logic."""
+    yield
+
+
+# ============================================================================
 # TEST: get_db context manager usage
 # ============================================================================
 

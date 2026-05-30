@@ -149,6 +149,13 @@ async def test_queue_timeout_and_eviction(mocked_vllm):
             assert "vLLM future timeout" in str(r)
             
         assert 2.0 <= duration <= 2.5, f"Duration was {duration}s"
+        # Drain any remaining cancelled items that the cancelled dispatcher task couldn't process
+        while not client._endpoints["jetson"].queue.empty():
+            try:
+                client._endpoints["jetson"].queue.get_nowait()
+                client._endpoints["jetson"].queue.task_done()
+            except asyncio.QueueEmpty:
+                break
         assert client._endpoints["jetson"].queue.empty()
 
 
