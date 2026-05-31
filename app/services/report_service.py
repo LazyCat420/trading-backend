@@ -19,7 +19,7 @@ class ReportService:
         cycle_id = summary.get("cycle_id", "unknown")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        report_dir = "reports"
+        report_dir = "logs/autoresearch"
         os.makedirs(report_dir, exist_ok=True)
         # overwrite single file to prevent hundreds of files
         report_path = os.path.join(report_dir, "latest_cycle_report.md")

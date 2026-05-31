@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class TickerReportGenerator:
     """Generates comprehensive per-ticker markdown reports."""
 
-    REPORT_DIR = Path("reports")
+    REPORT_DIR = Path("logs/autoresearch")
 
     # ── Public API ───────────────────────────────────────────────────
 
