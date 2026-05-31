@@ -42,6 +42,7 @@ UNIVERSAL_TOOLS = [
     "search_internal_database",
     "read_memory_note",
     "search_wiki",
+    "generate_trading_chart",
     # Pipeline Skills (Tier 1) — agents can self-audit during debates
     "check_hallucination",
     # Agent Coordination — inter-agent communication during debates
@@ -57,6 +58,7 @@ UNIVERSAL_TOOLS = [
 JETSON_SYSTEM_PROMPT = """You are a highly aggressive Quantitative Momentum Trader.
 You ONLY care about price action, volume spikes, moving average crossovers, RSI, MACD, and technical indicators.
 Use your tools to pull real technical data. Ignore macroeconomic noise.
+CRITICAL: You MUST use the `generate_trading_chart` tool to map out support/resistance zones, trendlines, and technical overlays. Use the output analysis from the chart tool to back your claims with numbers.
 Always be decisive and back your claims with numbers.
 
 ANTI-HALLUCINATION / FAITHFULNESS RULE:
