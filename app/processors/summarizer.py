@@ -724,7 +724,7 @@ async def summarize_unsummarized(
                 SELECT id, title, COALESCE(body, ''), subreddit, qualitative_draft
                 FROM reddit_posts
                 WHERE summary IS NULL
-                  AND quality_status IS NULL
+                  AND (quality_status IS NULL OR quality_status = 'relevant')
                   AND (LENGTH(title) + LENGTH(COALESCE(body, ''))) > 20
                   AND ticker = %s
                 ORDER BY created_utc DESC
@@ -738,7 +738,7 @@ async def summarize_unsummarized(
                 SELECT id, title, COALESCE(body, ''), subreddit, qualitative_draft
                 FROM reddit_posts
                 WHERE summary IS NULL
-                  AND quality_status IS NULL
+                  AND (quality_status IS NULL OR quality_status = 'relevant')
                   AND (LENGTH(title) + LENGTH(COALESCE(body, ''))) > 20
                 ORDER BY created_utc DESC
                 LIMIT %s
@@ -753,7 +753,7 @@ async def summarize_unsummarized(
                 SELECT id, title, COALESCE(summary, ''), qualitative_draft
                 FROM news_articles
                 WHERE llm_summary IS NULL
-                  AND quality_status IS NULL
+                  AND (quality_status IS NULL OR quality_status = 'relevant')
                   AND title IS NOT NULL
                   AND LENGTH(title) > 10
                   AND ticker = %s
@@ -768,7 +768,7 @@ async def summarize_unsummarized(
                 SELECT id, title, COALESCE(summary, ''), qualitative_draft
                 FROM news_articles
                 WHERE llm_summary IS NULL
-                  AND quality_status IS NULL
+                  AND (quality_status IS NULL OR quality_status = 'relevant')
                   AND title IS NOT NULL
                   AND LENGTH(title) > 10
                 ORDER BY published_at DESC

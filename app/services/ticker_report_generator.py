@@ -221,6 +221,37 @@ class TickerReportGenerator:
 
         return self._sanitize("\n".join(lines))
 
+    def save_ticker_report(
+        self,
+        ticker: str,
+        result: dict,
+        cycle_id: str,
+        cycle_summary: dict | None = None,
+    ) -> None:
+        """Generate and save a single ticker's report to disk and DB."""
+        cycle_dir = self.REPORT_DIR / cycle_id
+        cycle_dir.mkdir(parents=True, exist_ok=True)
+
+        md = self.generate_ticker_report(
+            ticker=ticker,
+            result=result,
+            cycle_id=cycle_id,
+            cycle_summary=cycle_summary,
+        )
+
+        # Save to file
+        file_path = cycle_dir / f"{ticker}.md"
+        file_path.write_text(md, encoding="utf-8")
+
+        # Save to DB
+        self._save_to_db(
+            cycle_id=cycle_id,
+            ticker=ticker,
+            report_markdown=md,
+            result=result,
+            is_summary=False,
+        )
+
     def save_reports(
         self,
         cycle_id: str,
@@ -233,8 +264,6 @@ class TickerReportGenerator:
         """
         report_count = 0
         errors = []
-        cycle_dir = self.REPORT_DIR / cycle_id
-        cycle_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate per-ticker reports
         for result in results:
@@ -242,26 +271,12 @@ class TickerReportGenerator:
             if not ticker:
                 continue
             try:
-                md = self.generate_ticker_report(
+                self.save_ticker_report(
                     ticker=ticker,
                     result=result,
                     cycle_id=cycle_id,
                     cycle_summary=cycle_summary,
                 )
-
-                # Save to file
-                file_path = cycle_dir / f"{ticker}.md"
-                file_path.write_text(md, encoding="utf-8")
-
-                # Save to DB
-                self._save_to_db(
-                    cycle_id=cycle_id,
-                    ticker=ticker,
-                    report_markdown=md,
-                    result=result,
-                    is_summary=False,
-                )
-
                 report_count += 1
             except Exception as e:
                 logger.warning("[REPORT] Failed to generate report for %s: %s", ticker, e)
@@ -269,6 +284,8 @@ class TickerReportGenerator:
 
         # Generate cycle summary
         summary_saved = False
+        cycle_dir = self.REPORT_DIR / cycle_id
+        cycle_dir.mkdir(parents=True, exist_ok=True)
         try:
             summary_md = self.generate_cycle_summary_report(
                 cycle_id=cycle_id,

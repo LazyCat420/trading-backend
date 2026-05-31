@@ -248,6 +248,14 @@ async def run_phase4_analysis(
                     )
                     _log_ticker_result(ctx.cycle_id, ticker, result, _ticker_elapsed_ms)
 
+                    # Save report immediately for real-time visibility!
+                    try:
+                        from app.services.ticker_report_generator import report_generator
+                        report_generator.save_ticker_report(ticker, result, ctx.cycle_id)
+                        logger.info("[CYCLE] [Worker %d] Saved real-time report for %s", worker_id, ticker)
+                    except Exception as r_err:
+                        logger.warning("[CYCLE] [Worker %d] Failed to save real-time report for %s: %s", worker_id, ticker, r_err)
+
             except asyncio.TimeoutError:
                 _ticker_elapsed_ms = int((time.monotonic() - _ticker_start) * 1000)
                 err_str = f"LLM Timeout after {settings.ANALYSIS_WORKER_TIMEOUT_SECONDS}s"

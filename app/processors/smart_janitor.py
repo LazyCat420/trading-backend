@@ -165,8 +165,19 @@ Summary/Snippet: {summary or "No summary content."}
 
         with get_db() as db:
             db.execute(
-                "UPDATE news_articles SET qualitative_draft = %s::jsonb WHERE id = %s",
-                [json.dumps(draft_data), article_id]
+                """
+                UPDATE news_articles 
+                SET qualitative_draft = %s::jsonb,
+                    quality_status = %s,
+                    quality_reason = %s
+                WHERE id = %s
+                """,
+                [
+                    json.dumps(draft_data),
+                    "discarded" if decision == "discard" else "relevant",
+                    draft_data.get("justification", ""),
+                    article_id
+                ]
             )
         logger.info(f"[JANITOR] Processed article {article_id} for {ticker} -> {draft_data.get('decision')}")
         return True
@@ -303,8 +314,19 @@ Body: {body or "No body content."}
 
         with get_db() as db:
             db.execute(
-                "UPDATE reddit_posts SET qualitative_draft = %s::jsonb WHERE id = %s",
-                [json.dumps(draft_data), post_id]
+                """
+                UPDATE reddit_posts 
+                SET qualitative_draft = %s::jsonb,
+                    quality_status = %s,
+                    quality_reason = %s
+                WHERE id = %s
+                """,
+                [
+                    json.dumps(draft_data),
+                    "discarded" if decision == "discard" else "relevant",
+                    draft_data.get("justification", ""),
+                    post_id
+                ]
             )
         logger.info(f"[JANITOR] Processed Reddit post {post_id} for {ticker} -> {draft_data.get('decision')}")
         return True

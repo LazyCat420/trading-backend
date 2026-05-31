@@ -30,7 +30,7 @@ async def run_smart_janitor_on_ticker_data(ticker: str) -> None:
         # 1. Fetch un-janited news articles
         with get_db() as db:
             news_rows = db.execute(
-                "SELECT id FROM news_articles WHERE ticker = %s AND qualitative_draft IS NULL ORDER BY published_at DESC LIMIT 10",
+                "SELECT id FROM news_articles WHERE ticker = %s AND qualitative_draft IS NULL AND (quality_status IS NULL OR quality_status NOT IN ('duplicate', 'discarded', 'noise')) ORDER BY published_at DESC LIMIT 10",
                 [ticker]
             ).fetchall()
             article_ids = [r[0] for r in news_rows]
@@ -43,7 +43,7 @@ async def run_smart_janitor_on_ticker_data(ticker: str) -> None:
         # 2. Fetch un-janited Reddit posts
         with get_db() as db:
             reddit_rows = db.execute(
-                "SELECT id FROM reddit_posts WHERE ticker = %s AND qualitative_draft IS NULL ORDER BY created_utc DESC LIMIT 10",
+                "SELECT id FROM reddit_posts WHERE ticker = %s AND qualitative_draft IS NULL AND (quality_status IS NULL OR quality_status NOT IN ('duplicate', 'discarded', 'noise')) ORDER BY created_utc DESC LIMIT 10",
                 [ticker]
             ).fetchall()
             post_ids = [r[0] for r in reddit_rows]
@@ -59,16 +59,16 @@ async def run_smart_janitor_on_ticker_data(ticker: str) -> None:
 
 async def run_ticker_processors(ticker: str, emit) -> None:
     """Run per-ticker deduplication, summarization, and consensus."""
-    # -- Pre-process raw text with Smart Janitor --
-    await run_smart_janitor_on_ticker_data(ticker)
-
-    # ── Per-ticker deduplication ──
+    # ── Per-ticker deduplication runs FIRST so Smart Janitor skips duplicates ──
     try:
         from app.processors.deduplicator import deduplicate_news
         # Run in thread pool to not block
         await asyncio.to_thread(deduplicate_news, ticker)
     except Exception as e:
         logger.warning("[PIPELINE] Per-ticker deduplication failed for %s: %s", ticker, e)
+
+    # -- Pre-process raw text with Smart Janitor --
+    await run_smart_janitor_on_ticker_data(ticker)
 
     # ── Per-ticker summarization ──
     try:
