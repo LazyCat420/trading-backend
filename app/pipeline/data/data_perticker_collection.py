@@ -30,7 +30,7 @@ async def run_smart_janitor_on_ticker_data(ticker: str) -> None:
         # 1. Fetch un-janited news articles
         with get_db() as db:
             news_rows = db.execute(
-                "SELECT id FROM news_articles WHERE ticker = %s AND qualitative_draft IS NULL ORDER BY published_at DESC LIMIT 50",
+                "SELECT id FROM news_articles WHERE ticker = %s AND qualitative_draft IS NULL ORDER BY published_at DESC LIMIT 10",
                 [ticker]
             ).fetchall()
             article_ids = [r[0] for r in news_rows]
@@ -43,7 +43,7 @@ async def run_smart_janitor_on_ticker_data(ticker: str) -> None:
         # 2. Fetch un-janited Reddit posts
         with get_db() as db:
             reddit_rows = db.execute(
-                "SELECT id FROM reddit_posts WHERE ticker = %s AND qualitative_draft IS NULL ORDER BY created_utc DESC LIMIT 30",
+                "SELECT id FROM reddit_posts WHERE ticker = %s AND qualitative_draft IS NULL ORDER BY created_utc DESC LIMIT 10",
                 [ticker]
             ).fetchall()
             post_ids = [r[0] for r in reddit_rows]
@@ -73,7 +73,7 @@ async def run_ticker_processors(ticker: str, emit) -> None:
     # ── Per-ticker summarization ──
     try:
         from app.processors.summarizer import summarize_unsummarized
-        await summarize_unsummarized(emit=emit, max_items=50, ticker=ticker)
+        await summarize_unsummarized(emit=emit, max_items=10, ticker=ticker)
     except Exception as e:
         logger.warning("[PIPELINE] Per-ticker summarization failed for %s: %s", ticker, e)
 
@@ -863,27 +863,15 @@ async def run_perticker_collection(
             except Exception as e:
                 logger.info(f"[PIPELINE]   [tech] {ticker} FAILED: {e}")
 
-            # ── Push to analysis queue FIRST (eliminates queue starvation) ──
-            # Analysis workers were starving for 3-5 minutes waiting for
-            # smart janitor + summarizer + consensus + narrative to complete.
-            # The V2 pipeline's data_completeness check handles any gaps.
+            # ── Push to analysis queue ──
+            # Ticker processors (Smart Janitor, Summarizer, Consensus, Narrative) will be run
+            # synchronously in the analysis worker right before building the evidence packet.
             if analysis_queue is not None:
                 await analysis_queue.put(ticker)
                 logger.info(
-                    "[PIPELINE] %s collection + technicals done → queued for analysis (processors running in background)",
+                    "[PIPELINE] %s collection + technicals done → queued for analysis",
                     ticker,
                 )
-
-            # ── Run per-ticker processors as background task ──
-            # These are LLM-heavy (dedup, summarize, consensus, narrative)
-            # and should NOT block the analysis queue push.
-            async def _bg_processors(t: str):
-                try:
-                    await run_ticker_processors(t, emit)
-                except Exception as proc_err:
-                    logger.warning("[PIPELINE] Background processors failed for %s: %s", t, proc_err)
-
-            asyncio.create_task(_bg_processors(ticker))
 
             return ticker
 

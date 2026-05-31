@@ -240,7 +240,7 @@ async def build_evidence_packet(
                     ]
                 )
                 news_rows = db.execute(
-                    f"SELECT {q_cols} FROM news_articles WHERE ticker = %s ORDER BY published_at DESC LIMIT 5",
+                    f"SELECT {q_cols} FROM news_articles WHERE ticker = %s AND (quality_status IS NULL OR quality_status != 'discarded') ORDER BY published_at DESC LIMIT 5",
                     [ticker],
                 ).fetchall()
                 for r in news_rows:
@@ -263,7 +263,7 @@ async def build_evidence_packet(
                 ]
                 q_cols = ",".join(cols)
                 reddit_rows = db.execute(
-                    f"SELECT {q_cols} FROM reddit_posts WHERE ticker = %s ORDER BY created_utc DESC LIMIT 5",
+                    f"SELECT {q_cols} FROM reddit_posts WHERE ticker = %s AND (quality_status IS NULL OR quality_status != 'discarded') ORDER BY created_utc DESC LIMIT 5",
                     [ticker],
                 ).fetchall()
                 for r in reddit_rows:
@@ -286,7 +286,7 @@ async def build_evidence_packet(
                 ]
                 q_cols = ",".join(cols)
                 yt_rows = db.execute(
-                    f"SELECT {q_cols} FROM youtube_transcripts WHERE ticker = %s ORDER BY published_at DESC LIMIT 5",
+                    f"SELECT {q_cols} FROM youtube_transcripts WHERE ticker = %s AND (quality_status IS NULL OR quality_status != 'discarded') ORDER BY published_at DESC LIMIT 5",
                     [ticker],
                 ).fetchall()
                 for r in yt_rows:

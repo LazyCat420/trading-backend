@@ -133,6 +133,26 @@ async def execute_v2_pipeline(
         "ticker": ticker, "filled": filled, "elapsed_ms": ms0,
     })
 
+    # ── Step 0.6: Run Ticker Processors (Smart Janitor, Summarizer, Consensus, Narrative) ──
+    # Runs synchronously inside the analysis worker to limit concurrency to V2_TICKER_CONCURRENCY workers,
+    # ensuring the evidence packet has access to fully cleaned and summarized data.
+    t_proc = time.monotonic()
+    try:
+        from app.pipeline.data.data_perticker_collection import run_ticker_processors
+        emit(
+            "analyzing",
+            f"v2_processors_{ticker}",
+            f"{ticker}: Running data processors (Smart Janitor, Summarizer, Consensus, Narrative)...",
+            status="running",
+        )
+        await run_ticker_processors(ticker, emit)
+        ms_proc = elapsed_ms(t_proc)
+        stages.append("ticker_processors")
+        stage_timings["ticker_processors"] = ms_proc
+        logger.info("[V2] Data processors completed for %s in %dms", ticker, ms_proc)
+    except Exception as proc_err:
+        logger.warning("[V2] Data processors failed for %s (non-fatal): %s", ticker, proc_err)
+
     # ── Step 1: Ontology (optional, non-blocking) ────────────────────
     ontology_ctx: dict[str, Any] = {}
     try:
