@@ -1230,7 +1230,10 @@ async def validate_unknown_tickers(tickers: list[str]) -> dict[str, bool]:
                         pass
                 return _info, _df
 
-            info, df = await asyncio.to_thread(_fetch_yf_data)
+            info, df = await asyncio.wait_for(
+                asyncio.to_thread(_fetch_yf_data),
+                timeout=20.0
+            )
 
             mcap = info.get("marketCap", 0) or 0
             name = info.get("shortName") or info.get("longName") or sym

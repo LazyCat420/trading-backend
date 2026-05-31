@@ -145,7 +145,10 @@ async def execute_v2_pipeline(
             f"{ticker}: Running data processors (Smart Janitor, Summarizer, Consensus, Narrative)...",
             status="running",
         )
-        await run_ticker_processors(ticker, emit)
+        await asyncio.wait_for(
+            run_ticker_processors(ticker, emit),
+            timeout=300.0
+        )
         ms_proc = elapsed_ms(t_proc)
         stages.append("ticker_processors")
         stage_timings["ticker_processors"] = ms_proc
