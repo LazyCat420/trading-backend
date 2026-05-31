@@ -229,6 +229,16 @@ async def buy(
     )
     _ensure_bot(bot_id)
 
+    if cycle_id:
+        with get_db() as db:
+            existing = db.execute(
+                "SELECT fill_id FROM trade_fills WHERE cycle_id = %s AND ticker = %s AND side = 'BUY'",
+                [cycle_id, ticker]
+            ).fetchone()
+            if existing:
+                logger.warning("[TRACE][BUY] ABORT — Duplicate BUY order in same cycle for %s", ticker)
+                return {"error": f"Duplicate BUY order in cycle {cycle_id} for {ticker}"}
+
     with get_db() as db:
         cash = db.execute(
             "SELECT cash_balance FROM bots WHERE bot_id = %s", [bot_id]
@@ -514,6 +524,16 @@ async def sell(
         "[TRACE][SELL] START bot_id=%s ticker=%s qty_pct=%s", bot_id, ticker, qty_pct
     )
     _ensure_bot(bot_id)
+
+    if cycle_id:
+        with get_db() as db:
+            existing = db.execute(
+                "SELECT fill_id FROM trade_fills WHERE cycle_id = %s AND ticker = %s AND side = 'SELL'",
+                [cycle_id, ticker]
+            ).fetchone()
+            if existing:
+                logger.warning("[TRACE][SELL] ABORT — Duplicate SELL order in same cycle for %s", ticker)
+                return {"error": f"Duplicate SELL order in cycle {cycle_id} for {ticker}"}
 
     with get_db() as db:
         pos = db.execute(

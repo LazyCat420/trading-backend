@@ -39,6 +39,20 @@ def record_decision(
     if action not in ("BUY", "SELL"):
         return None
 
+    try:
+        with get_db() as db:
+            # Idempotency check: if cycle_id is provided, check if a decision was already recorded
+            if cycle_id and cycle_id != "manual":
+                existing = db.execute(
+                    "SELECT id FROM decision_outcomes WHERE cycle_id = %s AND ticker = %s AND action = %s",
+                    [cycle_id, ticker, action],
+                ).fetchone()
+                if existing:
+                    logger.info("[OUTCOME] Skipping duplicate %s decision for %s in cycle %s", action, ticker, cycle_id)
+                    return existing[0]
+    except Exception as e:
+        logger.warning("[OUTCOME] Failed idempotency check: %s", e)
+
     # Get current price if not provided
     if entry_price is None:
         try:

@@ -1131,7 +1131,7 @@ def _log_decision(result: dict, cycle_id: str, bot_id: str) -> None:
         from app.utils.text_utils import sanitize_surrogates
         result = sanitize_surrogates(result)
         with get_db() as db:
-            result_id = str(uuid.uuid4())
+            result_id = str(uuid.uuid5(uuid.NAMESPACE_OID, f"{cycle_id}_{bot_id}_{ticker}_{result.get('config_used', 'C')}"))
 
             # Compute estimate inline for BUY actions so it persists in DB
             estimate = None
