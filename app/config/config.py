@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     ACTIVE_MODEL: str = ""  # Auto-discovered from vLLM /v1/models at startup
 
     # ── Concurrency (tuned from saturation benchmarks — see tests/benchmarks/outputs/) ──
-    JETSON_MAX_CONCURRENT: int = 4  # prevent GPU saturation and timeouts
+    JETSON_MAX_CONCURRENT: int = 24  # prevent GPU saturation and timeouts
     DGX_MAX_CONCURRENT: int = 8  # capped: >8 concurrent drops below 3 tok/s
     RLM_MAX_CONCURRENT: int = (
         2  # max concurrent RLM sessions (uses own client, occupies slots)
@@ -75,14 +75,14 @@ class Settings(BaseSettings):
     # ── Batch Dispatch (prevents queue overload) ──
     # Items are drained from the queue in batches, not one-at-a-time.
     # Each batch completes before the next is dispatched.
-    JETSON_BATCH_SIZE: int = 4       # Jetson Orin AGX 64GB — aligned with concurrent max
+    JETSON_BATCH_SIZE: int = 24       # Jetson Orin AGX 64GB — aligned with concurrent max
     DGX_BATCH_SIZE: int = 8            # DGX Spark — matched to max_concurrent
     BATCH_TIMEOUT: int = 60           # 60s per batch (Jetson inference is 5-20s; prevents queue backup)
     BATCH_CIRCUIT_BREAKER_THRESHOLD: int = 5  # consecutive failed batches → disable endpoint 60s (raised from 3: burst patterns hit 3 too easily)
 
     # ── Adaptive Concurrency (caller-side LLM throttling) ──
-    ADAPTIVE_MIN_CONCURRENCY: int = 4   # floor when KV cache pressure is high (>80%)
-    ADAPTIVE_MAX_CONCURRENCY: int = 8   # ceiling when cache pressure is low (<60%)
+    ADAPTIVE_MIN_CONCURRENCY: int = 8   # floor when KV cache pressure is high (>80%)
+    ADAPTIVE_MAX_CONCURRENCY: int = 24   # ceiling when cache pressure is low (<60%)
 
     # ── Pipeline ──
     MAX_ANALYSIS_TICKERS: int = 30  # hard cap on tickers per cycle
@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     MIN_MARKET_CAP: float = 50_000_000  # $50M floor — reject OTC/penny
     CYCLE_TIMEOUT_MINUTES: int = 120  # 2-hour hard cap per cycle
     V2_TICKER_CONCURRENCY: int = (
-        2  # parallel tickers — reduced from 3 to prevent GPU saturation (2 tickers × ~8 calls = 16 in-flight, split across Jetson + DGX)
+        8  # parallel tickers — parallel ticker analysis worker count
     )
     VLLM_FUTURE_TIMEOUT: int = 300  # seconds before a hung LLM future is killed (aligned with batch timeout)
     ANALYSIS_WORKER_TIMEOUT_SECONDS: int = (
